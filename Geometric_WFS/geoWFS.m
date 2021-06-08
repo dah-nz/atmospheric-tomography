@@ -42,7 +42,7 @@ radonIm = radon(Im, angles);
 radonSize = size(radonIp,1);
 if(radonSize*numAngles ~= size(HmatrixInverse,2))
 	error(['Invalid HmatrixInverse - it needs to be of size X by ' int2str(radonSize*numAngles) '.']);
-end;
+end
 
 cumIp = cumsum(radonIp);
 cumIm = cumsum(radonIm);
@@ -54,7 +54,7 @@ for projection = 1:numAngles
 	hdiff = horizontalDiff(cumIm(:,projection), cumIp(:,projection));
 	data((projection-1)*radonSize+(1:radonSize)) = -hdiff.*radonIm(:,projection) / z;
 
-end;
+end
 
 coef = HmatrixInverse * data;
 

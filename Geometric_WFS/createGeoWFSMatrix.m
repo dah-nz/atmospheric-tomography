@@ -1,14 +1,21 @@
-function Hmatrix = createGeoWFSMatrix(asize, diameter, fresnelExtent, lambda, z, validRange, radonSize, angles, numModes)
 %%
-% function Hmatrix = createGeoWFSMatrix(asize, diameter, fresnelExtent, lambda, z, validRange, radonSize, angles, numModes)
+% Inputs
+% asize         - (pixels) aperture size in pixels
+% diameter      - (m) telescope diameter 
+% fresnelExtent - ?
+% lambda        - (m) initial wavelength
+% z             - (m) altitude
+% validRange    - ?
+% radonSize     - ?
+% angles        - degrees
+% numModes      - number of Zernike modes to simulate
 
+% Outputs
+% Hmatrix       - matrix of Geometric WFS
 %%
+function Hmatrix = createGeoWFSMatrix(asize, diameter, fresnelExtent, lambda, z, validRange, radonSize, angles, numModes)
 
 numAngles = max(size(angles));
-
-% radonSize = 357 for validRange size = 250;
-% radonSize = 499 for validRange size = 350;
-% 
 
 Hmatrix = zeros([radonSize*numAngles numModes]);
 
@@ -22,14 +29,19 @@ for mode = 1:numModes
 
     randomWavefront = zernike(asize,asize,mode)*1e-8; %make sure it is really small.
 
-    Ip = myFresnelProp(circle(asize/2,asize).*exp(sqrt(-1)* randomWavefront*2*pi/lambda), diameter, fresnelExtent, lambda, z, overrideError);
-    Im = myFresnelProp(circle(asize/2,asize).*exp(sqrt(-1)* randomWavefront*2*pi/lambda), diameter, fresnelExtent, lambda, -z, overrideError);
+    Ip = fresnelPropagation(circle(asize/2,asize).*exp(sqrt(-1)* randomWavefront*2*pi/lambda), diameter, fresnelExtent, lambda, z, overrideError);
+    Im = fresnelPropagation(circle(asize/2,asize).*exp(sqrt(-1)* randomWavefront*2*pi/lambda), diameter, fresnelExtent, lambda, -z, overrideError);
     Ip = abs(Ip).^2;
     Im = abs(Im).^2;
 
-    I = circle(asize/2,asize); I = I / sum(sum(I));
-    Ip = Ip(validRange, validRange); Ip = Ip / sum(sum(Ip));
-    Im = Im(validRange, validRange); Im = Im / sum(sum(Im));
+    % I = circle(asize/2,asize);
+    % I = I / sum(sum(I));
+    
+    Ip = Ip(validRange, validRange);
+    Ip = Ip / sum(sum(Ip));
+    
+    Im = Im(validRange, validRange);
+    Im = Im / sum(sum(Im));
 
     [radonIp, Ixp] = radon(Ip,angles);
     [radonIm, Mxp] = radon(Im,angles);
@@ -48,9 +60,9 @@ for mode = 1:numModes
     for projection = 1:numAngles
         hdiff = horizontalDiff(cumIm(:,projection), cumIp(:,projection));
         Hmatrix((projection-1)*radonSize+(1:radonSize), mode) = -hdiff.*radonIm(:,projection) / z;	
-    end;
+    end
 
 
-end;  % of mode histogram generation.
+end  % of mode histogram generation.
 %-----------------------------
 Hmatrix = Hmatrix / 1e-8;
