@@ -19,6 +19,7 @@ if __name__ == "__main__":
 
     rng = np.random.default_rng()
     zernikeScaling = rng.normal(size=(2 * nModes))
+    zernikeScaling[0] = 0       # Assume no zeroth order abberation
     zernikeScaling = [z / ((i + 1) ** 1/3) for i, z in enumerate(zernikeScaling)]
 
     # Generate telescope aperture
@@ -45,6 +46,12 @@ if __name__ == "__main__":
     j = complex(0, 1)
     fplus = fresnel_propagation(tel*np.exp(j * phase), 1, 2, wavelength, z, 0)
     fminus = fresnel_propagation(tel*np.exp(j * phase), 1, 2, wavelength, -z, 0)
+
+    fplus_noise = rng.normal(size=np.shape(fplus)) * noiseLevel
+    fminus_noise = rng.normal(size=np.shape(fminus)) * noiseLevel
+
+    fplus += fplus_noise
+    fminus += fminus_noise
     
     axes[1, 0].set_title('Extra-focal iamge')
     im_plus = np.abs(fplus) ** 2
