@@ -32,3 +32,4 @@ _ReSharper*/
 packages/
 */__pycache__/*
 */~$*
+*.pyc
