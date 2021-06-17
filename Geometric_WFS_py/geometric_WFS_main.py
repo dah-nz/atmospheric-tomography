@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm
 
 import GeoWFS
 from parameters import *
@@ -13,10 +14,15 @@ if __name__ == "__main__":
         Also create the inverse matrix.
     """
     M = GeoWFS.generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRegion, radonSize, radonAngles, nModes)
-    MInv = np.matmul(np.linalg.pinv(np.matmul(np.transpose(M), M)), np.transpose(M))
+    Mt = np.transpose(M)
+    MInv = np.matmul(np.linalg.pinv(np.matmul(Mt, M)), Mt)
 
     # Generate a phase screen to propagate the wavefront through
     phase = phase_screen(asize, D_r0)
+
+    plt.figure()
+    plt.title('Turbulence phase screen')
+    plt.imshow(np.abs(phase), aspect='equal')
 
     # Generate telescope aperture
     tel = GeoWFS.circle(asize/2, asize)
@@ -33,10 +39,12 @@ if __name__ == "__main__":
     fminus = fresnel_propagation(tel*np.exp(j * phase), 1, 2, wavelength, -z, 0)
     plt.figure()
     plt.title('Image of the Extra-focal plane')
-    plt.imshow(np.abs(fplus)**2)
+    im_plus = np.abs(fplus) ** 2
+    plt.imshow(im_plus, aspect='equal')
     plt.figure()
     plt.title('Image of the Intra-focal plane')
-    plt.imshow(np.abs(fminus)**2)
+    im_minus = np.abs(fminus) ** 2
+    plt.imshow(im_minus, aspect='equal')
 
     iMin = validRegion[0]
     iMax = validRegion[-1]
@@ -54,9 +62,5 @@ if __name__ == "__main__":
     plt.figure()
     plt.title('Geometric WFS modes')
     plt.plot(est2)
-
-    plt.figure()
-    plt.title('Turbulence phase screen')
-    plt.imshow(np.abs(phase))
 
     plt.show()

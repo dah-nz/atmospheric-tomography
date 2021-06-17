@@ -34,14 +34,12 @@ def fresnel_propagation(fieldStart, fieldSize, fresnelExtent, wavelength, z, ove
     x = np.ones(np.round(fresnelPixels) + 1)
     y = np.arange((-fresnelPixels - 1)/2, (fresnelPixels - 1)/2 + 1, 1)
 
-    [fresnelTemp, _] = np.meshgrid(x, y)
+    [_, fresnelTemp] = np.meshgrid(x, y)
     fresnelTemp *= fieldSize
     fresnelTemp /= numPixels
 
     fresnelTempTranspose = np.transpose(fresnelTemp)
-    fresnelPhase = k / 2 / z * (fresnelTemp * fresnelTemp + fresnelTempTranspose * fresnelTempTranspose)
+    fresnelPhase = k / 2 / z * (fresnelTemp ** 2 + fresnelTempTranspose ** 2)
     fresnelKernel = np.exp(j * fresnelPhase)
 
-    # return cconv2d(fresnelKernel, fieldStart, fieldSize/numPixels)
-    # return convolve2d(fresnelKernel, fieldStart)
     return cconv2d(fresnelKernel, fieldStart)

@@ -45,4 +45,9 @@ def cconv2d(A, B):
 
     R = np.fft.ifft2(C)
 
-    return R[:sizeC, :sizeC]
+    if (np.real(A) == A).all():
+        if (np.real(B) == B).all():
+            R = np.real(R)
+
+    R = R[:sizeC, :sizeC]
+    return R

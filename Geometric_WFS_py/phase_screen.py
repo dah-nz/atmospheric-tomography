@@ -3,6 +3,8 @@ import scipy.io as sio
 # from conv import cconv2d
 from scipy.signal import convolve2d
 
+import matplotlib.pyplot as plt
+
 def phase_screen(grid_size, D_r0):
 #   Simulation of a phase screen with Kolmogorv Statistics.
 #   Starts from an exact 15 x 15 phase screen.
@@ -30,6 +32,7 @@ def phase_screen(grid_size, D_r0):
     scaled_screen = chopped_screen * scale
 
     # Scale screen to specified D_r0
+    # return sio.loadmat("phase.mat", struct_as_record=False)['phase']
     return scaled_screen * (D_r0 ** (5/6))
 
 def generate_phase_screen(n_increases):
@@ -72,8 +75,7 @@ def generate_phase_screen(n_increases):
     r_hat = 1/(M-1)     # Spacing between samples
     total_points = M
 
-    for _ in range(n_increases):
-
+    for itr in range(n_increases):
         # Do first interpolation
 
         [r0, c0] = np.shape(phase)
@@ -110,12 +112,19 @@ def generate_phase_screen(n_increases):
 
         # work out new phase screen size
         r_hat /= np.sqrt(2)
-        phase = phase[5:r1 - 5, 5:c1 - 5]
+        phase = phase[5:r1 - 6, 5:c1 - 6]
 
         total_points = 2 * total_points - 1
 
-    if phase.size > 1:
-        scale = (total_points / (phase.size - 1)) ** (5/6)
+    size_phase = np.shape(phase)[0]
+    if size_phase > 1:
+        scale = (total_points / (size_phase - 1)) ** (5/6)
         phase *= scale
     
     return phase
+
+if __name__ == "__main__":
+    scr = phase_screen(250, 1/0.05)
+    print(np.amax(scr))
+    plt.imshow(np.abs(scr), aspect='equal')
+    plt.show()

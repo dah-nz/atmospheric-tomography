@@ -1,6 +1,8 @@
 import numpy as np
 from skimage.transform import radon
 
+import matplotlib.pyplot as plt
+
 from fresnel_propagation import fresnel_propagation
 
 def generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes):
@@ -53,7 +55,7 @@ def generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRange, ra
             iMin = projection * radonSize
             iMax = projection * radonSize + radonSize
             Hmatrix[iMin:iMax, mode] = -hdiff * radonIm[:, projection] / z
-    
+
     return (Hmatrix / scaling_factor)
 
 def horizontalDiff(cumI1, cumI2):
@@ -66,17 +68,21 @@ def horizontalDiff(cumI1, cumI2):
     hdiff = np.zeros_like(cumI1)
 
     for i, val in enumerate(cumI1):
-        i_gt = [i for x in cumI2 if x >= val and x != 0]
+        # find all the nonzero values in the 2D array "cumI2" that are greater than or 
+        # equal to tne value in "cumI1" at array "index", and return the minimum of these values.
+        i_gt = np.argwhere(cumI2 >= val)
         bitMore = len(cumI1) - 1
-        if len(i_gt) > 0:
+        if len(i_gt) > 0 and cumI2[np.min(i_gt)] < 1:
             bitMore = np.min(i_gt)           
 
-        i_lt = [i for x in cumI2 if x <= val and x != 0]
+        # find all the nonzero values in the 2D array "cumI2" that are less than or 
+        # equal to tne value in "cumI1" at array "index", and return the maximum of these values.
+        i_lt = np.argwhere(cumI2 <= val)
         bitLess = 0
         if len(i_lt) > 0:
             bitLess = np.max(i_lt)
 
-        if cumI2[bitMore] <= cumI2[bitLess]:
+        if bitMore <= bitLess:
             hdiff[i] = 0
         else:
             hdiff[i] = bitLess - i + (val-cumI2[bitLess]) / (cumI2[bitMore] - cumI2[bitLess]) * (bitMore - bitLess)
@@ -96,7 +102,7 @@ def zernike(dim, diameter, order):
 
     [l, k] = np.meshgrid(x, y)
 
-    sq_distance = np.matmul(k, k) + np.matmul(l, l)
+    sq_distance = k ** 2 + l ** 2
 
     x = l/radius
     y = k/radius
@@ -124,12 +130,12 @@ def zerni(x, y, j):
 
     for s in range(int(smax + 1)):
         coef = ((-1) ** s) * np.prod(np.arange(1, n-s+1))
-        coef = coef / np.prod(np.arange(1, s + 1)) * np.prod(np.arange(1, smaxk - s + 1)) * np.prod(np.arange(1, smax - s + 1))
+        coef = coef / (np.prod(np.arange(1, s + 1)) * np.prod(np.arange(1, smaxk - s + 1)) * np.prod(np.arange(1, smax - s + 1)))
         p = (n - 2 * s)
         Rnm = Rnm + coef * (r ** p)
 
     if m == 0:
-        z = np.sqrt(n + 1)
+        z = np.sqrt(n + 1) * Rnm
     elif j % 2 == 0:
         z = np.sqrt(2 * (n + 1)) * Rnm * np.cos(m * theta)
     else:
@@ -179,9 +185,11 @@ def geoWFS(Ip, Im, z, HmatrixInverse, angles):
 def circle(radius, dimension):
     image = np.zeros((dimension, dimension))
     sqr_radius = radius ** 2
-    center = dimension / 2 + 0.5
+    center = dimension / 2 - 0.5
     for i in range(dimension):
         for j in range(dimension):
             image[i, j] = (i - center) ** 2 + (j - center) ** 2 <= sqr_radius
     return image
-                
+
+if __name__ == "__main__":
+    print(horizontalDiff(np.array([0, 0.5, 0.9, 0.9, 1]), np.array([0, 0.6, 0.7, 0.8, 1])))
