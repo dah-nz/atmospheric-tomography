@@ -19,19 +19,21 @@ if __name__ == "__main__":
 
     rng = np.random.default_rng()
     zernikeScaling = rng.normal(size=(2 * nModes))
-    zernikeScaling = [np.exp(-i/10) * z for i, z in enumerate(zernikeScaling)]
+    zernikeScaling = [z / ((i + 1) ** 1/3) for i, z in enumerate(zernikeScaling)]
 
     # Generate telescope aperture
     tel = GeoWFS.circle(asize/2, asize)
 
-    fig, axes = plt.subplots(2, 2)
+    fig, axes = plt.subplots(2, 3)
     fig.suptitle("Zernike mode  Geo WFS output")
 
     # Generate a phase screen to propagate the wavefront through
     # phase = phase_screen(asize, D_r0)
     phase = np.zeros((asize, asize))
-    for m, z in enumerate(zernikeScaling):
-        phase += tel * z * GeoWFS.zernike(asize, asize, m)
+    for m, z0 in enumerate(zernikeScaling):
+        phase += z0 * GeoWFS.zernike(asize, asize, m + 1)
+
+    phase /= np.linalg.norm(phase)
 
     # Generate two defocused pupil planes using Fresnel diffraction
     # Generation of intra and extra focal planes (fplus, fminus),
@@ -65,11 +67,22 @@ if __name__ == "__main__":
     #   Note that this is effectivelty a matrix multiplication of the pre-derived respective inverse matrices with an unknown projected wavefront. 
     est2 = GeoWFS.geoWFS(Ip, Im, z, MInv, radonAngles)
 
-    axes[0, 0].set_title("Phase Screen")
-    axes[0, 0].imshow(phase, aspect='equal')
+    phase_est = np.zeros((asize, asize))
+    for m, z0 in enumerate(est2):
+        phase_est += z0 * GeoWFS.zernike(asize, asize, m + 1)
 
-    axes[0, 1].set_title('Calculated and Actual Geometric WFS modes')
-    axes[0, 1].plot(est2, '-x')
-    axes[0, 1].plot(zernikeScaling, '--')
+    phase_est /= np.linalg.norm(phase_est)
+
+    axes[0, 0].set_title("Actual Phase Screen")
+    axes[0, 0].imshow(np.abs(phase), aspect='equal', cmap='afmhot')
+    axes[0, 1].set_title("Estimated Phase Screen")
+    axes[0, 1].imshow(np.abs(phase_est), aspect='equal', cmap='afmhot')
+    axes[0, 2].set_title("Phase Screen Difference")
+    axes[0, 2].imshow(np.abs(phase) - np.abs(phase_est), aspect='equal', cmap='afmhot')
+
+    axes[1, 2].set_title('Calculated and Actual Geometric WFS modes')
+    axes[1, 2].plot(est2/np.linalg.norm(est2), '-x')
+    axes[1, 2].plot(zernikeScaling/np.linalg.norm(zernikeScaling), '--')
 
     plt.show()
+

@@ -17,46 +17,53 @@ def generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRange, ra
 #           numModes      - number of Zernike modes to simulate
 
 # Outputs   Hmatrix       - matrix of Geometric WFS
-    numAngles = len(angles)
-    Hmatrix = np.zeros((radonSize * numAngles, numModes))
-    overrideError = 1
-    scaling_factor = 1e-8  # Make sure it is really small
 
-    j = complex(0, 1) # complex
+    try:
+        Hmatrix = np.load("zernike_modes.npy")
+    except FileNotFoundError:
+        numAngles = len(angles)
+        Hmatrix = np.zeros((radonSize * numAngles, numModes))
+        overrideError = 1
+        scaling_factor = 1e-8  # Make sure it is really small
 
-    for mode in range(numModes):
-        print("Calculating mode {} of {}".format(mode + 1, numModes))
+        j = complex(0, 1) # complex
+
+        for mode in range(numModes):
+            print("Calculating mode {} of {}".format(mode + 1, numModes))
+            
+            randomWavefront = zernike(asize, asize, mode + 1) * scaling_factor
+            randomWavefront = circle(asize / 2, asize) * np.exp(j * randomWavefront * 2 * np.pi / wavelength)
+
+            image_plus = fresnel_propagation(randomWavefront, diameter, fresnelExtent, wavelength, z, overrideError)
+            image_minus = fresnel_propagation(randomWavefront, diameter, fresnelExtent, wavelength, -z, overrideError)
+            image_plus = np.abs(image_plus) ** 2
+            image_minus = np.abs(image_minus) ** 2
+            
+            rangeMin = validRange[0]
+            rangeMax = validRange[-1]
+            
+            image_plus = image_plus[rangeMin:rangeMax, rangeMin:rangeMax]
+            image_plus /= np.sum(image_plus)
+
+            image_minus = image_minus[rangeMin:rangeMax, rangeMin:rangeMax]
+            image_minus = image_minus / np.sum(image_minus)
+
+            radonIp = radon(image_plus, angles, circle=False)
+            radonIm = radon(image_minus, angles, circle=False)
+
+            sumIp = np.cumsum(radonIp, 0)
+            sumIm = np.cumsum(radonIm, 0)
+
+            for projection in range(numAngles):
+                hdiff = horizontalDiff(sumIm[:, projection], sumIp[:, projection])
+                iMin = projection * radonSize
+                iMax = projection * radonSize + radonSize
+                Hmatrix[iMin:iMax, mode] = -hdiff * radonIm[:, projection] / z
         
-        randomWavefront = zernike(asize, asize, mode + 1) * scaling_factor
-        randomWavefront = circle(asize / 2, asize) * np.exp(j * randomWavefront * 2 * np.pi / wavelength)
+        Hmatrix = (Hmatrix / scaling_factor)
+        np.save("zernike_modes.npy", Hmatrix)
 
-        image_plus = fresnel_propagation(randomWavefront, diameter, fresnelExtent, wavelength, z, overrideError)
-        image_minus = fresnel_propagation(randomWavefront, diameter, fresnelExtent, wavelength, -z, overrideError)
-        image_plus = np.abs(image_plus) ** 2
-        image_minus = np.abs(image_minus) ** 2
-        
-        rangeMin = validRange[0]
-        rangeMax = validRange[-1]
-        
-        image_plus = image_plus[rangeMin:rangeMax, rangeMin:rangeMax]
-        image_plus /= np.sum(image_plus)
-
-        image_minus = image_minus[rangeMin:rangeMax, rangeMin:rangeMax]
-        image_minus = image_minus / np.sum(image_minus)
-
-        radonIp = radon(image_plus, angles, circle=False)
-        radonIm = radon(image_minus, angles, circle=False)
-
-        sumIp = np.cumsum(radonIp, 0)
-        sumIm = np.cumsum(radonIm, 0)
-
-        for projection in range(numAngles):
-            hdiff = horizontalDiff(sumIm[:, projection], sumIp[:, projection])
-            iMin = projection * radonSize
-            iMax = projection * radonSize + radonSize
-            Hmatrix[iMin:iMax, mode] = -hdiff * radonIm[:, projection] / z
-
-    return (Hmatrix / scaling_factor)
+    return Hmatrix
 
 def horizontalDiff(cumI1, cumI2):
 # Histogram specification for Geometric wavefront sensor
