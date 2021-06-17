@@ -1,5 +1,5 @@
 import numpy as np
-from .conv import cconv2d
+from conv import cconv2d
 
 def fresnel_propagation(fieldStart, fieldSize, fresnelExtent, wavelength, z, overrideError):
 # Fresnel propagation for a finite aperture to a certain finite distance
