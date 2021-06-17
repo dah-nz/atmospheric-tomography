@@ -3,7 +3,7 @@ from skimage.transform import radon
 
 import matplotlib.pyplot as plt
 
-from fresnel_propagation import fresnel_propagation
+from .fresnel_propagation import fresnel_propagation
 
 def generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes):
 # Inputs    asize         - pixels; aperture size in pixels

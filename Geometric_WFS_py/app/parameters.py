@@ -1,5 +1,8 @@
 import numpy as np
 
+###
+ #  Simulation parameters
+###
 asize = 250                                         # pixels; Aperture size
 r_0 = 0.05                                          # metres; Fried parameter
 diameter = 1                                        # metres; telescope diameter
