@@ -23,13 +23,13 @@ if __name__ == "__main__":
     rng = np.random.default_rng()
     zernikeScaling = rng.normal(size=(2 * nModes))
     zernikeScaling[0] = 0       # Assume no zeroth order abberation
-    zernikeScaling = [z / ((i + 1) ** 1/3) for i, z in enumerate(zernikeScaling)]
+    zernikeScaling = [z / ((i + 1) ** 1/6) for i, z in enumerate(zernikeScaling)]
 
     # Generate telescope aperture
     tel = GeoWFS.circle(asize/2, asize)
 
     fig, axes = plt.subplots(2, 4)
-    fig.suptitle("Zernike mode  Geo WFS output")
+    fig.suptitle("Zernike mode induced Geometric WFS output")
 
     # Generate a phase screen to propagate the wavefront through
     # phase = phase_screen(asize, D_r0)
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     for m, z0 in enumerate(zernikeScaling):
         phase += z0 * GeoWFS.zernike(asize, asize, m + 1)
 
-    # phase /= np.linalg.norm(phase)
+    # phase /= np.amax(phase)
 
     # Generate two defocused pupil planes using Fresnel diffraction
     # Generation of intra and extra focal planes (fplus, fminus),
@@ -56,38 +56,42 @@ if __name__ == "__main__":
 
     # fplus += fplus_noise
     # fminus += fminus_noise
+
     
-    axes[1, 0].set_title('Extra-focal image')
-    im_plus = np.abs(fplus) ** 2
-    axes[1, 0].imshow(im_plus, aspect='equal')
-
-    axes[1, 1].set_title('Intra-focal image')
-    im_minus = np.abs(fminus) ** 2
-    axes[1, 1].imshow(im_minus, aspect='equal')
-
     iMin = validRegion[0]
     iMax = validRegion[-1]
+    
+    axes[1, 0].set_title('Extra-focal image')
+    im_plus = np.abs(fplus[iMin:iMax, iMin:iMax]) ** 2
+    axes[1, 0].imshow(im_plus, aspect='equal', extent=(iMin, iMax, iMin, iMax))
 
-    Ip = np.abs(fplus[iMin:iMax, iMin:iMax]) ** 2
-    Im = np.abs(fminus[iMin:iMax, iMin:iMax]) ** 2
+    axes[1, 1].set_title('Intra-focal image')
+    im_minus = np.abs(fminus[iMin:iMax, iMin:iMax]) ** 2
+    axes[1, 1].imshow(im_minus, aspect='equal', extent=(iMin, iMax, iMin, iMax))
+
+    # Ip = np.abs(fplus[iMin:iMax, iMin:iMax]) ** 2
+    # Im = np.abs(fminus[iMin:iMax, iMin:iMax]) ** 2
+    Ip = im_plus
+    Im = im_minus
     Ip /= np.sum(Ip)
     Im /= np.sum(Im)
 
-    Ip *= total_photons
-    Im *= total_photons
+    IpNoise = Ip * total_photons
+    ImNoise = Im * total_photons
 
-    IpNoise = fast_poisson(Ip)
-    ImNoise = fast_poisson(Im)
+    IpNoise = fast_poisson(IpNoise)
+    ImNoise = fast_poisson(ImNoise)
 
     axes[1, 2].set_title('Noisy Extra-focal image')
-    axes[1, 2].imshow(IpNoise, aspect='equal')
+    axes[1, 2].imshow(IpNoise, aspect='equal', extent=(iMin, iMax, iMin, iMax))
 
     axes[1, 3].set_title('Noisy Intra-focal image')
-    axes[1, 3].imshow(ImNoise, aspect='equal')
+    axes[1, 3].imshow(ImNoise, aspect='equal', extent=(iMin, iMax, iMin, iMax))
 
     # Generate or acquire signal for decomposition into Zernikes
     #   This is going to generate a single column vector of Zernikes for the Geometric WFS, i.e, "est2".
     #   Note that this is effectivelty a matrix multiplication of the pre-derived respective inverse matrices with an unknown projected wavefront. 
+    est1 = GeoWFS.geoWFS(Ip, Im, z, MInv, radonAngles)
     est2 = GeoWFS.geoWFS(IpNoise, ImNoise, z, MInv, radonAngles)
 
     phase_est = np.zeros((asize, asize))
@@ -97,17 +101,20 @@ if __name__ == "__main__":
     # phase_est /= np.linalg.norm(phase_est)
 
     axes[0, 0].set_title("Actual Phase Screen")
-    axes[0, 0].imshow(np.abs(phase), aspect='equal', cmap='afmhot')
+    axes[0, 0].imshow(np.abs(phase), aspect='equal', cmap='viridis')
     axes[0, 1].set_title("Estimated Phase Screen")
-    axes[0, 1].imshow(np.abs(phase_est), aspect='equal', cmap='afmhot')
+    axes[0, 1].imshow(np.abs(phase_est), aspect='equal', cmap='viridis')
     axes[0, 2].set_title("Phase Screen Difference")
     diff = np.abs(phase) - np.abs(phase_est)
     m = np.amax(diff)
     axes[0, 2].imshow(diff, aspect='equal', cmap='seismic', vmin=-m, vmax=m)
 
     axes[0, 3].set_title('Calculated and Actual Geometric WFS modes')
-    axes[0, 3].plot(est2/np.linalg.norm(est2), '-x')
-    axes[0, 3].plot(zernikeScaling/np.linalg.norm(zernikeScaling), '--')
+    axes[0, 3].plot(est2 / np.linalg.norm(est2), '-x')
+    axes[0, 3].plot(est1 / np.linalg.norm(est1), '-o')
+    axes[0, 3].plot(zernikeScaling / np.linalg.norm(zernikeScaling), '--')
+
+    print("Norm of est1: {}; est2: {}; actual: {}".format(np.linalg.norm(est1), np.linalg.norm(est2), np.linalg.norm(zernikeScaling)))
 
     plt.show()
 
