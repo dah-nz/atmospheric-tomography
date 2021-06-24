@@ -1,11 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from numpy.random import poisson
 
 import GeoWFS
 from parameters import *
 from fresnel_propagation import fresnel_propagation
 from phase_screen import phase_screen
+
+from poisson import fast_poisson
 
 
 if __name__ == "__main__":
@@ -25,7 +28,7 @@ if __name__ == "__main__":
     # Generate telescope aperture
     tel = GeoWFS.circle(asize/2, asize)
 
-    fig, axes = plt.subplots(2, 3)
+    fig, axes = plt.subplots(2, 4)
     fig.suptitle("Zernike mode  Geo WFS output")
 
     # Generate a phase screen to propagate the wavefront through
@@ -34,7 +37,7 @@ if __name__ == "__main__":
     for m, z0 in enumerate(zernikeScaling):
         phase += z0 * GeoWFS.zernike(asize, asize, m + 1)
 
-    phase /= np.linalg.norm(phase)
+    # phase /= np.linalg.norm(phase)
 
     # Generate two defocused pupil planes using Fresnel diffraction
     # Generation of intra and extra focal planes (fplus, fminus),
@@ -47,13 +50,14 @@ if __name__ == "__main__":
     fplus = fresnel_propagation(tel*np.exp(j * phase), 1, 2, wavelength, z, 0)
     fminus = fresnel_propagation(tel*np.exp(j * phase), 1, 2, wavelength, -z, 0)
 
-    fplus_noise = rng.normal(size=np.shape(fplus)) * noiseLevel
-    fminus_noise = rng.normal(size=np.shape(fminus)) * noiseLevel
+    # Gaussian noise for detectors - possibly not a scientifically rigorous approach
+    # fplus_noise = rng.normal(size=np.shape(fplus)) * noiseLevel
+    # fminus_noise = rng.normal(size=np.shape(fminus)) * noiseLevel
 
-    fplus += fplus_noise
-    fminus += fminus_noise
+    # fplus += fplus_noise
+    # fminus += fminus_noise
     
-    axes[1, 0].set_title('Extra-focal iamge')
+    axes[1, 0].set_title('Extra-focal image')
     im_plus = np.abs(fplus) ** 2
     axes[1, 0].imshow(im_plus, aspect='equal')
 
@@ -69,27 +73,41 @@ if __name__ == "__main__":
     Ip /= np.sum(Ip)
     Im /= np.sum(Im)
 
+    Ip *= total_photons
+    Im *= total_photons
+
+    IpNoise = fast_poisson(Ip)
+    ImNoise = fast_poisson(Im)
+
+    axes[1, 2].set_title('Noisy Extra-focal image')
+    axes[1, 2].imshow(IpNoise, aspect='equal')
+
+    axes[1, 3].set_title('Noisy Intra-focal image')
+    axes[1, 3].imshow(ImNoise, aspect='equal')
+
     # Generate or acquire signal for decomposition into Zernikes
     #   This is going to generate a single column vector of Zernikes for the Geometric WFS, i.e, "est2".
     #   Note that this is effectivelty a matrix multiplication of the pre-derived respective inverse matrices with an unknown projected wavefront. 
-    est2 = GeoWFS.geoWFS(Ip, Im, z, MInv, radonAngles)
+    est2 = GeoWFS.geoWFS(IpNoise, ImNoise, z, MInv, radonAngles)
 
     phase_est = np.zeros((asize, asize))
     for m, z0 in enumerate(est2):
         phase_est += z0 * GeoWFS.zernike(asize, asize, m + 1)
 
-    phase_est /= np.linalg.norm(phase_est)
+    # phase_est /= np.linalg.norm(phase_est)
 
     axes[0, 0].set_title("Actual Phase Screen")
     axes[0, 0].imshow(np.abs(phase), aspect='equal', cmap='afmhot')
     axes[0, 1].set_title("Estimated Phase Screen")
     axes[0, 1].imshow(np.abs(phase_est), aspect='equal', cmap='afmhot')
     axes[0, 2].set_title("Phase Screen Difference")
-    axes[0, 2].imshow(np.abs(phase) - np.abs(phase_est), aspect='equal', cmap='afmhot')
+    diff = np.abs(phase) - np.abs(phase_est)
+    m = np.amax(diff)
+    axes[0, 2].imshow(diff, aspect='equal', cmap='seismic', vmin=-m, vmax=m)
 
-    axes[1, 2].set_title('Calculated and Actual Geometric WFS modes')
-    axes[1, 2].plot(est2/np.linalg.norm(est2), '-x')
-    axes[1, 2].plot(zernikeScaling/np.linalg.norm(zernikeScaling), '--')
+    axes[0, 3].set_title('Calculated and Actual Geometric WFS modes')
+    axes[0, 3].plot(est2/np.linalg.norm(est2), '-x')
+    axes[0, 3].plot(zernikeScaling/np.linalg.norm(zernikeScaling), '--')
 
     plt.show()
 

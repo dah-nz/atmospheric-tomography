@@ -22,4 +22,6 @@ turbLevels = np.array([0.1, 0.2, 0.5, 1, 2, 4, 8, 16, 25])
 validRegion = np.arange(200, 550 + 1)
 overrideError = 2
 
+total_photons = 10000
+
 noiseLevel = 5e1
