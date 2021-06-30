@@ -23,7 +23,7 @@ if __name__ == "__main__":
     rng = np.random.default_rng()
     zernikeScaling = rng.normal(size=(2 * nModes))
     zernikeScaling[0] = 0       # Assume no zeroth order abberation
-    zernikeScaling = [z / ((i + 1) ** 1/6) for i, z in enumerate(zernikeScaling)]
+    zernikeScaling = np.array([z0 / ((i + 1) ** 1/5) for i, z0 in enumerate(zernikeScaling)])
 
     # Generate telescope aperture
     tel = GeoWFS.circle(asize/2, asize)
@@ -37,8 +37,6 @@ if __name__ == "__main__":
     for m, z0 in enumerate(zernikeScaling):
         phase += z0 * GeoWFS.zernike(asize, asize, m + 1)
 
-    # phase /= np.amax(phase)
-
     # Generate two defocused pupil planes using Fresnel diffraction
     # Generation of intra and extra focal planes (fplus, fminus),
     # seperated by distance z, measured either side of the focal point. These planes
@@ -49,6 +47,9 @@ if __name__ == "__main__":
     j = complex(0, 1)
     fplus = fresnel_propagation(tel*np.exp(j * phase), 1, 2, wavelength, z, 0)
     fminus = fresnel_propagation(tel*np.exp(j * phase), 1, 2, wavelength, -z, 0)
+
+    # zernikeScaling /= total_photons
+    # phase /= total_photons
 
     # Gaussian noise for detectors - possibly not a scientifically rigorous approach
     # fplus_noise = rng.normal(size=np.shape(fplus)) * noiseLevel
@@ -75,12 +76,16 @@ if __name__ == "__main__":
     Im = im_minus
     Ip /= np.sum(Ip)
     Im /= np.sum(Im)
+    est1 = GeoWFS.geoWFS(Ip, Im, z, MInv, radonAngles)
 
     IpNoise = Ip * total_photons
     ImNoise = Im * total_photons
 
     IpNoise = fast_poisson(IpNoise)
     ImNoise = fast_poisson(ImNoise)
+
+    # IpNoise /= total_photons
+    # ImNoise /= total_photons
 
     axes[1, 2].set_title('Noisy Extra-focal image')
     axes[1, 2].imshow(IpNoise, aspect='equal', extent=(iMin, iMax, iMin, iMax))
@@ -91,7 +96,6 @@ if __name__ == "__main__":
     # Generate or acquire signal for decomposition into Zernikes
     #   This is going to generate a single column vector of Zernikes for the Geometric WFS, i.e, "est2".
     #   Note that this is effectivelty a matrix multiplication of the pre-derived respective inverse matrices with an unknown projected wavefront. 
-    est1 = GeoWFS.geoWFS(Ip, Im, z, MInv, radonAngles)
     est2 = GeoWFS.geoWFS(IpNoise, ImNoise, z, MInv, radonAngles)
 
     phase_est = np.zeros((asize, asize))
@@ -106,7 +110,7 @@ if __name__ == "__main__":
     axes[0, 1].imshow(np.abs(phase_est), aspect='equal', cmap='viridis')
     axes[0, 2].set_title("Phase Screen Difference")
     diff = np.abs(phase) - np.abs(phase_est)
-    m = np.amax(diff)
+    m = max(np.abs(np.amax(diff)), np.abs(np.amin(diff)))
     axes[0, 2].imshow(diff, aspect='equal', cmap='seismic', vmin=-m, vmax=m)
 
     axes[0, 3].set_title('Calculated and Actual Geometric WFS modes')
