@@ -189,13 +189,15 @@ def geoWFS(Ip, Im, z, HmatrixInverse, angles):
 
     return np.matmul(HmatrixInverse, data)
 
-def circle(radius, dimension):
+def circle(radius, dimension, location=(0,0)):
     image = np.zeros((dimension, dimension))
     sqr_radius = radius ** 2
     center = dimension / 2 - 0.5
+    center_x = center + location[0]
+    center_y = center + location[1]
     for i in range(dimension):
         for j in range(dimension):
-            image[i, j] = (i - center) ** 2 + (j - center) ** 2 <= sqr_radius
+            image[i, j] = (i - center_x) ** 2 + (j - center_y) ** 2 <= sqr_radius
     return image
 
 if __name__ == "__main__":

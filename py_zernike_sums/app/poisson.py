@@ -13,14 +13,10 @@ def fast_poisson(mu):
         current *= rng.random(size=np.shape(mu))
         hits = current > value
 
-    # print(np.shape(mu))
-    # bigmean = np.argwhere(mu > 100)
-    # print(np.shape(bigmean))
-    # print(bigmean)
-    # mb = mu[bigmean]
-    # print(mb)
-    # print(np.shape(mb))
-    # noise[bigmean] = np.around(mb + np.sqrt(mb) * rng.normal(size=np.shape(bigmean)))
+    # Limit magnitude when lots of photons hit the same position
+    bigmean = np.argwhere(mu > 100)
+    mb = mu[bigmean[:, 0], bigmean[:, 1]]
+    noise[bigmean[:, 0], bigmean[:, 1]] = np.around(mb + np.sqrt(mb) * rng.normal(size=np.shape(mb)))
 
     return noise
 

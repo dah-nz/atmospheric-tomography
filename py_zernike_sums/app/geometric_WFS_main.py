@@ -26,9 +26,10 @@ if __name__ == "__main__":
     zernikeScaling = np.array([z0 / ((i + 1) ** 1/5) for i, z0 in enumerate(zernikeScaling)])
 
     # Generate telescope aperture
-    tel = GeoWFS.circle(asize/2, asize)
+    tel = GeoWFS.circle(asize/3, asize)
+    # tel = GeoWFS.circle(asize/6, asize, location=(asize/4, asize/4)) + GeoWFS.circle(asize/6, asize, location=(-asize/4, -asize/4))
 
-    fig, axes = plt.subplots(2, 4)
+    fig, axes = plt.subplots(2, 5)
     fig.suptitle("Zernike mode induced Geometric WFS output")
 
     # Generate a phase screen to propagate the wavefront through
@@ -76,7 +77,6 @@ if __name__ == "__main__":
     Im = im_minus
     Ip /= np.sum(Ip)
     Im /= np.sum(Im)
-    est1 = GeoWFS.geoWFS(Ip, Im, z, MInv, radonAngles)
 
     IpNoise = Ip * total_photons
     ImNoise = Im * total_photons
@@ -84,8 +84,13 @@ if __name__ == "__main__":
     IpNoise = fast_poisson(IpNoise)
     ImNoise = fast_poisson(ImNoise)
 
-    # IpNoise /= total_photons
-    # ImNoise /= total_photons
+    # noiseNorm = np.linalg.norm(IpNoise)
+
+    # IpNoise /= noiseNorm
+    # ImNoise /= noiseNorm
+
+    IpNoise /= np.linalg.norm(IpNoise)
+    ImNoise /= np.linalg.norm(ImNoise)
 
     axes[1, 2].set_title('Noisy Extra-focal image')
     axes[1, 2].imshow(IpNoise, aspect='equal', extent=(iMin, iMax, iMin, iMax))
@@ -95,14 +100,15 @@ if __name__ == "__main__":
 
     # Generate or acquire signal for decomposition into Zernikes
     #   This is going to generate a single column vector of Zernikes for the Geometric WFS, i.e, "est2".
-    #   Note that this is effectivelty a matrix multiplication of the pre-derived respective inverse matrices with an unknown projected wavefront. 
+    #   Note that this is effectivelty a matrix multiplication of the pre-derived respective inverse matrices with an unknown projected wavefront.
+    est1 = GeoWFS.geoWFS(Ip, Im, z, MInv, radonAngles)
     est2 = GeoWFS.geoWFS(IpNoise, ImNoise, z, MInv, radonAngles)
 
     phase_est = np.zeros((asize, asize))
     for m, z0 in enumerate(est2):
         phase_est += z0 * GeoWFS.zernike(asize, asize, m + 1)
 
-    # phase_est /= np.linalg.norm(phase_est)
+    phase *= np.linalg.norm(phase_est) / np.linalg.norm(phase)
 
     axes[0, 0].set_title("Actual Phase Screen")
     axes[0, 0].imshow(np.abs(phase), aspect='equal', cmap='viridis')
@@ -117,6 +123,10 @@ if __name__ == "__main__":
     axes[0, 3].plot(est2 / np.linalg.norm(est2), '-x')
     axes[0, 3].plot(est1 / np.linalg.norm(est1), '-o')
     axes[0, 3].plot(zernikeScaling / np.linalg.norm(zernikeScaling), '--')
+    axes[0, 3].legend(('Noisy', 'No noise'))
+
+    axes[1, 4].set_title('Telescope aperature/in-focus image')
+    axes[1, 4].imshow(tel, aspect='equal')
 
     print("Norm of est1: {}; est2: {}; actual: {}".format(np.linalg.norm(est1), np.linalg.norm(est2), np.linalg.norm(zernikeScaling)))
 
