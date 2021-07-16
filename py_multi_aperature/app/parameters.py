@@ -25,3 +25,5 @@ overrideError = 2
 total_photons = 5e6
 
 noiseLevel = 5e1
+
+nGS = 1                                             # Number of guide stars

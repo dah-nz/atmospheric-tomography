@@ -18,50 +18,54 @@ def generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRange, ra
 
 # Outputs   Hmatrix       - matrix of Geometric WFS
 
+    rangeMin = validRange[0]
+    rangeMax = validRange[-1]
+    nAngles = len(angles)
+    meta_data = (asize, diameter, fresnelExtent, wavelength, z, rangeMin, rangeMax, radonSize, nAngles, numModes)
+    md_hash = hash(meta_data)
+
     try:
-        Hmatrix = np.load("zernike_modes.npy")
+        Hdata = np.load("zernike_mode_data.npy", allow_pickle=True).item()
+        if md_hash in Hdata.keys():
+            return Hdata[md_hash]
     except FileNotFoundError:
-        numAngles = len(angles)
-        Hmatrix = np.zeros((radonSize * numAngles, numModes))
-        overrideError = 1
-        scaling_factor = 1e-8  # Make sure it is really small
+        Hdata = {}
+    
+    Hmatrices = generateHmatrices(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes)
+    Hdata[md_hash] = Hmatrices
+    np.save("zernike_mode_data.npy", Hdata, allow_pickle=True)
 
-        j = complex(0, 1) # complex
+    return Hdata[md_hash]
 
-        for mode in range(numModes):
-            print("Calculating mode {} of {}".format(mode + 1, numModes))
-            
-            randomWavefront = zernike(asize, asize, mode + 1) * scaling_factor
-            randomWavefront = circle(asize / 2, asize) * np.exp(j * randomWavefront * 2 * np.pi / wavelength)
-
-            image_plus = fresnel_propagation(randomWavefront, diameter, fresnelExtent, wavelength, z, overrideError)
-            image_minus = fresnel_propagation(randomWavefront, diameter, fresnelExtent, wavelength, -z, overrideError)
-            image_plus = np.abs(image_plus) ** 2
-            image_minus = np.abs(image_minus) ** 2
-            
-            rangeMin = validRange[0]
-            rangeMax = validRange[-1]
-            
-            image_plus = image_plus[rangeMin:rangeMax, rangeMin:rangeMax]
-            image_plus /= np.sum(image_plus)
-
-            image_minus = image_minus[rangeMin:rangeMax, rangeMin:rangeMax]
-            image_minus = image_minus / np.sum(image_minus)
-
-            radonIp = radon(image_plus, angles, circle=False)
-            radonIm = radon(image_minus, angles, circle=False)
-
-            sumIp = np.cumsum(radonIp, 0)
-            sumIm = np.cumsum(radonIm, 0)
-
-            for projection in range(numAngles):
-                hdiff = horizontalDiff(sumIm[:, projection], sumIp[:, projection])
-                iMin = projection * radonSize
-                iMax = projection * radonSize + radonSize
-                Hmatrix[iMin:iMax, mode] = -hdiff * radonIm[:, projection] / z
+def generateHmatrices(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes):
+    j = complex(0, 1) # complex
+    numAngles = len(angles)
+    Hmatrix = np.zeros((radonSize * numAngles, numModes))
+    overrideError = 1
+    scaling_factor = 1e-8  # Make sure it is really small
+    for mode in range(numModes):
+        print("Calculating mode {} of {}".format(mode + 1, numModes))
         
-        Hmatrix = (Hmatrix / scaling_factor)
-        np.save("zernike_modes.npy", Hmatrix)
+        zer = zernike(asize, asize, mode + 1) * scaling_factor
+        randomWavefront = circle(asize / 2, asize) * np.exp(j * zer * 2 * np.pi / wavelength)
+
+        image_plus = fresnel_propagation(randomWavefront, diameter, fresnelExtent, wavelength, z, overrideError)
+        image_minus = fresnel_propagation(randomWavefront, diameter, fresnelExtent, wavelength, -z, overrideError)
+        image_plus = np.abs(image_plus) ** 2
+        image_minus = np.abs(image_minus) ** 2
+        
+        rangeMin = validRange[0]
+        rangeMax = validRange[-1]
+        
+        image_plus = image_plus[rangeMin:rangeMax, rangeMin:rangeMax]
+        image_plus /= np.sum(image_plus)
+
+        image_minus = image_minus[rangeMin:rangeMax, rangeMin:rangeMax]
+        image_minus = image_minus / np.sum(image_minus)
+
+        Hmatrix[:, mode] = _geometricWavefrontSensor(image_plus, image_minus, z, angles)
+    
+    Hmatrix = (Hmatrix / scaling_factor)
 
     return Hmatrix
 
@@ -167,27 +171,33 @@ def geoWFS(Ip, Im, z, HmatrixInverse, angles):
     #	                          specification over all projection angles.
     #	                          The number of modes estimated, order of modes, etc are
     #	                          determined by Hmatrix.
-    
-    numAngles = len(angles)
+    data = _geometricWavefrontSensor(Ip, Im, z, angles)
+
+    return np.matmul(HmatrixInverse, data)
+
+def _geometricWavefrontSensor(Ip, Im, z, angles):
+    # Calculate Zernike modes of a wavefront using a geometric wavefront sensor method.
+    # Inputs    Ip      - Normalised intensity distribution after the focal plane
+    #           Im      - Normalised intensity distribution before the focal plane
+    #           z       - Distance of operation from focal plane
+    #           angles  - Angles to calculate Zernike modes for (defines the maximum radial order)
+    # Output    M       - Forward matrix for the GeoWFS. Used to calcualte mode information
     radonIp = radon(Ip, angles, circle=False)
     radonIm = radon(Im, angles, circle=False)
-
     radonSize = len(radonIp)
-    if radonSize*numAngles != np.shape(HmatrixInverse)[1]:
-        ValueError('Invalid HmatrixInverse - it needs to be of size X by {}.'.format(radonSize*numAngles))
+    nAngles= len(angles)
 
     cumIp = np.cumsum(radonIp, 0)
     cumIm = np.cumsum(radonIm, 0)
 
-    data = np.zeros(radonSize * numAngles)
+    M = np.zeros(radonSize * nAngles)
 
-    for projection in range(numAngles):
+    for projection in range(nAngles):
         hdiff = horizontalDiff(cumIm[:, projection], cumIp[:, projection])
         iMin = projection * radonSize
         iMax = projection * radonSize + radonSize
-        data[iMin:iMax] = -hdiff * radonIm[:, projection] / z
-
-    return np.matmul(HmatrixInverse, data)
+        M[iMin:iMax] = -hdiff * radonIm[:, projection] / z
+    return M
 
 def circle(radius, dimension, location=(0,0)):
     image = np.zeros((dimension, dimension))

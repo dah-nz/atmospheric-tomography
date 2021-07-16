@@ -6,7 +6,7 @@ def fresnel_propagation(fieldStart, fieldSize, fresnelExtent, wavelength, z, ove
 # Inputs    fieldStart      - Complex field at the aperture
 #           fieldSize       - metres; Size of the aperture
 #           fresnelExtent   - Extent of the fresnel kernel to convolve with, in terms of number 
-#                             of times the size of the perture (fieldSize)
+#                             of times the size of the aperture (fieldSize)
 #           wavelength      - metres; light wavelength
 #           z               - distance to propagate to
 #           overrideError   - Override sampling criterion (you can usually push this
