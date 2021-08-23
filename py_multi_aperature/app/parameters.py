@@ -26,4 +26,4 @@ total_photons = 5e6
 
 noiseLevel = 5e1
 
-nGS = 1                                             # Number of guide stars
+nGS = 2                                             # Number of guide stars
