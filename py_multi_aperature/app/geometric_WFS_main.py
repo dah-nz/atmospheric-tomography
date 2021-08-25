@@ -13,14 +13,11 @@ from poisson import fast_poisson
 
 def main():
     est = []
-    for altitude in layer_alt:
-        est.append(run_layer(altitude))
+    # output from run_layer = (guidestarModes, metaModes, targetModes, actualModes)
+    for altitude, modes in zip(layer_alt, layer_modes):
+        est.append(run_layer(altitude, modes))
 
-    for e in est:
-        print(e)
-
-    # guidestarModes, metaModes, targetModes, actualModes
-
+    # generate L, A, W, T matrices
     A = np.zeros((nModes*nGS,nModes*nLayers))
     for l, e in enumerate(est):
         for s, m in enumerate(e[0]):
@@ -28,20 +25,75 @@ def main():
                 A[(l*nModes)+n][(s*nModes)+n] = x
     
     W = np.zeros((nModes*nLayers))
+    Wj = np.zeros((nModes, 1, nLayers))
     for l, e in enumerate(est):
         for w, m in enumerate(e[1]):
             W[(l*nModes)+w] = m
-    Wt = np.zeros((nModes))
+            Wj[w, 0, l] = m
+
+    Wt = np.zeros((nModes*nLayers, 1))
+    Wtj = np.zeros((nModes,  1, nLayers))
     for l, e in enumerate(est):
         for w, m in enumerate(e[2]):
-            W[w] += m
+            Wt[(l*nModes)+w, 0] = m
+            Wtj[w, 0, l] = m
     L = np.matmul(A,W)
-    L_inv = np.transpose(L) / np.dot(L, L)      # roughly the pinv of a real vector
-    LinvA = np.matmul(L_inv, A)
-    print(LinvA)
-    T = np.matmul(Wt, LinvA)
+    w0w0T = np.matmul(Wj[:,:,0], np.transpose(Wj[:,:,0]))
+    w1w1T = np.matmul(Wj[:,:,1], np.transpose(Wj[:,:,1]))
+    w0tw0T = np.matmul(Wtj[:,:,0], np.transpose(Wj[:,:,0]))
+    w1tw1T = np.matmul(Wtj[:,:,1], np.transpose(Wj[:,:,1]))
+    # print(w0w0T)
+    # print(w1w1T)
+    # print(w0tw0T)
+    # print(w1tw1T)
+    T0 = np.matmul(w0tw0T, np.linalg.pinv(w0w0T))
+    T1 = np.matmul(w1tw1T, np.linalg.pinv(w1w1T))
 
-    print(T)
+    T = np.concatenate((T0, T1), 1)
+
+    WTp = np.matmul(A, np.linalg.pinv(T))
+    WTp = np.linalg.pinv(WTp)
+    WT = np.matmul(WTp, L)
+
+    # WT = np.matmul(np.linalg.pinv(A), L)
+    # WT = np.matmul(T, WT)
+
+    print(WT)
+
+    fig, axes = plt.subplots(1, 4)
+    targetWF = createPhaseScreenFromModes(WT)
+    targetWF /= np.linalg.norm(targetWF)
+    axes[0].set_title('Calculated Target Wavefront')
+    axes[0].imshow(np.abs(targetWF), aspect='equal', cmap='viridis')
+
+    # output from run_layer = (guidestarModes, metaModes, targetModes, actualModes)
+    o = run_layer(np.mean(layer_alt), WT)
+
+    print(o[0][0])
+
+    L0 = np.zeros((nModes*nGS, 1))
+    for g, s in enumerate(e[0]):
+        for n, m in enumerate(s):
+            L0[g*nGS+n, 0] = m
+    WT0 = np.matmul(WTp, L0)
+    target0WF = createPhaseScreenFromModes(WT0)
+    target1WF = createPhaseScreenFromModes(o[2])
+    target0WF /= np.linalg.norm(target0WF)
+    target1WF /= np.linalg.norm(target1WF)
+    axes[1].set_title('Wavefront calculated from guide stars')
+    axes[1].imshow(np.abs(target0WF), aspect='equal', cmap='viridis')
+
+    axes[3].set_title('Target wavefront output')
+    axes[3].imshow(np.abs(target1WF), aspect='equal', cmap='viridis')
+
+    axes[2].set_title('Wavefront Difference')
+    axes[2].imshow(np.abs(target0WF) - np.abs(targetWF), aspect='equal', cmap='viridis')
+
+    # LinvA = np.matmul(L_inv, A)
+    # print(LinvA)
+    # T = np.matmul(Wt, LinvA)
+
+    # print(T)
 
     plt.show()
 
@@ -87,7 +139,7 @@ def createPhaseScreenFromModes(modes):
         phase += z0 * GeoWFS.zernike(asize, asize, m + 3)
     return phase
 
-def run_layer(altitude):
+def run_layer(altitude, layerModes):
     # Set up plot output
     fig, axes = plt.subplots(2, 5)
     fig.suptitle("Zernike mode induced Geometric WFS output for layer at {}m altitude".format(altitude))
@@ -119,9 +171,8 @@ def run_layer(altitude):
 
     # Generate a phase screen to propagate the wavefront through
     # phase = phase_screen(asize, D_r0)
-    zernikeScaling = np.zeros(nModes)
-    zernikeScaling[1] = 1
-    phase = createPhaseScreenFromModes(zernikeScaling)
+
+    phase = createPhaseScreenFromModes(layerModes)
 
     axes[0, 0].set_title("Actual Phase Screen")
     axes[0, 0].imshow(np.abs(phase), aspect='equal', cmap='viridis')
@@ -148,11 +199,6 @@ def run_layer(altitude):
         im_l[(x0-s):(x0+s), (y0-s):(y0+s)] = Im[(x1-s):(x1+s), (y1-s):(y1+s)]
         guidestarModes.append(GeoWFS.geoWFS(ip_l, im_l, z, mt[1], radonAngles))
 
-    Ip, Im, im_plus, im_minus = generateIMatrices(targetWF, phase)
-    targetModes = GeoWFS.geoWFS(Ip, Im, z, target_m[1], radonAngles)
-    Ip, Im, im_plus, im_minus = generateIMatrices(metaPupilWF, phase)
-    metaModes = GeoWFS.geoWFS(Ip, Im, z, meta_m[1], radonAngles)
-
     iMin = validRegion[0]
     iMax = validRegion[-1]
     
@@ -162,6 +208,11 @@ def run_layer(altitude):
     axes[1, 1].set_title('Intra-focal image')
     axes[1, 1].imshow(im_minus, aspect='equal', extent=(iMin, iMax, iMin, iMax))
 
+    axes[1, 2].set_title('Sub Extra-focal image')
+    axes[1, 2].imshow(ip_l, aspect='equal', extent=(iMin, iMax, iMin, iMax))
+
+    axes[1, 3].set_title('Sub Intra-focal image')
+    axes[1, 3].imshow(im_l, aspect='equal', extent=(iMin, iMax, iMin, iMax))
 
     # axes[1, 2].set_title('Noisy Extra-focal image')
     # axes[1, 2].imshow(IpNoise, aspect='equal', extent=(iMin, iMax, iMin, iMax))
@@ -172,11 +223,11 @@ def run_layer(altitude):
     # est1 = GeoWFS.geoWFS(Ip, Im, z, MInv, radonAngles)
     # est2 = GeoWFS.geoWFS(IpNoise, ImNoise, z, MInv, radonAngles)
 
-    axes[1, 2].set_title('Sub Extra-focal image')
-    axes[1, 2].imshow(ip_l, aspect='equal', extent=(iMin, iMax, iMin, iMax))
+    Ip, Im, im_plus, im_minus = generateIMatrices(targetWF, phase)
+    targetModes = GeoWFS.geoWFS(Ip, Im, z, target_m[1], radonAngles)
+    Ip, Im, im_plus, im_minus = generateIMatrices(metaPupilWF, phase)
+    metaModes = GeoWFS.geoWFS(Ip, Im, z, meta_m[1], radonAngles)
 
-    axes[1, 3].set_title('Sub Intra-focal image')
-    axes[1, 3].imshow(im_l, aspect='equal', extent=(iMin, iMax, iMin, iMax))
 
     phase_est = createPhaseScreenFromModes(guidestarModes[0])
 
@@ -194,11 +245,11 @@ def run_layer(altitude):
         axes[0, 3].plot(e / np.linalg.norm(e), '-x')
     # axes[0, 3].plot(est2 / np.linalg.norm(est2), '-x')
     # axes[0, 3].plot(est1 / np.linalg.norm(est1), '-o')
-    axes[0, 3].plot(zernikeScaling / np.linalg.norm(zernikeScaling), '--')
+    axes[0, 3].plot(layerModes / np.linalg.norm(layerModes), '--')
     # axes[0, 3].legend(('Noisy', 'No noise'))
 
     # print("Norm of est1: {}; est2: {}; actual: {}".format(np.linalg.norm(est1), np.linalg.norm(est2), np.linalg.norm(zernikeScaling)))
-    actualModes = zernikeScaling
+    actualModes = layerModes
     return guidestarModes, metaModes, targetModes, actualModes
 
 if __name__ == "__main__":
