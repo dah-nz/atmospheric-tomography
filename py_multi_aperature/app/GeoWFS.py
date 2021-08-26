@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from fresnel_propagation import fresnel_propagation
 
-def generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes):
+def generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes, modeOffset):
 # Inputs    asize         - pixels; aperture size in pixels
 #           diameter      - metres: telescope diameter 
 #           fresnelExtent - strength of fresnel diffraction
@@ -21,7 +21,7 @@ def generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRange, ra
     rangeMin = validRange[0]
     rangeMax = validRange[-1]
     nAngles = len(angles)
-    meta_data = (asize, diameter, fresnelExtent, wavelength, z, rangeMin, rangeMax, radonSize, nAngles, numModes)
+    meta_data = (asize, diameter, fresnelExtent, wavelength, z, rangeMin, rangeMax, radonSize, nAngles, numModes, modeOffset)
     md_hash = hash(meta_data)
 
     try:
@@ -31,13 +31,13 @@ def generateMatrix(asize, diameter, fresnelExtent, wavelength, z, validRange, ra
     except FileNotFoundError:
         Hdata = {}
     
-    Hmatrices = generateHmatrices(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes)
+    Hmatrices = generateHmatrices(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes, modeOffset)
     Hdata[md_hash] = Hmatrices
     np.save("zernike_mode_data.npy", Hdata, allow_pickle=True)
 
     return Hdata[md_hash]
 
-def generateHmatrices(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes):
+def generateHmatrices(asize, diameter, fresnelExtent, wavelength, z, validRange, radonSize, angles, numModes, modeOffset):
     j = complex(0, 1) # complex
     numAngles = len(angles)
     Hmatrix = np.zeros((radonSize * numAngles, numModes))
@@ -46,7 +46,7 @@ def generateHmatrices(asize, diameter, fresnelExtent, wavelength, z, validRange,
     for mode in range(numModes):
         print("Calculating mode {} of {}".format(mode + 1, numModes))
         
-        zer = zernike(asize, asize, mode + 1) * scaling_factor
+        zer = zernike(asize, asize, mode + modeOffset) * scaling_factor
         randomWavefront = circle(asize / 2, asize) * np.exp(j * zer * 2 * np.pi / wavelength)
 
         image_plus = fresnel_propagation(randomWavefront, diameter, fresnelExtent, wavelength, z, overrideError)

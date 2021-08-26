@@ -58,19 +58,14 @@ def main():
     # WT = np.matmul(np.linalg.pinv(A), L)
     # WT = np.matmul(T, WT)
 
-    print(WT)
-
-    fig, axes = plt.subplots(1, 4)
+    fig, axes = plt.subplots(1, 5)
     targetWF = createPhaseScreenFromModes(WT)
     targetWF /= np.linalg.norm(targetWF)
-    axes[0].set_title('Calculated Target Wavefront')
+    axes[0].set_title('Target Phase Screen (Modal Tomography)')
     axes[0].imshow(np.abs(targetWF), aspect='equal', cmap='viridis')
 
     # output from run_layer = (guidestarModes, metaModes, targetModes, actualModes)
     o = run_layer(np.mean(layer_alt), WT)
-
-    print(o[0][0])
-
     L0 = np.zeros((nModes*nGS, 1))
     for g, s in enumerate(e[0]):
         for n, m in enumerate(s):
@@ -80,14 +75,26 @@ def main():
     target1WF = createPhaseScreenFromModes(o[2])
     target0WF /= np.linalg.norm(target0WF)
     target1WF /= np.linalg.norm(target1WF)
-    axes[1].set_title('Wavefront calculated from guide stars')
+    axes[1].set_title('Target Phase Screen (simulated guide stars)')
     axes[1].imshow(np.abs(target0WF), aspect='equal', cmap='viridis')
 
-    axes[3].set_title('Target wavefront output')
+    axes[3].set_title('Simulated Target Phase Screen')
     axes[3].imshow(np.abs(target1WF), aspect='equal', cmap='viridis')
 
-    axes[2].set_title('Wavefront Difference')
-    axes[2].imshow(np.abs(target0WF) - np.abs(targetWF), aspect='equal', cmap='viridis')
+    axes[2].set_title('Phase Screen Difference')
+    diff = np.abs(target0WF) - np.abs(targetWF)
+    m = max(np.abs(np.amax(diff)), np.abs(np.amin(diff)))
+    axes[2].imshow(diff, aspect='equal', cmap='seismic', vmin=-m, vmax=m)
+
+    axes[4].set_title('Calculated and Actual Geometric WFS modes')
+    for e in o[0]:
+        axes[4].plot(e / np.linalg.norm(e), '-x')
+    # axes[0, 3].plot(est2 / np.linalg.norm(est2), '-x')
+    # axes[0, 3].plot(est1 / np.linalg.norm(est1), '-o')
+    axes[4].plot(o[1] / np.linalg.norm(o[1]), '--')
+    axes[4].plot(o[2] / np.linalg.norm(o[2]), '-0')
+    axes[4].plot(o[3] / np.linalg.norm(o[3]))
+    axes[4].legend(('GS1', 'GS2', 'Metapupil', 'Target', '"Actual"'))
 
     # LinvA = np.matmul(L_inv, A)
     # print(LinvA)
@@ -99,7 +106,7 @@ def main():
 
 # Generate m and minv matrices for calculating zernike orders from geo wf sensor
 def generateMMatrices(d):
-    M = GeoWFS.generateMatrix(asize, d / asize, fresnelExtent, wavelength, z, validRegion, radonSize, radonAngles, nModes)
+    M = GeoWFS.generateMatrix(asize, d / asize, fresnelExtent, wavelength, z, validRegion, radonSize, radonAngles, nModes, modeOffset)
     Mt = np.transpose(M)
     MInv = np.matmul(np.linalg.pinv(np.matmul(Mt, M)), Mt)
     return (M, MInv)
@@ -136,7 +143,7 @@ def generateIMatrices(wavefront, phase):
 def createPhaseScreenFromModes(modes):
     phase = np.zeros((asize, asize))
     for m, z0 in enumerate(modes):
-        phase += z0 * GeoWFS.zernike(asize, asize, m + 3)
+        phase += z0 * GeoWFS.zernike(asize, asize, m + modeOffset)
     return phase
 
 def run_layer(altitude, layerModes):
