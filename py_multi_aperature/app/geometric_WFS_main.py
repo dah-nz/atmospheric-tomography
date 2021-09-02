@@ -8,99 +8,77 @@ from func import pol2cart
 from parameters import *
 from fresnel_propagation import fresnel_propagation
 from phase_screen import phase_screen
+from projection import projectionMatrix
 
 from poisson import fast_poisson
 
 def main():
-    est = []
-    # output from run_layer = (guidestarModes, metaModes, targetModes, actualModes)
+    guidestarModes = []
+    targetModes = []
+    pMatrices = []
+    tMatrices = []
+    # output from run_layer = (guidestarModes, targetModes, pMatrices, tMatrix)
     for altitude, modes in zip(layer_alt, layer_modes):
-        est.append(run_layer(altitude, modes))
+        gsm_l, tm_l, pm_l, tM_l = run_layer(altitude, modes)
+        guidestarModes.append(gsm_l)
+        targetModes.append(tm_l)
+        pMatrices.append(pm_l)
+        tMatrices.append(tM_l)
 
-    # generate L, A, W, T matrices
-    A = np.zeros((nModes*nGS,nModes*nLayers))
-    for l, e in enumerate(est):
-        for s, m in enumerate(e[0]):
-            for n, x in enumerate(m):
-                A[(l*nModes)+n][(s*nModes)+n] = x
-    
-    W = np.zeros((nModes*nLayers))
-    Wj = np.zeros((nModes, 1, nLayers))
-    for l, e in enumerate(est):
-        for w, m in enumerate(e[1]):
-            W[(l*nModes)+w] = m
-            Wj[w, 0, l] = m
+    # generate A and T matrices from pMatrices and tMatrix outputs for each layer
+    A = np.concatenate([np.concatenate([p for p in pM], 0) for pM in pMatrices], 1)
+    T = np.concatenate([t for t in tMatrices], 1)
 
-    Wt = np.zeros((nModes*nLayers, 1))
-    Wtj = np.zeros((nModes,  1, nLayers))
-    for l, e in enumerate(est):
-        for w, m in enumerate(e[2]):
-            Wt[(l*nModes)+w, 0] = m
-            Wtj[w, 0, l] = m
-    L = np.matmul(A,W)
-    w0w0T = np.matmul(Wj[:,:,0], np.transpose(Wj[:,:,0]))
-    w1w1T = np.matmul(Wj[:,:,1], np.transpose(Wj[:,:,1]))
-    w0tw0T = np.matmul(Wtj[:,:,0], np.transpose(Wj[:,:,0]))
-    w1tw1T = np.matmul(Wtj[:,:,1], np.transpose(Wj[:,:,1]))
-    # print(w0w0T)
-    # print(w1w1T)
-    # print(w0tw0T)
-    # print(w1tw1T)
-    T0 = np.matmul(w0tw0T, np.linalg.pinv(w0w0T))
-    T1 = np.matmul(w1tw1T, np.linalg.pinv(w1w1T))
+    # generate L vector from simulated modes for each guide star
+    L = np.concatenate(np.sum(guidestarModes, 0))
 
-    T = np.concatenate((T0, T1), 1)
+    W_t_layer = np.sum(targetModes, 0)
 
-    WTp = np.matmul(A, np.linalg.pinv(T))
-    WTp = np.linalg.pinv(WTp)
-    WT = np.matmul(WTp, L)
+    tempM = np.matmul(A, np.linalg.pinv(T))
+    W_t_tomo = np.matmul(np.linalg.pinv(tempM), L)
 
-    # WT = np.matmul(np.linalg.pinv(A), L)
-    # WT = np.matmul(T, WT)
-
-    fig, axes = plt.subplots(1, 5)
-    targetWF = createPhaseScreenFromModes(WT)
-    targetWF /= np.linalg.norm(targetWF)
+    fig, axes = plt.subplots(1, 2)
+    tomoWF = createPhaseScreenFromModes(W_t_tomo)
+    tomoWF /= np.linalg.norm(tomoWF)
     axes[0].set_title('Target Phase Screen (Modal Tomography)')
-    axes[0].imshow(np.abs(targetWF), aspect='equal', cmap='viridis')
+    axes[0].imshow(np.abs(tomoWF), aspect='equal', cmap='viridis')
 
-    # output from run_layer = (guidestarModes, metaModes, targetModes, actualModes)
-    o = run_layer(np.mean(layer_alt), WT)
-    L0 = np.zeros((nModes*nGS, 1))
-    for g, s in enumerate(e[0]):
-        for n, m in enumerate(s):
-            L0[g*nGS+n, 0] = m
-    WT0 = np.matmul(WTp, L0)
-    target0WF = createPhaseScreenFromModes(WT0)
-    target1WF = createPhaseScreenFromModes(o[2])
-    target0WF /= np.linalg.norm(target0WF)
-    target1WF /= np.linalg.norm(target1WF)
-    axes[1].set_title('Target Phase Screen (simulated guide stars)')
-    axes[1].imshow(np.abs(target0WF), aspect='equal', cmap='viridis')
+    targetWF = createPhaseScreenFromModes(W_t_layer)
+    targetWF /= np.linalg.norm(targetWF)
+    axes[1].set_title('Target Phase Screen (Sum of Layer Outputs)')
+    axes[1].imshow(np.abs(targetWF), aspect='equal', cmap='viridis')
 
-    axes[3].set_title('Simulated Target Phase Screen')
-    axes[3].imshow(np.abs(target1WF), aspect='equal', cmap='viridis')
+    # # output from run_layer = (guidestarModes, targetModes, actualModes, pMatrices, tMatrix)
+    # o = run_layer(np.mean(layer_alt), W_t)
+    # L0 = np.zeros((nModes*nGS, 1))
+    # for g, s in enumerate(e[0]):
+    #     for n, m in enumerate(s):
+    #         L0[g*nGS+n, 0] = m
+    # WT0 = np.matmul(WTp, L0)
+    # target0WF = createPhaseScreenFromModes(WT0)
+    # target1WF = createPhaseScreenFromModes(o[2])
+    # target0WF /= np.linalg.norm(target0WF)
+    # target1WF /= np.linalg.norm(target1WF)
+    # axes[1].set_title('Target Phase Screen (simulated guide stars)')
+    # axes[1].imshow(np.abs(target0WF), aspect='equal', cmap='viridis')
 
-    axes[2].set_title('Phase Screen Difference')
-    diff = np.abs(target0WF) - np.abs(targetWF)
-    m = max(np.abs(np.amax(diff)), np.abs(np.amin(diff)))
-    axes[2].imshow(diff, aspect='equal', cmap='seismic', vmin=-m, vmax=m)
+    # axes[3].set_title('Simulated Target Phase Screen')
+    # axes[3].imshow(np.abs(target1WF), aspect='equal', cmap='viridis')
 
-    axes[4].set_title('Calculated and Actual Geometric WFS modes')
-    for e in o[0]:
-        axes[4].plot(e / np.linalg.norm(e), '-x')
-    # axes[0, 3].plot(est2 / np.linalg.norm(est2), '-x')
-    # axes[0, 3].plot(est1 / np.linalg.norm(est1), '-o')
-    axes[4].plot(o[1] / np.linalg.norm(o[1]), '--')
-    axes[4].plot(o[2] / np.linalg.norm(o[2]), '-0')
-    axes[4].plot(o[3] / np.linalg.norm(o[3]))
-    axes[4].legend(('GS1', 'GS2', 'Metapupil', 'Target', '"Actual"'))
+    # axes[2].set_title('Phase Screen Difference')
+    # diff = np.abs(target0WF) - np.abs(targetWF)
+    # m = max(np.abs(np.amax(diff)), np.abs(np.amin(diff)))
+    # axes[2].imshow(diff, aspect='equal', cmap='seismic', vmin=-m, vmax=m)
 
-    # LinvA = np.matmul(L_inv, A)
-    # print(LinvA)
-    # T = np.matmul(Wt, LinvA)
-
-    # print(T)
+    # axes[4].set_title('Calculated and Actual Geometric WFS modes')
+    # for e in o[0]:
+    #     axes[4].plot(e / np.linalg.norm(e), '-x')
+    # # axes[0, 3].plot(est2 / np.linalg.norm(est2), '-x')
+    # # axes[0, 3].plot(est1 / np.linalg.norm(est1), '-o')
+    # axes[4].plot(o[1] / np.linalg.norm(o[1]), '--')
+    # axes[4].plot(o[2] / np.linalg.norm(o[2]), '-0')
+    # axes[4].plot(o[3] / np.linalg.norm(o[3]))
+    # axes[4].legend(('GS1', 'GS2', 'Metapupil', 'Target', '"Actual"'))
 
     plt.show()
 
@@ -146,16 +124,33 @@ def createPhaseScreenFromModes(modes):
         phase += z0 * GeoWFS.zernike(asize, asize, m + modeOffset)
     return phase
 
+# Function: run_layer
+#   Runs a simulation over a layer
+# Inputs:       - altitude          Altitude of layer
+#               - layerModes        Zernike modes of distortion at layer
+# Outputs:      - guidestarModes    Zernike modes of guide stars (calculated)
+#               - targetModes       Zernike modes of target (calculated)
+#               - pMatrices         Projection matrices from guidestars to metapupil
+#               - tMatrix           Projection matrix from metapupil to target
 def run_layer(altitude, layerModes):
     # Set up plot output
     fig, axes = plt.subplots(2, 5)
     fig.suptitle("Zernike mode induced Geometric WFS output for layer at {}m altitude".format(altitude))
 
     # Calculate guide star positions/separation at layer
-    tSize = asize/metaSize
-    sep = tSize*altitude*np.tan(theta/2)                                  # distance of centre of guide stars from zenith 
-    guideStar_theta = [t * (2 * np.pi / nGS) for t in range(nGS)]   # angles of guide stars around zenith 
-    guideStar_pos = [pol2cart(sep, t) for t in guideStar_theta]     # position of guide star wavefront on a layer 
+    sep = altitude*np.tan(theta/2)                                  # distance of centre of guide stars on layer from zenith (metres)
+    metaRadius = sep + (diameter / 2)                               # radius of meta pupil (metres)
+    sep /= (metaRadius * 2)                                         # normalise separation to metaRadius
+    tRadius = (diameter / 2) / (metaRadius * 2)                         # radius of telescope relative to metapupil - metapupil is the "unit circle" for each layer, guide stars and the target are sub-portions of this
+    guideStar_pos = []
+    pMatrices = []
+    for s in range(nGS):
+        phi = s * (2 * np.pi / nGS)
+        guideStar_pos.append(pol2cart(sep * asize, phi))                                          # position of guide star wavefront on a layer
+        pMatrices.append(projectionMatrix(pol2cart(sep, phi), tRadius, nModes + modeOffset))      # Construct projection matrices for each guide star
+
+    # Construct projection matrix for the target
+    tMatrix = projectionMatrix((0, 0), tRadius, nModes + modeOffset)
 
     # Add asterism of guide stars to wavefront data
     # Create the forward and inverse matrices for each guide star in asterism
@@ -163,22 +158,18 @@ def run_layer(altitude, layerModes):
     guidestarWF = np.zeros((asize,asize))
     gs_m = []
     for gs in guideStar_pos:
-        guidestarWF += GeoWFS.circle(tSize, asize, location=gs)
-        gs_m.append(generateMMatrices(diameter * tSize))
-
+        guidestarWF += GeoWFS.circle(tRadius * asize, asize, location=gs)
+        gs_m.append(generateMMatrices(tRadius * asize))
     guidestarWF = np.clip(guidestarWF, 0, 1)
 
-    metaPupilWF = GeoWFS.circle(asize, asize)
-    meta_m = generateMMatrices(asize)
-    targetWF = GeoWFS.circle(tSize, asize)
-    target_m = generateMMatrices(diameter * tSize)
+    # Create wavefront data for target
+    targetWF = GeoWFS.circle(tRadius * asize, asize)
+    target_m = generateMMatrices(tRadius * asize)
 
     axes[1, 4].set_title('Telescope aperature/in-focus image')
     axes[1, 4].imshow(guidestarWF, aspect='equal')
 
     # Generate a phase screen to propagate the wavefront through
-    # phase = phase_screen(asize, D_r0)
-
     phase = createPhaseScreenFromModes(layerModes)
 
     axes[0, 0].set_title("Actual Phase Screen")
@@ -195,13 +186,12 @@ def run_layer(altitude, layerModes):
     x0 = int(x0 / 2)
     y0 = int(y0 / 2)
     # Increase the size of the window
-    offset = metaSize
-    for location,  mt in zip(guideStar_pos, gs_m):
+    for pos,  mt in zip(guideStar_pos, gs_m):
         ip_l = np.zeros_like(Ip)
         im_l = np.zeros_like(Im)
-        x1 = int(x0 + location[0])
-        y1 = int(y0 + location[1])
-        s = int(tSize + offset)
+        x1 = int(x0 + pos[0])
+        y1 = int(y0 + pos[1])
+        s = int(tRadius * asize + 5)
         ip_l[(x0-s):(x0+s), (y0-s):(y0+s)] = Ip[(x1-s):(x1+s), (y1-s):(y1+s)]
         im_l[(x0-s):(x0+s), (y0-s):(y0+s)] = Im[(x1-s):(x1+s), (y1-s):(y1+s)]
         guidestarModes.append(GeoWFS.geoWFS(ip_l, im_l, z, mt[1], radonAngles))
@@ -221,23 +211,10 @@ def run_layer(altitude, layerModes):
     axes[1, 3].set_title('Sub Intra-focal image')
     axes[1, 3].imshow(im_l, aspect='equal', extent=(iMin, iMax, iMin, iMax))
 
-    # axes[1, 2].set_title('Noisy Extra-focal image')
-    # axes[1, 2].imshow(IpNoise, aspect='equal', extent=(iMin, iMax, iMin, iMax))
-
-    # axes[1, 3].set_title('Noisy Intra-focal image')
-    # axes[1, 3].imshow(ImNoise, aspect='equal', extent=(iMin, iMax, iMin, iMax))
-
-    # est1 = GeoWFS.geoWFS(Ip, Im, z, MInv, radonAngles)
-    # est2 = GeoWFS.geoWFS(IpNoise, ImNoise, z, MInv, radonAngles)
-
     Ip, Im, im_plus, im_minus = generateIMatrices(targetWF, phase)
     targetModes = GeoWFS.geoWFS(Ip, Im, z, target_m[1], radonAngles)
-    Ip, Im, im_plus, im_minus = generateIMatrices(metaPupilWF, phase)
-    metaModes = GeoWFS.geoWFS(Ip, Im, z, meta_m[1], radonAngles)
-
 
     phase_est = createPhaseScreenFromModes(guidestarModes[0])
-
     phase *= np.linalg.norm(phase_est) / np.linalg.norm(phase)
 
     axes[0, 1].set_title("Estimated Phase Screen")
@@ -255,9 +232,7 @@ def run_layer(altitude, layerModes):
     axes[0, 3].plot(layerModes / np.linalg.norm(layerModes), '--')
     # axes[0, 3].legend(('Noisy', 'No noise'))
 
-    # print("Norm of est1: {}; est2: {}; actual: {}".format(np.linalg.norm(est1), np.linalg.norm(est2), np.linalg.norm(zernikeScaling)))
-    actualModes = layerModes
-    return guidestarModes, metaModes, targetModes, actualModes
+    return (guidestarModes, targetModes, pMatrices, tMatrix)
 
 if __name__ == "__main__":
     main()
