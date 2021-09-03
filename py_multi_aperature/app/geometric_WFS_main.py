@@ -138,10 +138,10 @@ def run_layer(altitude, layerModes):
     for s in range(nGS):
         phi = s * (2 * np.pi / nGS)
         guideStar_pos.append(pol2cart(sep * asize, phi))                                          # position of guide star wavefront on a layer
-        pMatrices.append(projectionMatrix(pol2cart(sep, phi), tRadius, nModes + modeOffset))      # Construct projection matrices for each guide star
+        pMatrices.append(projectionMatrix(pol2cart(sep, phi), tRadius, nModes, modeOffset))      # Construct projection matrices for each guide star
 
     # Construct projection matrix for the target
-    tMatrix = projectionMatrix((0, 0), tRadius, nModes + modeOffset)
+    tMatrix = projectionMatrix((0, 0), tRadius, nModes, modeOffset)
 
     # Add asterism of guide stars to wavefront data
     # Create the forward and inverse matrices for each guide star in asterism

@@ -29,6 +29,6 @@ noiseLevel = 5e1
 modeOffset = 3
 nGS = 3                                             # Number of guide stars
 layer_alt = [1000, 3000]                            # altitudes of different layers
-layer_modes = [[0,0,0,1,0], [0,0,0,0,0.5]]
+layer_modes = [[0,0.5,0,0,0], [0,0.5,0,0,0]]
 nLayers = len(layer_alt)
 theta = (0.75/60) * (np.pi / 120)                    # angular  separation between guide stars (radians)

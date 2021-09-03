@@ -38,22 +38,22 @@ def transformUnitGrid(l, d, g):
 #   Inputs      l - location of circular portion
 #               d - relative diameter of circular portion (1 = same size as metapupil)
 #               n = number of Zernike modes
-def projectionMatrix(l, d, n):
+def projectionMatrix(l, d, n, modeOffset):
     global _G
     global _Ginv
-    gridSize = 2*n
+    gridSize = 10*n
     unitGrid = getGrid(gridSize)
     if np.size(_G) != (n * gridSize):
         _G = np.zeros((n, gridSize))
         for j in range(n):
             for i, g in enumerate(unitGrid):
-                _G[j, i] = zerni(g[0], g[1], j+1)
+                _G[j, i] = zerni(g[0], g[1], j+modeOffset)
         _Ginv = np.linalg.pinv(_G)
     portGrid = transformUnitGrid(l, d, unitGrid)
     Y = np.zeros((n, gridSize))
     for j in range(n):
         for i, g in enumerate(portGrid):
-            Y[j, i] = zerni(g[0], g[1], j+1)
+            Y[j, i] = zerni(g[0], g[1], j+modeOffset)
 
     return np.matmul(Y, _Ginv)
 
@@ -68,16 +68,16 @@ if __name__ == "__main__":
     l1 = (0.1, 0.1)
     d1 = 0.4
     plotcirc(l1, d1, 'r')
-    P1 = projectionMatrix(l1, d1, 5)
+    P1 = projectionMatrix(l1, d1, 5, 3)
     l2 = (-0.1, -0.1)
     d2 = 0.4
     plotcirc(l2, d2, 'b')
     g2 = transformUnitGrid(l2, d2, grid)
-    P2 = projectionMatrix(l2, d2, 5)
+    P2 = projectionMatrix(l2, d2, 5, 3)
     l3 = (0, 0)
     d3 = 0.4
     plotcirc(l3, d3, 'g')
-    P3 = projectionMatrix(l3, d3, 5)
+    P3 = projectionMatrix(l3, d3, 5, 3)
     plotcirc((0.0, 0.0), 1, 'k')
     
     plt.show()
