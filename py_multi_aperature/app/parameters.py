@@ -31,4 +31,4 @@ nGS = 3                                             # Number of guide stars
 layer_alt = [1000, 3000]                            # altitudes of different layers
 layer_modes = [[0,0.5,0,0,0], [0,0.5,0,0,0]]
 nLayers = len(layer_alt)
-theta = (0.75/60) * (np.pi / 120)                    # angular  separation between guide stars (radians)
+theta = (0.3/60) * (np.pi / 120)                    # angular  separation between guide stars (radians)
