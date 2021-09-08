@@ -20,20 +20,15 @@ if __name__ == "__main__":
     Mt = np.transpose(M)
     MInv = np.matmul(np.linalg.pinv(np.matmul(Mt, M)), Mt)
 
-    rng = np.random.default_rng()
-    zernikeScaling = rng.normal(size=(2 * nModes))
-    zernikeScaling[0] = 0       # Assume no zeroth order abberation
-    zernikeScaling = np.array([z0 / ((i + 1) ** 1/5) for i, z0 in enumerate(zernikeScaling)])
-
     # Generate telescope aperture
     tel = GeoWFS.circle(asize/3, asize)
-    # tel = GeoWFS.circle(asize/6, asize, location=(asize/4, asize/4)) + GeoWFS.circle(asize/6, asize, location=(-asize/4, -asize/4))
 
     fig, axes = plt.subplots(2, 5)
     fig.suptitle("Zernike mode induced Geometric WFS output")
 
     # Generate a phase screen to propagate the wavefront through
-    # phase = phase_screen(asize, D_r0)
+    zernikeScaling = np.zeros(nModes)
+    zernikeScaling[1] = 1
     phase = np.zeros((asize, asize))
     for m, z0 in enumerate(zernikeScaling):
         phase += z0 * GeoWFS.zernike(asize, asize, m + 1)
@@ -48,17 +43,6 @@ if __name__ == "__main__":
     j = complex(0, 1)
     fplus = fresnel_propagation(tel*np.exp(j * phase), 1, 2, wavelength, z, 0)
     fminus = fresnel_propagation(tel*np.exp(j * phase), 1, 2, wavelength, -z, 0)
-
-    # zernikeScaling /= total_photons
-    # phase /= total_photons
-
-    # Gaussian noise for detectors - possibly not a scientifically rigorous approach
-    # fplus_noise = rng.normal(size=np.shape(fplus)) * noiseLevel
-    # fminus_noise = rng.normal(size=np.shape(fminus)) * noiseLevel
-
-    # fplus += fplus_noise
-    # fminus += fminus_noise
-
     
     iMin = validRegion[0]
     iMax = validRegion[-1]
