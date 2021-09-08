@@ -33,6 +33,7 @@ class Layer:
     guideStars = None
     altitude = 0
     modes = None
+    number = 0
     def __init__(self, _ps, _minv, _alt, _gs, _tgt, _modes):
         self.phaseScreen = _ps
         self.Minv = _minv
@@ -49,10 +50,13 @@ def main():
         gs_pos.append((theta, phi))     # azimuthal position of guide star wavefront on a layer
     layers = []
     # Run simulation for each layer
+    nLayer = 1
     for alt, modes in zip(layer_alt, layer_modes):
         layer = gen_layer(alt, modes, gs_pos)
+        layer.number = nLayer
         run_layer(layer)
         layers.append(layer)
+        nLayer += 1
 
     # generate A and T matrices from pMatrices and tMatrix outputs for each layer
     A = np.concatenate([np.concatenate([gs.projMatrix for gs in layer.guideStars], 0) for layer in layers], 1)
@@ -65,6 +69,8 @@ def main():
         for n, gs in enumerate(layer.guideStars):
             L[n*nModes:(n+1)*nModes] += gs.modes
         W_t_total += layer.target.modes
+
+    print(L)
 
     tempM = np.matmul(A, np.linalg.pinv(T))
     W_t_tomo = np.matmul(np.linalg.pinv(tempM), L)
@@ -82,7 +88,7 @@ def main():
         fig.suptitle("Layer at {}m altitude".format(layer.altitude))
         legend = ['Layer', 'Target']
         axes[0, 0].set_title('Layer phase screen')
-        axes[0, 0].imshow(layer.phaseScreen, aspect='equal', extent=(iMin, iMax, iMin, iMax))
+        axes[0, 0].imshow(np.abs(layer.phaseScreen), aspect='equal', extent=(iMin, iMax, iMin, iMax))
         axes[1, 0].set_title('Layer Asterism')
         plotcirc(axes[1, 0], (0, 0), (asize / 2), 'k')
         plotcirc(axes[1, 0], layer.target.pos, layer.target.rT * (asize / 2), 'b--')
@@ -90,22 +96,22 @@ def main():
         axes[2, 0].plot(layer.modes / np.linalg.norm(layer.modes))
         axes[2, 0].plot(layer.target.modes / np.linalg.norm(layer.target.modes), '--')
         axes[0, 1].set_title('Target aperture')
-        img = layer.target.wf * layer.phaseScreen
+        img = np.abs(layer.target.wf * layer.phaseScreen)
         mx = max(abs(np.amax(img)), abs(np.amin(img)))
-        axes[0, 1].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=-mx)
+        axes[0, 1].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=0)
         axes[1, 1].set_title('Extra-focal image for target')
         axes[1, 1].imshow(layer.target.imP, aspect='equal', extent=(iMin, iMax, iMin, iMax))
         axes[2, 1].set_title('Intra-focal image for target')
-        axes[2, 1].imshow(layer.target.imM, aspect='equal', extent=(iMin, iMax, iMin, iMax))
+        axes[2, 1].imshow(np.abs(layer.target.imM), aspect='equal', extent=(iMin, iMax, iMin, iMax))
         for n, gs in enumerate(layer.guideStars):
             axes[0, 2 + n].set_title('Guidestar {} aperture'.format(n+1))
-            img = gs.wf * layer.phaseScreen
+            img = np.abs(gs.wf * layer.phaseScreen)
             mx = max(abs(np.amax(img)), abs(np.amin(img)))
-            axes[0, 2 + n].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=-mx)
+            axes[0, 2 + n].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=0)
             axes[1, 2 + n].set_title('Extra-focal image for guidestar {}'.format(n+1))
-            axes[1, 2 + n].imshow(gs.imP, aspect='equal', extent=(iMin, iMax, iMin, iMax))
+            axes[1, 2 + n].imshow(np.abs(gs.imP), aspect='equal', extent=(iMin, iMax, iMin, iMax))
             axes[2, 2 + n].set_title('Intra-focal image for guidestar {}'.format(n+1))
-            axes[2, 2 + n].imshow(gs.imM, aspect='equal', extent=(iMin, iMax, iMin, iMax))
+            axes[2, 2 + n].imshow(np.abs(gs.imM), aspect='equal', extent=(iMin, iMax, iMin, iMax))
             axes[2, 0].plot(gs.modes / np.linalg.norm(gs.modes), '-x')
             plotcirc(axes[1, 0], gs.pos, gs.rT * (asize / 2), 'g--')
             legend.append('Guidestar {}'.format(n+1))
@@ -263,7 +269,7 @@ def gen_layer(altitude, modes, gs_azi_pos, tg_azi_pos=(0,0)):
     for rA, phi in gs_rad:
         rA /= r_outer
         pos = pol2cart(rA * (asize / 2), phi)
-        pMatrix = projectionMatrix(pos, rT, nModes, modeOffset)  # Generate projection matrix for each guide star
+        pMatrix = projectionMatrix((rA/2, phi), rT/2, nModes, modeOffset)  # Generate projection matrix for each guide star
         wF = GeoWFS.circle(rT * (asize / 2), asize, pos)
         guideStar = StarAberration(pos, rT, wF, pMatrix)
         gs.append(guideStar)
@@ -274,8 +280,7 @@ def gen_layer(altitude, modes, gs_azi_pos, tg_azi_pos=(0,0)):
     r0 /= r_outer
     pos = pol2cart(r0 * (asize / 2), tg_azi_pos[1])
     target = StarAberration(pos, rT, tWF, tMatrix)
-        
-    phase = createPhaseScreenFromModes(modes, asize)
+    phase = createPhaseScreenFromModes(modes, rT * asize)       # Only create phase screen for target
 
     return Layer(phase, Minv, altitude, gs, target, modes)
 
@@ -283,28 +288,37 @@ def gen_layer(altitude, modes, gs_azi_pos, tg_azi_pos=(0,0)):
 #   Runs a simulation over a layer
 # Inputs:       - layer             Class containing layer information
 def run_layer(layer):
+    print("Running layer {}".format(layer.number))
     # Generate or acquire signal for decomposition into Zernikes
     #   This is going to generate a single column vector of Zernikes for the Geometric WFS, i.e, "est2".
     #   Note that this is effectivelty a matrix multiplication of the pre-derived respective inverse matrices with an unknown projected wavefront.
     phasescreen = layer.phaseScreen
     Minv = layer.Minv
-    # wf = np.zeros_like(layer.target.wf)
-    # for gs in layer.guideStars:
-    #     wf += gs.wf
-    # np.clip(wf, 0, 1)
-    # extent = None
+    separateGuidestars = False
+
+    wf = np.zeros_like(layer.target.wf)
+    if not separateGuidestars:
+        wf += layer.target.wf
+        for gs in layer.guideStars:
+            wf += gs.wf
+        wf = np.clip(wf, 0, 1)
+        extent = None
+        Ip, Im, im_plus, im_minus = generateIMatrices(wf, phasescreen)
     for gs in layer.guideStars:
-        Ip, Im, im_plus, im_minus = generateIMatrices(gs.wf, phasescreen)
+        if separateGuidestars:
+            wf = gs.wf
+            Ip, Im, im_plus, im_minus = generateIMatrices(wf, phasescreen)
         # Shift location of WFS images to account for offset
         (x, y) = gs.pos
         x = int(x)
         y = int(y)
         ip_l = shift2darray(Ip, -x, -y, fill_value=0)
         im_l = shift2darray(Im, -x, -y, fill_value=0)
-        # if extent is None:
-        #     extent = GeoWFS.circle((layer.target.rT * (asize / 2)) + 30, np.shape(ip_l)[0])
-        # ip_l *= extent
-        # im_l *= extent
+        # if not separateGuidestars:
+        #     if extent is None:
+        #         extent = GeoWFS.circle((layer.target.rT * (asize / 2)) + boundingOffset, np.shape(ip_l)[0])
+        #     ip_l *= extent
+        #     im_l *= extent
         gs.modes = GeoWFS.geoWFS(ip_l, im_l, z, Minv, radonAngles)
         gs.imP = ip_l
         gs.imM = im_l
