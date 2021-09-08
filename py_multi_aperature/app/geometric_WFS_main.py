@@ -70,10 +70,10 @@ def main():
             L[n*nModes:(n+1)*nModes] += gs.modes
         W_t_total += layer.target.modes
 
-    print(L)
-
     tempM = np.matmul(A, np.linalg.pinv(T))
     W_t_tomo = np.matmul(np.linalg.pinv(tempM), L)
+    # tempM = np.matmul(T, np.linalg.pinv(A))
+    # W_t_tomo = np.matmul(tempM, L)
 
     iMin = validRegion[0]
     iMax = validRegion[-1]
@@ -314,11 +314,12 @@ def run_layer(layer):
         y = int(y)
         ip_l = shift2darray(Ip, -x, -y, fill_value=0)
         im_l = shift2darray(Im, -x, -y, fill_value=0)
-        # if not separateGuidestars:
-        #     if extent is None:
-        #         extent = GeoWFS.circle((layer.target.rT * (asize / 2)) + boundingOffset, np.shape(ip_l)[0])
-        #     ip_l *= extent
-        #     im_l *= extent
+        if not separateGuidestars:
+            if boundingOffset >= 0:
+                if extent is None:
+                    extent = GeoWFS.circle((layer.target.rT * (asize / 2)) + boundingOffset, np.shape(ip_l)[0])
+                ip_l *= extent
+                im_l *= extent
         gs.modes = GeoWFS.geoWFS(ip_l, im_l, z, Minv, radonAngles)
         gs.imP = ip_l
         gs.imM = im_l
