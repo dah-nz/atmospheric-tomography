@@ -11,11 +11,11 @@ _Ginv = np.array(None)  # cached G inverse matrix   (used to calculate P)
 # Get/generate grid of points to use in creating projection matrices
 def getGrid(N):
     global _grid
-    pi2 = np.pi * np.pi
+    pi2 = np.pi**0.5
     if len(_grid) != N:
         for n in range(N):
             # Generate r and theta for grid point
-            r_n = ((n+1)/N)**0.3
+            r_n = ((n+1)/N)**0.5
             theta_n = pi2*N*r_n
 
             if (r_n > 1):
@@ -41,7 +41,7 @@ def transformUnitGrid(l, d, g):
 def projectionMatrix(l, d, n, modeOffset):
     global _G
     global _Ginv
-    gridSize = 10*n
+    gridSize = 100*n
     unitGrid = getGrid(gridSize)
     if np.size(_G) != (n * gridSize):
         _G = np.zeros((n, gridSize))
