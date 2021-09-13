@@ -26,11 +26,11 @@ total_photons = 5e6
 
 noiseLevel = 5e1
 
+targetPos = (0, 0)                                # position of target
 modeOffset = 3
 nGS = 3                                             # Number of guide stars
 layer_alt = [1000, 3000]                            # altitudes of different layers
 layer_modes = [[0,0.5,0,0.5,0], [0,0.5,0.5,0,0]]
 nLayers = len(layer_alt)
-arcminutes = 0.3
-theta = (arcminutes/60) * (np.pi / 120)             # angular  separation between guide stars (radians)
+theta = 0.45                                         # angular  separation between guide stars (arcminutes)
 boundingOffset = 10                                  # Offset around each guidestar for WFS calculation

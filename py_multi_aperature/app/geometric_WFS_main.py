@@ -42,17 +42,40 @@ class Layer:
         self.altitude = _alt
         self.modes = _modes
 
+def arcmin2rad(t):
+    return (t/60) * (np.pi / 180)
+
 def main():
+    angles = [0.05 * t for t in range(20)]
+    mse = []
+    corr = []
+    for theta in angles:
+        print("Running sim for angle = {}".format(theta))
+        plotData = int(theta * 100) in [0, 15, 35, 95, 60]
+        output = run_simulation(theta, plotData)
+        mse.append(output[0])
+        corr.append(output[1][0])
+    
+    plt.figure()
+    plt.xlabel('Theta (arcmin)')
+    plt.plot(angles, mse, '-o')
+    plt.plot(angles, corr, '-x')
+    plt.legend(['MSE', "Correlation"])
+
+    plt.show()
+
+def run_simulation(theta, plot=False):
     # Create guide star asterism
+    tPos = (arcmin2rad(targetPos[0]), targetPos[1])
     gs_pos = []
     for s in range(nGS):
         phi = s * (2 * np.pi / nGS)
-        gs_pos.append((theta, phi))     # azimuthal position of guide star wavefront on a layer
+        gs_pos.append((arcmin2rad(theta), phi))     # azimuthal position of guide star wavefront on a layer
     layers = []
     # Run simulation for each layer
     nLayer = 1
     for alt, modes in zip(layer_alt, layer_modes):
-        layer = gen_layer(alt, modes, gs_pos)
+        layer = gen_layer(alt, modes, gs_pos, tPos)
         layer.number = nLayer
         run_layer(layer)
         layers.append(layer)
@@ -72,100 +95,85 @@ def main():
 
     tempM = np.matmul(A, np.linalg.pinv(T))
     W_t_tomo = np.matmul(np.linalg.pinv(tempM), L)
+
     # tempM = np.matmul(T, np.linalg.pinv(A))
     # W_t_tomo = np.matmul(tempM, L)
 
-    iMin = validRegion[0]
-    iMax = validRegion[-1]
+    if plot:
+        iMin = validRegion[0]
+        iMax = validRegion[-1]
 
-    n_points = 256
-    def plotcirc(axes, pos, rad, dsp):
-        g = [pol2cart(rad,t/n_points*(2*np.pi)) for t in range(n_points)]
-        axes.plot([pos[0] + x for x,_ in g], [pos[1] + y for _,y in g], dsp)
+        n_points = 256
+        def plotcirc(axes, pos, rad, dsp):
+            g = [pol2cart(rad,t/n_points*(2*np.pi)) for t in range(n_points)]
+            axes.plot([pos[0] + x for x,_ in g], [pos[1] + y for _,y in g], dsp)
 
-    for layer in layers:
-        fig, axes = plt.subplots(3, 2 + nGS)
-        fig.suptitle("Layer at {}m altitude".format(layer.altitude))
-        legend = ['Layer', 'Target']
-        axes[0, 0].set_title('Layer phase screen')
-        axes[0, 0].imshow(np.abs(layer.phaseScreen), aspect='equal', extent=(iMin, iMax, iMin, iMax))
-        axes[1, 0].set_title('Layer Asterism')
-        plotcirc(axes[1, 0], (0, 0), (asize / 2), 'k')
-        plotcirc(axes[1, 0], layer.target.pos, layer.target.rT * (asize / 2), 'b--')
-        axes[2, 0].set_title('Layer modes')
-        axes[2, 0].plot(layer.modes / np.linalg.norm(layer.modes))
-        axes[2, 0].plot(layer.target.modes / np.linalg.norm(layer.target.modes), '--')
-        axes[0, 1].set_title('Target aperture')
-        img = np.abs(layer.target.wf * layer.phaseScreen)
-        mx = max(abs(np.amax(img)), abs(np.amin(img)))
-        axes[0, 1].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=0)
-        axes[1, 1].set_title('Extra-focal image for target')
-        axes[1, 1].imshow(layer.target.imP, aspect='equal', extent=(iMin, iMax, iMin, iMax))
-        axes[2, 1].set_title('Intra-focal image for target')
-        axes[2, 1].imshow(np.abs(layer.target.imM), aspect='equal', extent=(iMin, iMax, iMin, iMax))
-        for n, gs in enumerate(layer.guideStars):
-            axes[0, 2 + n].set_title('Guidestar {} aperture'.format(n+1))
-            img = np.abs(gs.wf * layer.phaseScreen)
+        for layer in layers:
+            fig, axes = plt.subplots(3, 2 + nGS)
+            fig.suptitle("Layer at {}m altitude - Theta: {}".format(layer.altitude, theta))
+            legend = ['Layer', 'Target']
+            axes[0, 0].set_title('Layer phase screen')
+            axes[0, 0].imshow(np.abs(layer.phaseScreen), aspect='equal', extent=(iMin, iMax, iMin, iMax))
+            axes[1, 0].set_title('Layer Asterism')
+            plotcirc(axes[1, 0], (0, 0), (asize / 2), 'k')
+            plotcirc(axes[1, 0], layer.target.pos, layer.target.rT * (asize / 2), 'b--')
+            axes[2, 0].set_title('Layer modes')
+            axes[2, 0].plot(layer.modes / np.linalg.norm(layer.modes))
+            axes[2, 0].plot(layer.target.modes / np.linalg.norm(layer.target.modes), '--')
+            axes[0, 1].set_title('Target aperture')
+            img = np.abs(layer.target.wf * layer.phaseScreen)
             mx = max(abs(np.amax(img)), abs(np.amin(img)))
-            axes[0, 2 + n].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=0)
-            axes[1, 2 + n].set_title('Extra-focal image for guidestar {}'.format(n+1))
-            axes[1, 2 + n].imshow(np.abs(gs.imP), aspect='equal', extent=(iMin, iMax, iMin, iMax))
-            axes[2, 2 + n].set_title('Intra-focal image for guidestar {}'.format(n+1))
-            axes[2, 2 + n].imshow(np.abs(gs.imM), aspect='equal', extent=(iMin, iMax, iMin, iMax))
-            axes[2, 0].plot(gs.modes / np.linalg.norm(gs.modes), '-x')
-            plotcirc(axes[1, 0], gs.pos, gs.rT * (asize / 2), 'g--')
-            legend.append('Guidestar {}'.format(n+1))
-        axes[2, 0].legend(legend)
+            axes[0, 1].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=0)
+            axes[1, 1].set_title('Extra-focal image for target')
+            axes[1, 1].imshow(layer.target.imP, aspect='equal', extent=(iMin, iMax, iMin, iMax))
+            axes[2, 1].set_title('Intra-focal image for target')
+            axes[2, 1].imshow(np.abs(layer.target.imM), aspect='equal', extent=(iMin, iMax, iMin, iMax))
+            for n, gs in enumerate(layer.guideStars):
+                axes[0, 2 + n].set_title('Guidestar {} aperture'.format(n+1))
+                img = np.abs(gs.wf * layer.phaseScreen)
+                mx = max(abs(np.amax(img)), abs(np.amin(img)))
+                axes[0, 2 + n].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=0)
+                axes[1, 2 + n].set_title('Extra-focal image for guidestar {}'.format(n+1))
+                axes[1, 2 + n].imshow(np.abs(gs.imP), aspect='equal', extent=(iMin, iMax, iMin, iMax))
+                axes[2, 2 + n].set_title('Intra-focal image for guidestar {}'.format(n+1))
+                axes[2, 2 + n].imshow(np.abs(gs.imM), aspect='equal', extent=(iMin, iMax, iMin, iMax))
+                axes[2, 0].plot(gs.modes / np.linalg.norm(gs.modes), '-x')
+                plotcirc(axes[1, 0], gs.pos, gs.rT * (asize / 2), 'g--')
+                legend.append('Guidestar {}'.format(n+1))
+            axes[2, 0].legend(legend)
 
-    # phase_est = createPhaseScreenFromModes(targetModes)
-    # phase *= np.linalg.norm(phase_est) / np.linalg.norm(phase)
+        fig, axes = plt.subplots(2, 2)
+        fig.suptitle("Tomography output for theta {} arcminute".format(theta))
+        tomoWF = createPhaseScreenFromModes(W_t_tomo)
+        tomoWF /= np.linalg.norm(tomoWF)
+        axes[0, 0].set_title('Target Phase Screen (Modal Tomography)')
+        axes[0, 0].imshow(np.abs(tomoWF), aspect='equal', cmap='viridis')
 
-    # axes[0, 1].set_title("Estimated Phase Screen")
-    # axes[0, 1].imshow(np.abs(phase_est), aspect='equal', cmap='viridis')
-    
-    # axes[0, 2].set_title('Calculated and Actual Geometric WFS modes')
-    # for e in guidestarModes:
-    #     axes[0, 2].plot(e / np.linalg.norm(e), '-x')
-    # axes[0, 2].plot(layerModes / np.linalg.norm(layerModes), '--')
+        targetWF = createPhaseScreenFromModes(W_t_total)
+        targetWF /= np.linalg.norm(targetWF)
+        axes[1, 0].set_title('Target Phase Screen (Sum of Layer Outputs)')
+        axes[1, 0].imshow(np.abs(targetWF), aspect='equal', cmap='viridis')
 
-    
-    # # Create wavefront data for target
-    # targetWF = GeoWFS.circle(tRadius * asize, asize)
-    # target_m = generateMMatrices(tRadius * asize)
+        actual_modes = np.sum(layer_modes, 0)
+        actualWF = createPhaseScreenFromModes(actual_modes)
+        actualWF /= np.linalg.norm(actualWF)
+        axes[1, 1].set_title('Target Phase Screen (Actual)')
+        axes[1, 1].imshow(np.abs(actualWF), aspect='equal', cmap='viridis')
 
-    # axes[1, 2].set_title('Telescope aperature/in-focus image')
-    # axes[1, 2].imshow(guidestarWF, aspect='equal')
-
-    # # Generate a phase screen to propagate the wavefront through
-    # phase = createPhaseScreenFromModes(layerModes, 2*tRadius*asize)
-
-    # axes[0, 0].set_title("Actual Phase Screen")
-    # axes[0, 0].imshow(np.abs(phase), aspect='equal', cmap='viridis')
-
-    fig, axes = plt.subplots(2, 2)
-    tomoWF = createPhaseScreenFromModes(W_t_tomo)
-    tomoWF /= np.linalg.norm(tomoWF)
-    axes[0, 0].set_title('Target Phase Screen (Modal Tomography)')
-    axes[0, 0].imshow(np.abs(tomoWF), aspect='equal', cmap='viridis')
-
-    targetWF = createPhaseScreenFromModes(W_t_total)
-    targetWF /= np.linalg.norm(targetWF)
-    axes[1, 0].set_title('Target Phase Screen (Sum of Layer Outputs)')
-    axes[1, 0].imshow(np.abs(targetWF), aspect='equal', cmap='viridis')
+        axes[0, 1].set_title('Calculated and Actual Geometric WFS modes')
+        axes[0, 1].plot(W_t_tomo / np.linalg.norm(W_t_tomo), '--')
+        axes[0, 1].plot(W_t_total / np.linalg.norm(W_t_total), '-0')
+        axes[0, 1].plot(actual_modes / np.linalg.norm(actual_modes))
+        axes[0, 1].legend(('Tomo', 'Sum', 'Actual'))
 
     actual_modes = np.sum(layer_modes, 0)
-    actualWF = createPhaseScreenFromModes(actual_modes)
-    actualWF /= np.linalg.norm(actualWF)
-    axes[1, 1].set_title('Target Phase Screen (Actual)')
-    axes[1, 1].imshow(np.abs(actualWF), aspect='equal', cmap='viridis')
+    act_v = actual_modes / np.linalg.norm(actual_modes)
+    tom_v = W_t_tomo / np.linalg.norm(W_t_tomo)
+    mse = ((act_v - tom_v)**2).mean()
+    corr = np.correlate(act_v, tom_v)
 
-    axes[0, 1].set_title('Calculated and Actual Geometric WFS modes')
-    axes[0, 1].plot(W_t_tomo / np.linalg.norm(W_t_tomo), '--')
-    axes[0, 1].plot(W_t_total / np.linalg.norm(W_t_total), '-0')
-    axes[0, 1].plot(actual_modes / np.linalg.norm(actual_modes))
-    axes[0, 1].legend(('Tomo', 'Sum', 'Actual'))
+    return mse, corr
 
-    plt.show()
 
 # Generate m and minv matrices for calculating zernike orders from geo wf sensor
 def generateMMatrices(d):
@@ -288,7 +296,7 @@ def gen_layer(altitude, modes, gs_azi_pos, tg_azi_pos=(0,0)):
 #   Runs a simulation over a layer
 # Inputs:       - layer             Class containing layer information
 def run_layer(layer):
-    print("Running layer {}".format(layer.number))
+    # print("Running layer {}".format(layer.number))
     # Generate or acquire signal for decomposition into Zernikes
     #   This is going to generate a single column vector of Zernikes for the Geometric WFS, i.e, "est2".
     #   Note that this is effectivelty a matrix multiplication of the pre-derived respective inverse matrices with an unknown projected wavefront.

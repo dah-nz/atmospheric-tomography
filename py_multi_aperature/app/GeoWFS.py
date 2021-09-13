@@ -44,7 +44,7 @@ def generateHmatrices(asize, diameter, fresnelExtent, wavelength, z, validRange,
     overrideError = 1
     scaling_factor = 1e-8  # Make sure it is really small
     for mode in range(numModes):
-        print("Calculating mode {} of {}".format(mode + 1, numModes))
+        # print("Calculating mode {} of {}".format(mode + 1, numModes))
         
         zer = zernike(asize, asize, mode + modeOffset) * scaling_factor
         randomWavefront = circle(asize / 2, asize) * np.exp(j * zer * 2 * np.pi / wavelength)
