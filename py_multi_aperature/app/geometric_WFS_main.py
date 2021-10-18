@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 from matplotlib import cm
 from numpy.random import poisson, set_state
 
@@ -62,28 +63,42 @@ def arcmin2rad(t):
     return (t/60) * (np.pi / 180)
 
 def main():
-    angles = [0.05 * t for t in range(20)]
-    output = []
-    for theta in angles:
-        print("Running sim for angle = {}".format(theta))
-        output.append(run_simulation(theta))
+    matplotlib.use("pgf")
+    matplotlib.rcParams.update({
+        "pgf.texsystem": "pdflatex",
+        "font.family": "serif",
+        "text.usetex": True,
+        "pgf.rcfonts": False,
+    })
+
+    sim = run_simulation(0.35)
+    plot_simulation_modesonly(sim)
+
+    # angles = [0.05 * t for t in range(20)]
+    # output = []
+    # for theta in angles:
+    #     print("Running sim for angle = {}".format(theta))
+    #     output.append(run_simulation(theta))
     
-    fig, axes = plt.subplots(1, 2)
-    axes[0].set_title('Correlation of tomgraphy output modes to actual modes')
-    axes[0].xlabel('Theta (arcmin)')
-    axes[0].plot(angles, [o.corr for o in output])
+    # fig, axes = plt.subplots(1, 2)
+    # axes[0].set_title('Correlation of tomgraphy output modes to actual modes')
+    # axes[0].set_xlabel('Theta (arcmin)')
+    # axes[0].plot(angles, [o.corr for o in output])
 
-    legend = []
-    actual_modes = np.sum(layer_modes, 0)
-    axes[1].set_title('Calculated and Actual Geometric WFS modes')
-    for o in output:
-        axes[1].plot(o.W_t_tomo, '--')
-        legend.append(o.theta)
-    axes[1].plot(actual_modes / np.linalg.norm(actual_modes))
-    legend.append('Actual')
-    axes[1].legend(legend)
+    # legend = []
+    # actual_modes = np.sum(layer_modes, 0)
+    # axes[1].set_title('Calculated and Actual Geometric WFS modes')
+    # for o in output:
+    #     axes[1].plot(o.W_t_tomo, '--')
+    #     legend.append(o.theta)
+    # axes[1].plot(actual_modes / np.linalg.norm(actual_modes))
+    # legend.append('Actual')
+    # axes[1].legend(legend)
 
-    plt.show()
+    fig = matplotlib.pyplot.gcf()
+    fig.set_size_inches(6, 4.5)
+    plt.savefig("work.pgf")
+    # plt.show()
 
 def run_simulation(theta, plot=False):
     # Create guide star asterism
@@ -124,7 +139,36 @@ def run_simulation(theta, plot=False):
 
     return SimulationOutput(W_t_tomo, W_t_total, actual_modes, layers, theta)
 
+def plot_simulation_modesonly(sim):
+    fig, axes = plt.subplots(1 + len(sim.layers))
+    actual_modes = np.sum(layer_modes, 0)
+    x = [i+1 for i in range(len(actual_modes))]
 
+    for i, layer in enumerate(sim.layers):
+        legend = ['Layer Ground Truth', 'Target (WFS)']
+        axes[i].set_title('Layer {} Simulation Data'.format(i+1))
+        axes[i].plot(x, layer.modes / np.linalg.norm(layer.modes), 'r')
+        axes[i].plot(x, layer.target.modes / np.linalg.norm(layer.target.modes), '--c')
+        for n, gs in enumerate(layer.guideStars):
+            axes[i].plot(x, gs.modes / np.linalg.norm(gs.modes), '+:')
+            legend.append('Guidestar {}'.format(n+1))
+        axes[i].legend(legend, loc='upper left', fancybox=True, shadow=True, bbox_to_anchor=(1.04, 1), fontsize=8)
+        axes[i].set_xlabel("Zernike Mode Index")
+        axes[i].set_ylabel("Normalised Mode Coefficient")
+        axes[i].xaxis.set_ticks(np.arange(min(x), max(x)+1, 1.0))
+
+    axes[-1].set_title('Tomography Comparison')
+    axes[-1].plot(x, actual_modes / np.linalg.norm(actual_modes), 'r')
+    axes[-1].plot(x, sim.W_t_sum / np.linalg.norm(sim.W_t_sum), '--c')
+    axes[-1].plot(x, sim.W_t_tomo / np.linalg.norm(sim.W_t_tomo), '+:')
+    axes[-1].legend(('Ground Truth', 'Target (WFS) Output', 'Tomography Output'), loc='upper left', fancybox=True, shadow=True, bbox_to_anchor=(1.04, 1), fontsize=8)
+    axes[-1].set_xlabel("Zernike Mode Index")
+    axes[-1].set_ylabel("Normalised Mode Coefficient")
+    axes[-1].xaxis.set_ticks(np.arange(min(x), max(x)+1, 1.0))
+    fig.tight_layout()
+
+# plot_simulation
+# Plots all the data for a simulation
 def plot_simulation(sim):
     iMin = validRegion[0]
     iMax = validRegion[-1]
@@ -175,7 +219,7 @@ def plot_simulation(sim):
     axes[0, 0].set_title('Target Phase Screen (Modal Tomography)')
     axes[0, 0].imshow(np.abs(tomoWF), aspect='equal', cmap='viridis')
 
-    targetWF = createPhaseScreenFromModes(sim.W_t_total)
+    targetWF = createPhaseScreenFromModes(sim.W_t_sum)
     targetWF /= np.linalg.norm(targetWF)
     axes[1, 0].set_title('Target Phase Screen (Sum of Layer Outputs)')
     axes[1, 0].imshow(np.abs(targetWF), aspect='equal', cmap='viridis')
@@ -188,7 +232,7 @@ def plot_simulation(sim):
 
     axes[0, 1].set_title('Calculated and Actual Geometric WFS modes')
     axes[0, 1].plot(sim.W_t_tomo / np.linalg.norm(sim.W_t_tomo), '--')
-    axes[0, 1].plot(sim.W_t_total / np.linalg.norm(sim.W_t_total), '-0')
+    axes[0, 1].plot(sim.W_t_sum / np.linalg.norm(sim.W_t_sum), '-0')
     axes[0, 1].plot(actual_modes / np.linalg.norm(actual_modes))
     axes[0, 1].legend(('Tomo', 'Sum', 'Actual'))
 

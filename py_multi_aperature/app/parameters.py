@@ -26,7 +26,7 @@ total_photons = 5e6
 
 noiseLevel = 5e1
 
-targetPos = (0, 0)                                # position of target
+targetPos = (0, 0)                                  # position of target
 modeOffset = 3
 nGS = 3                                             # Number of guide stars
 layer_alt = [1000, 3000]                            # altitudes of different layers

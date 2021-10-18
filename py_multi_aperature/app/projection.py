@@ -11,7 +11,7 @@ _Ginv = np.array(None)  # cached G inverse matrix   (used to calculate P)
 # Get/generate grid of points to use in creating projection matrices
 def getGrid(N):
     global _grid
-    pi2 = np.pi**0.5
+    pi2 = np.pi**0.6
     if len(_grid) != N:
         for n in range(N):
             # Generate r and theta for grid point
@@ -65,19 +65,21 @@ if __name__ == "__main__":
     def plotcirc(l, d, dsp):
         g = transformUnitGrid(l, d, grid)
         plt.plot([x for x,_ in g], [y for _,y in g], dsp)
+    offset = 1
+    nModes = 7
     l1 = (0.1, 0.1)
     d1 = 0.4
     plotcirc(l1, d1, 'r')
-    P1 = projectionMatrix(l1, d1, 5, 3)
+    P1 = projectionMatrix(l1, d1, nModes, offset)
     l2 = (-0.1, -0.1)
     d2 = 0.4
     plotcirc(l2, d2, 'b')
     g2 = transformUnitGrid(l2, d2, grid)
-    P2 = projectionMatrix(l2, d2, 5, 3)
+    P2 = projectionMatrix(l2, d2, nModes, offset)
     l3 = (0, 0)
     d3 = 0.4
     plotcirc(l3, d3, 'g')
-    P3 = projectionMatrix(l3, d3, 5, 3)
+    P3 = projectionMatrix(l3, d3, nModes, offset)
     plotcirc((0.0, 0.0), 1, 'k')
     
     plt.show()
