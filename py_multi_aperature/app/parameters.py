@@ -10,7 +10,7 @@ radonSize = 495                                     # size of matrix for Radon t
 D_r0 = diameter / r_0                               # 
 fresnelExtent = 2                                   # Strength of fresnel diffraction
 radonAngles = np.arange(0, 180, 22.5)               # degrees; angles for Radon transform
-nModes = 5                                         # number of Zernike modes
+nModes = 7                                         # number of Zernike modes
 
 wavelength = 600e-9                                 # metres; narrowband wavelength
 wavelnList = np.arange(600, 1000 + 1, 20) * 1e-9    # meters; broad band wavelength approximations
@@ -27,10 +27,10 @@ total_photons = 5e6
 noiseLevel = 5e1
 
 targetPos = (0, 0)                                  # position of target
-modeOffset = 3
+modeOffset = 1
 nGS = 3                                             # Number of guide stars
 layer_alt = [1000, 3000]                            # altitudes of different layers
-layer_modes = [[0,0.5,0,0.5,0], [0,0.5,0.5,0,0]]
+layer_modes = [[0,0,0,0.5,0,0.5,0], [0,0,0,0.5,0.5,0,0]]
 nLayers = len(layer_alt)
 theta = 0.45                                         # angular  separation between guide stars (arcminutes)
 boundingOffset = 10                                  # Offset around each guidestar for WFS calculation

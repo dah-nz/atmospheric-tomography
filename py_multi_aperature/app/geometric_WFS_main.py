@@ -35,13 +35,15 @@ class Layer:
     altitude = 0
     modes = None
     number = 0
-    def __init__(self, _ps, _minv, _alt, _gs, _tgt, _modes):
+    rT = 0
+    def __init__(self, _ps, _minv, _alt, _gs, _tgt, _modes, _rT=1):
         self.phaseScreen = _ps
         self.Minv = _minv
         self.target = _tgt
         self.guideStars = _gs
         self.altitude = _alt
         self.modes = _modes
+        self.rT = _rT
 
 class SimulationOutput:
     mse = 0
@@ -113,12 +115,15 @@ def run_simulation(theta, plot=False):
     layers = []
     # Run simulation for each layer
     nLayer = 1
+    actual_modes = np.zeros((nModes))
     for alt, modes in zip(layer_alt, layer_modes):
         layer = gen_layer(alt, modes, gs_pos, tPos)
         layer.number = nLayer
         run_layer(layer)
         layers.append(layer)
         nLayer += 1
+        P = projectionMatrix(tPos, layer.rT, nModes, modeOffset)
+        actual_modes += np.matmul(P, modes)
 
     # generate A and T matrices from pMatrices and tMatrix outputs for each layer
     A = np.concatenate([np.concatenate([gs.projMatrix for gs in layer.guideStars], 0) for layer in layers], 1)
@@ -137,8 +142,6 @@ def run_simulation(theta, plot=False):
 
     # tempM = np.matmul(T, np.linalg.pinv(A))
     # W_t_tomo = np.matmul(tempM, L)
-
-    actual_modes = np.sum(layer_modes, 0)
 
     return SimulationOutput(W_t_tomo, W_t_total, actual_modes, layers, theta)
 
@@ -341,7 +344,7 @@ def gen_layer(altitude, modes, gs_azi_pos, tg_azi_pos=(0,0)):
     for rA, phi in gs_rad:
         rA /= r_outer
         pos = pol2cart(rA * (asize / 2), phi)
-        pMatrix = projectionMatrix((rA/2, phi), rT/2, nModes, modeOffset)  # Generate projection matrix for each guide star
+        pMatrix = projectionMatrix(pos, rT/2, nModes, modeOffset)  # Generate projection matrix for each guide star
         wF = GeoWFS.circle(rT * (asize / 2), asize, pos)
         guideStar = StarAberration(pos, rT, wF, pMatrix)
         gs.append(guideStar)
@@ -352,9 +355,9 @@ def gen_layer(altitude, modes, gs_azi_pos, tg_azi_pos=(0,0)):
     r0 /= r_outer
     pos = pol2cart(r0 * (asize / 2), tg_azi_pos[1])
     target = StarAberration(pos, rT, tWF, tMatrix)
-    phase = createPhaseScreenFromModes(modes, rT * asize)       # Only create phase screen for target
+    phase = createPhaseScreenFromModes(modes)       # Only create phase screen for target
 
-    return Layer(phase, Minv, altitude, gs, target, modes)
+    return Layer(phase, Minv, altitude, gs, target, modes, rT)
 
 # Function: run_layer
 #   Runs a simulation over a layer
