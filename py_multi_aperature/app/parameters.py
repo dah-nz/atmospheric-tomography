@@ -34,3 +34,5 @@ layer_modes = [[0,0.5,0,0.5,0], [0,0.5,0.5,0,0]]
 nLayers = len(layer_alt)
 theta = 0.45                                         # angular  separation between guide stars (arcminutes)
 boundingOffset = 10                                  # Offset around each guidestar for WFS calculation
+
+outputType = "plt"                                   # "pgf" for latex, "plt" for matplotlib

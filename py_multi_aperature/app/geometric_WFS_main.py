@@ -63,13 +63,14 @@ def arcmin2rad(t):
     return (t/60) * (np.pi / 180)
 
 def main():
-    matplotlib.use("pgf")
-    matplotlib.rcParams.update({
-        "pgf.texsystem": "pdflatex",
-        "font.family": "serif",
-        "text.usetex": True,
-        "pgf.rcfonts": False,
-    })
+    if outputType == "pgf":
+        matplotlib.use("pgf")
+        matplotlib.rcParams.update({
+            "pgf.texsystem": "pdflatex",
+            "font.family": "serif",
+            "text.usetex": True,
+            "pgf.rcfonts": False,
+        })
 
     sim = run_simulation(0.35)
     plot_simulation_modesonly(sim)
@@ -95,10 +96,12 @@ def main():
     # legend.append('Actual')
     # axes[1].legend(legend)
 
-    fig = matplotlib.pyplot.gcf()
-    fig.set_size_inches(6, 4.5)
-    plt.savefig("work.pgf")
-    # plt.show()
+    if outputType == "pgf":
+        fig = matplotlib.pyplot.gcf()
+        fig.set_size_inches(6, 4.5)
+        plt.savefig("work.pgf")
+    else:
+        plt.show()
 
 def run_simulation(theta, plot=False):
     # Create guide star asterism
