@@ -9,20 +9,29 @@ _G = np.array(None)     # cached G matrix           (modes in unit circle at gri
 _Ginv = np.array(None)  # cached G inverse matrix   (used to calculate P)
 
 # Get/generate grid of points to use in creating projection matrices
-def getGrid(N):
+def getGrid(N=None):
     global _grid
     pi2 = np.pi**0.6
-    if len(_grid) != N:
-        for n in range(N):
-            # Generate r and theta for grid point
-            r_n = ((n+1)/N)**0.5
-            theta_n = pi2*N*r_n
+    if N is not None:
+        if len(_grid) != N:
+            for n in range(N):
+                # Generate r and theta for grid point
+                r_n = ((n+1)/N)**0.5
+                theta_n = pi2*N*r_n
 
-            if (r_n > 1):
-                print("n:{}, r_n:{}".format(n+1, r_n))
-            
-            # append cartesian coordinates
-            _grid.append(pol2cart(r_n, theta_n))
+                if (r_n > 1):
+                    print("n:{}, r_n:{}".format(n+1, r_n))
+                
+                # append cartesian coordinates
+                _grid.append(pol2cart(r_n, theta_n))
+    elif _grid == []:
+        n_points = 50
+        X = np.linspace(-1, 1, n_points)
+        Y = np.linspace(-1, 1, n_points)
+        for x in X:
+            for y in Y:
+                if (x**2 + y**2) < 1:
+                    _grid.append((x, y))
     return _grid
 
 # Transform points on a grid on the unit circle into points in a circular portion
@@ -43,6 +52,7 @@ def projectionMatrix(l, d, n, modeOffset):
     global _Ginv
     gridSize = 100*n
     unitGrid = getGrid(gridSize)
+    # gridSize = len(unitGrid)
     if np.size(_G) != (n * gridSize):
         _G = np.zeros((n, gridSize))
         for j in range(n):
@@ -55,6 +65,7 @@ def projectionMatrix(l, d, n, modeOffset):
         for i, g in enumerate(portGrid):
             Y[j, i] = zerni(g[0], g[1], j+modeOffset)
 
+    # return np.transpose(np.matmul(Y, _Ginv))
     return np.matmul(Y, _Ginv)
 
 if __name__ == "__main__":
