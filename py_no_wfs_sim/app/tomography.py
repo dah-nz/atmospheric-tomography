@@ -26,9 +26,15 @@ def runTomography(layers):
 
 def runModes(theta, nGS, target_modes, nModes, nOffset):
     results = np.zeros_like(theta)
+
+    truth_modes = [0] * nModes
+    for m in target_modes:
+        truth_modes = np.add(truth_modes, m)
+
     for (x, y), _ in np.ndenumerate(results):
         t = theta[x, y]
         g = nGS[x, y]
+        print("Theta: {}; N Guide Stars: {}".format(t, g))
         gs_pos = []
         for s in range(g):
             phi = s * (2 * np.pi / g)
@@ -37,7 +43,6 @@ def runModes(theta, nGS, target_modes, nModes, nOffset):
         for i, _ in enumerate(target_modes):
             layers.append(layer.Layer((i+1) * 1000, gs_pos, (0,0)))
 
-        truth_modes = [0] * nModes
         for l, m in zip(layers, target_modes):
             l.updateProjectionMatrices(nModes, nOffset)
             l.modes = np.matmul(np.linalg.pinv(l.target.projMatrix), m)
@@ -45,10 +50,11 @@ def runModes(theta, nGS, target_modes, nModes, nOffset):
             for gs in l.guideStars:
                 gs.modes = np.matmul(gs.projMatrix, l.modes)         
             l.target.modes = np.matmul(l.target.projMatrix, l.modes)
-            truth_modes = np.add(truth_modes, m)
 
         tomo_modes = runTomography(layers)
-        results[x, y] = np.mean((tomo_modes - truth_modes) ** 2)
+        print(tomo_modes)
+        mse = np.mean((tomo_modes - truth_modes) ** 2)
+        results[x, y] = mse
 
     return results
 
@@ -61,14 +67,19 @@ def main():
     nOffset = 1
     rand_gen = np.random.default_rng()
 
-    t = np.arange(0.1, 3.1, 0.1)
-    g = np.arange(2, 6)
+    t = np.arange(0.1, 1.1, 0.1)
+    g = np.arange(1, 6)
 
     T, G = np.meshgrid(t, g)
 
-    target_modes = rand_gen.normal(size=(nLayers,nModes))
+    target_modes = rand_gen.normal(size=(N, nLayers,nModes))
 
-    Z = runModes(T, G, target_modes, nModes, nOffset)
+    Z = np.zeros_like(T)
+
+    for modes in target_modes:
+        Z += runModes(T, G, modes, nModes, nOffset)
+
+    Z /= N
 
     # modes_truth = []
     # modes_tomo = []
@@ -85,8 +96,10 @@ def main():
     #     # tomo_modes /= np.linalg.norm(tomo_modes)
     #     # truth_modes /= np.linalg.norm(truth_modes)
 
-    plt.plot3d(T, G ,Z)
-
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_surface(T, G ,Z)
+    print(Z)
 
     
     # X = [x for x in range(nOffset, nModes+nOffset)]

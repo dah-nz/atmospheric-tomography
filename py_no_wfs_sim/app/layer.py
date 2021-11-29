@@ -3,6 +3,7 @@ from func import pol2cart
 from projection import projectionMatrix
 from zernike import zernike_phase_screen
 
+proj_mat_cache = {}
 # Defines the projection of an object on a layer
 # An object may be a star, satellite or other optical target
 class Projection:
@@ -18,7 +19,12 @@ class Projection:
     # Inputs        - n         Number of Zernike modes required for projection matrix
     #               - offset    Number of modes to ignore
     def updateProj(self, n, offset):
-        self.projMatrix = projectionMatrix(self.pos, self.aperture_r, n, offset)
+        global proj_mat_cache
+        try:
+            self.projMatrix = proj_mat_cache[(n, offset, self.aperture_r, self.pos)]
+        except KeyError:
+            proj_mat_cache[(n, offset, self.aperture_r, self.pos)] = projectionMatrix(self.pos, self.aperture_r, n, offset)
+            self.projMatrix = proj_mat_cache[(n, offset, self.aperture_r, self.pos)]
     
 
 # Defines an atmospheric layer, and associated tomographic data
