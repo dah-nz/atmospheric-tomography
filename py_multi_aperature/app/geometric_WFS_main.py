@@ -74,7 +74,8 @@ def main():
             "pgf.rcfonts": False,
         })
 
-    sim = run_simulation(0.35)
+    sim = run_simulation(0.3)
+    plot_simulation(sim)
     plot_simulation_modesonly(sim)
 
     # angles = [0.05 * t for t in range(20)]
@@ -106,6 +107,9 @@ def main():
         plt.show()
 
 def run_simulation(theta, plot=False):
+    global layer_modes
+    rand_gen = np.random.default_rng()
+    layer_modes = rand_gen.normal(size=(2, nModes))
     # Create guide star asterism
     tPos = (arcmin2rad(targetPos[0]), targetPos[1])
     gs_pos = []
@@ -152,7 +156,7 @@ def plot_simulation_modesonly(sim):
 
     for i, layer in enumerate(sim.layers):
         legend = ['Layer Ground Truth', 'Target (WFS)']
-        axes[i].set_title('Layer {} Simulation Data'.format(i+1))
+        axes[i].set_title('Layer @ {}m Simulation Data'.format(layer.altitude))
         axes[i].plot(x, layer.modes / np.linalg.norm(layer.modes), 'r')
         axes[i].plot(x, layer.target.modes / np.linalg.norm(layer.target.modes), '--c')
         for n, gs in enumerate(layer.guideStars):
@@ -162,6 +166,7 @@ def plot_simulation_modesonly(sim):
         axes[i].set_xlabel("Zernike Mode Index")
         axes[i].set_ylabel("Normalised Mode Coefficient")
         axes[i].xaxis.set_ticks(np.arange(min(x), max(x)+1, 1.0))
+        print(layer.modes)
 
     axes[-1].set_title('Tomography Comparison')
     axes[-1].plot(x, actual_modes / np.linalg.norm(actual_modes), 'r')
@@ -186,10 +191,12 @@ def plot_simulation(sim):
 
     for layer in sim.layers:
         fig, axes = plt.subplots(3, 2 + nGS)
-        fig.suptitle("Layer at {}m altitude - Theta: {}".format(layer.altitude, sim.theta))
+        fig.suptitle("Layer at {}m altitude - Theta: {}'".format(layer.altitude, sim.theta))
         legend = ['Layer', 'Target']
         axes[0, 0].set_title('Layer phase screen')
-        axes[0, 0].imshow(np.abs(layer.phaseScreen), aspect='equal', extent=(iMin, iMax, iMin, iMax))
+        img = np.abs(layer.phaseScreen)
+        mx = max(abs(np.amax(img)), abs(np.amin(img)))
+        axes[0, 0].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=0)
         axes[1, 0].set_title('Layer Asterism')
         plotcirc(axes[1, 0], (0, 0), (asize / 2), 'k')
         plotcirc(axes[1, 0], layer.target.pos, layer.target.rT * (asize / 2), 'b--')
@@ -198,7 +205,6 @@ def plot_simulation(sim):
         axes[2, 0].plot(layer.target.modes / np.linalg.norm(layer.target.modes), '--')
         axes[0, 1].set_title('Target aperture')
         img = np.abs(layer.target.wf * layer.phaseScreen)
-        mx = max(abs(np.amax(img)), abs(np.amin(img)))
         axes[0, 1].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=0)
         axes[1, 1].set_title('Extra-focal image for target')
         axes[1, 1].imshow(layer.target.imP, aspect='equal', extent=(iMin, iMax, iMin, iMax))
@@ -207,7 +213,7 @@ def plot_simulation(sim):
         for n, gs in enumerate(layer.guideStars):
             axes[0, 2 + n].set_title('Guidestar {} aperture'.format(n+1))
             img = np.abs(gs.wf * layer.phaseScreen)
-            mx = max(abs(np.amax(img)), abs(np.amin(img)))
+            # mx = max(abs(np.amax(img)), abs(np.amin(img)))
             axes[0, 2 + n].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=0)
             axes[1, 2 + n].set_title('Extra-focal image for guidestar {}'.format(n+1))
             axes[1, 2 + n].imshow(np.abs(gs.imP), aspect='equal', extent=(iMin, iMax, iMin, iMax))
@@ -219,7 +225,7 @@ def plot_simulation(sim):
         axes[2, 0].legend(legend)
 
     fig, axes = plt.subplots(2, 2)
-    fig.suptitle("Tomography output for theta {} arcminute".format(sim.theta))
+    fig.suptitle("Tomography output for Theta: {}'".format(sim.theta))
     tomoWF = createPhaseScreenFromModes(sim.W_t_tomo)
     tomoWF /= np.linalg.norm(tomoWF)
     axes[0, 0].set_title('Target Phase Screen (Modal Tomography)')

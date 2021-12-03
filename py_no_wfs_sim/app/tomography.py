@@ -60,14 +60,14 @@ def runModes(theta, nGS, target_modes, nModes, nOffset):
 
 
 def main():
-    N = 5
+    N = 3
     nGS = 3
     nModes = 10
     nLayers = 2
     nOffset = 1
     rand_gen = np.random.default_rng()
 
-    t = np.arange(0.1, 1.1, 0.1)
+    t = np.arange(0.1, 1.6, 0.1)
     g = np.arange(1, 6)
 
     T, G = np.meshgrid(t, g)
@@ -99,6 +99,10 @@ def main():
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     ax.plot_surface(T, G ,Z)
+    ax.set_title("Verifying Tomography Algorithm")
+    ax.set_xlabel("Theta (')")
+    ax.set_ylabel("Number of Guide Stars")
+    ax.set_zlabel("Mean Square Error")
     print(Z)
 
     
