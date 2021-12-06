@@ -348,4 +348,27 @@ for timestep in progressbar(range(num_iterations)):
 
 anim.close()
 
+# Calculate Strehl ratio
+strehl = get_strehl_from_focal(long_exposure, unaberrated_PSF * wf_wfs.total_power)
+print("Strehl = {:.1f}%".format(strehl * 100))
+
+plt.figure()
+# Display radial profiles of PSFs
+r, y_coro, yerr, n = radial_profile(long_exposure_coro / long_exposure.max(), 0.25 * spatial_resolution)
+_, y_noncoro, _, _ = radial_profile(long_exposure / long_exposure.max(), 0.25 * spatial_resolution)
+_, y_unaber, _, _ = radial_profile(unaberrated_PSF / unaberrated_PSF.max(), 0.25 * spatial_resolution)
+
+rad_to_arcsec = 206265
+
+plt.plot(r * rad_to_arcsec, y_noncoro, label="Non-coronagraphic")
+plt.plot(r * rad_to_arcsec, y_coro, label="Coronagraphic")
+plt.plot(r * rad_to_arcsec, y_unaber, label="Unaberrated")
+
+plt.yscale('log')
+plt.xlim(0, 1.3)
+plt.ylim(3e-6, 1)
+plt.xlabel('Angular Separation [arcsec]')
+plt.ylabel('Raw Contrast')
+plt.legend()
+
 plt.show()
