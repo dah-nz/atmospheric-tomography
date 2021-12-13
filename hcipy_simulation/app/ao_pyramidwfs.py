@@ -54,7 +54,8 @@ plt.colorbar()
 
 # Generate Pyramid WFS
 pwfs = PyramidWavefrontSensorOptics(pupil_grid, wavelength_0=wavelength_wfs)
-camera = NoiselessDetector(pwfs.output_grid)
+camera = NoiselessDetector(focal_grid)
+# camera = NoiselessDetector(pwfs.output_grid)
 
 wf = Wavefront(VLT_aperture, wavelength_wfs)
 camera.integrate(pwfs.forward(wf), 1)
@@ -125,9 +126,6 @@ response_matrix = ModeBasis(response_matrix)
 
 plt.close()
 anim.close()
-
-anim
-
 
 # Invert reconstruction matrix using Tikhonov regularisation
 rcond = 1e-3
@@ -220,7 +218,7 @@ plt.close()
 anim.close()
 
 # Add atmospheric simulation
-seeing = 0.6 # arcsec @ 500nm 
+seeing = 0.5 # arcsec @ 500nm 
 outer_scale = 40 # m
 tau0 = 0.005 # seconds
 
@@ -265,19 +263,22 @@ anim.close()
 layer.reset()
 deformable_mirror.flatten()
 
-gain = 0.65
+gain = 1.0
 leakage = 0.01
 num_iterations = 750
-burn_in_iterations = 5
+burn_in_iterations = 10
 
 coro = PerfectCoronagraph(VLT_aperture, 4)
 
 long_exposure = focal_grid.zeros()
 long_exposure_coro = focal_grid.zeros()
 
+# plt.show()
+# quit()
+
 # set up animation
 plt.figure(figsize=(8, 8))
-anim = FFMpegWriter(video_prefix + 'AO_simulation_with_turbulence.mp4', framerate=3)
+anim = FFMpegWriter(video_prefix + 'AO_simulation_with_turbulence.mp4', framerate=10)
 
 for timestep in progressbar(range(num_iterations)):
     layer.t = timestep * delta_t
@@ -288,7 +289,7 @@ for timestep in progressbar(range(num_iterations)):
 
     # Propagate through SH-WFS
     # wf_wfs_on_sh = shwfs(magnifier(wf_wfs_after_dm))
-    wf_after_wfs = pwfs.forward(deformable_mirror.forward(wf_wfs))
+    wf_after_wfs = pwfs.forward(deformable_mirror.forward(wf_wfs_after_dm))
 
     # Propagate the NIR wavefront
     wf_sci_focal_plane = propagator(deformable_mirror(layer(wf_sci)))
@@ -298,6 +299,7 @@ for timestep in progressbar(range(num_iterations)):
     camera.integrate(wf_after_wfs, delta_t)
     wfs_image = camera.read_out()
     wfs_image = large_poisson(wfs_image).astype('float')
+    wfs_image /= np.sum(wfs_image)
 
     # Accumulate long-exposure image
     if timestep >= burn_in_iterations:
@@ -313,10 +315,10 @@ for timestep in progressbar(range(num_iterations)):
     # Perform wavefornt control and set DM actuators
     deformable_mirror.actuators = (1 - leakage) * deformable_mirror.actuators - gain * reconstruction_matrix.dot(diff_image)
 
-    # Plotting
-    if timestep % 10 == 0:
-        plt.clf()
 
+    # Plotting
+    if timestep % 20 == 0:
+        plt.clf()
         plt.suptitle('Timestep {} / {}'.format(timestep, num_iterations))
 
         plt.subplot(2, 2, 1)
