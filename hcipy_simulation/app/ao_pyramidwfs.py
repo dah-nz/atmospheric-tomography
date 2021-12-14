@@ -84,7 +84,7 @@ wf.total_power = 1
 plt.figure(figsize=(10, 6))
 anim = FFMpegWriter(video_prefix + 'response_matrix.mp4', framerate=5)
 
-image_ref /= image_ref.sum()
+# image_ref /= image_ref.sum()
 
 for i in progressbar(range(num_modes)):
     slope = 0
@@ -99,7 +99,7 @@ for i in progressbar(range(num_modes)):
 
         camera.integrate(wfs_wf, 1)
         image = camera.read_out()
-        image /= np.sum(image)
+        # image /= np.sum(image)
 
         # slopes = shwfse.estimate([image])
         slope += s * (image - image_ref) / (2 * probe_amp)
@@ -182,7 +182,7 @@ for timestep in progressbar(range(num_iterations)):
     camera.integrate(wf_after_wfs, delta_t)
     wfs_image = camera.read_out()
     wfs_image = large_poisson(wfs_image).astype('float')
-    wfs_image /= np.sum(wfs_image)
+    # wfs_image /= np.sum(wfs_image)
 
     # Calculate slopes from WFS image
     diff_image = wfs_image - image_ref
