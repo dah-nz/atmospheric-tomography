@@ -289,7 +289,7 @@ for timestep in progressbar(range(num_iterations)):
 
     # Propagate through SH-WFS
     # wf_wfs_on_sh = shwfs(magnifier(wf_wfs_after_dm))
-    wf_after_wfs = pwfs.forward(deformable_mirror.forward(wf_wfs_after_dm))
+    wf_after_wfs = pwfs.forward(deformable_mirror.forward(wf_wfs_after_atmos))
 
     # Propagate the NIR wavefront
     wf_sci_focal_plane = propagator(deformable_mirror(layer(wf_sci)))
