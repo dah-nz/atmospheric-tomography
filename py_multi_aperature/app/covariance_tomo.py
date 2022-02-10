@@ -136,43 +136,47 @@ def run_simulation(theta):
     # COVARIANCE BASED APPROACH
     layerweightings = [0.5, 0.5]
     C = np.zeros((nLayers * nModes, nLayers * nModes))
-    Cinv, _ = CovarianceKolmogorov(diameter, r_0, nModes)
+    Cinv, _ = CovarianceKolmogorov(diameter, r_0, nModes + modeOffset)
 
     pix_scale = asize / diameter
 
     for n in range(nLayers):
-        C[n*(nModes-1):(n+1)*(nModes-1),n*(nModes-1):(n+1)*(nModes-1)] = Cinv * layerweightings[n]
+        C[n*(nModes):(n+1)*(nModes),n*(nModes):(n+1)*(nModes)] = Cinv * layerweightings[n]
 
     IM = np.zeros((nLayers*nModes, nGS*nModes))
 
-    modes_normalSize = [GeoWFS.zernike(asize, asize, m + modeOffset + 1) for m in range(nModes)]
+    modes_normalSize = [GeoWFS.zernike(asize, asize, m + 1) for m in range(nModes + modeOffset)]
+
+    r = asize / 2
+    X, Y = np.meshgrid(range(asize), range(asize))
+    mask = (X - asize / 2 + 0.5) ** 2 + (Y - asize/2 + 0.5) ** 2 <= r * r
+
+    with open("mode.txt", 'w') as f:
+        writer = csv.writer(f)
+        for row in modes_normalSize[5]:
+            writer.writerow(["{:.5g}".format(v) for v in row])
 
     counter = 0
-    for l in layers:
+    for l_idx, l in enumerate(layers):
         z = []
-        dim = int(pix_scale * ((diameter / 2) / l.rT)) * 2
-        for m in range(nModes):
-            mode = GeoWFS.zernike(dim, dim, m + modeOffset + 1)
+        dim = int(pix_scale * ((diameter / 2) / l.rT) + 0.5) * 2
+        for m in range(nModes + modeOffset):
+            mode = GeoWFS.zernike(dim, dim, m + 1)
             z.append(mode)
-        for m in z:
+        for m_idx, m in enumerate(z[modeOffset:]):
             meas = np.array([])
 
-            X, Y = np.meshgrid(range(asize), range(asize))
-
-            for g in l.guideStars:
+            for g_idx, g in enumerate(l.guideStars):
                 circular = np.ones((asize, asize))
-                mask = np.zeros_like(circular)
-                r = asize / 2
                 x = (g.pos[0] + asize / 2) * dim / asize
                 y = (g.pos[1] + asize / 2) * dim / asize
                 
-                mask = (X - asize / 2) ** 2 + (Y - asize/2) ** 2 < r * r
-                m1 = m[int(x-asize/2):int(x+asize/2), int(y-asize/2):int(y+asize/2)]
+                m1 = m[int(x-asize/2 + 0.5):int(x+asize/2 + 0.5), int(y-asize/2 + 0.5):int(y+asize/2 + 0.5)]
                 circular = m1 * mask
 
-                print(circular[57:63, 57:63])
+                # print(circular[195:201, 19:25])
 
-                avec_real = [np.sum(circular*mode)/np.sum(mode*mode) for mode in modes_normalSize]
+                avec_real = [np.sum(circular*mode)/np.sum(mode*mode) for mode in modes_normalSize[modeOffset:]]
 
                 meas = np.append(meas, avec_real)
 
@@ -180,17 +184,35 @@ def run_simulation(theta):
             counter += 1
 
     plt.figure()
-    plt.imshow(IM, aspect='equal', extent=[0, 1, 0, 1])
+    plt.imshow(IM, aspect='equal')
 
     IM = np.transpose(IM)
 
+    with open("IM.txt", 'w') as f:
+        writer = csv.writer(f)
+        for row in IM:
+            writer.writerow(["{:.5g}".format(v) for v in row])
+
     eps = 1e-12
     temp = np.matmul(IM, np.matmul(C, np.transpose(IM)))
+    with open("temp.txt", 'w') as f:
+        writer = csv.writer(f)
+        for row in temp:
+            writer.writerow(["{:.5g}".format(v) for v in row])
     u, s, v = np.linalg.svd(temp)
     tol = s[0]*eps
     pseudoinv = np.linalg.pinv(temp, rcond=tol)
+    with open("pseudoinv.txt", 'w') as f:
+        writer = csv.writer(f)
+        for row in pseudoinv:
+            writer.writerow(["{:.5g}".format(v) for v in row])
 
     estim = np.matmul(C, np.matmul(np.transpose(IM), pseudoinv))     # Minimum variance tomographic estimator
+
+    with open("estim.txt", 'w') as f:
+        writer = csv.writer(f)
+        for row in estim:
+            writer.writerow(["{:.5g}".format(v) for v in row])
 
     # generate A and T matrices from pMatrices and tMatrix outputs for each layer
     A = np.concatenate([np.concatenate([gs.projMatrix for gs in layer.guideStars], 0) for layer in layers], 1)
@@ -204,11 +226,29 @@ def run_simulation(theta):
             L[n*nModes:(n+1)*nModes] += gs.modes
         W_t_total += layer.target.modes
 
+    Lcovar = np.zeros(nGS * nModes)
+    for layer, layer_mode in zip(layers, layer_modes):
+        dim = int(pix_scale * ((diameter / 2) / layer.rT) + 0.5) * 2
+        screen = np.zeros((dim, dim))
+        for z, lm in enumerate(layer_mode):
+            screen += lm * GeoWFS.zernike(dim, dim, z + modeOffset + 1)
+
+        for n, g in enumerate(layer.guideStars):
+            circular = np.ones((asize, asize))
+            x = (g.pos[0] + asize / 2) * dim / asize
+            y = (g.pos[1] + asize / 2) * dim / asize
+
+            m1 = screen[int(x-asize/2 + 0.5):int(x+asize/2 + 0.5), int(y-asize/2 + 0.5):int(y+asize/2 + 0.5)]
+            circular = m1 * mask
+            Lcovar[n*nModes:(n+1)*nModes] += [np.sum(circular*mode)/np.sum(mode*mode) for mode in modes_normalSize[modeOffset:]]
+
     tempM = np.matmul(A, np.linalg.pinv(T))
     W_t_tomo = np.matmul(np.linalg.pinv(tempM), L)
-    W_t_covar = np.matmul(estim, L)[:nModes]
-    print(W_t_tomo)
-    print(W_t_covar)
+    W_t_covar = np.matmul(estim, Lcovar)
+    W_t_covar = W_t_covar[:nModes] + W_t_covar[nModes:]
+
+    # print(W_t_tomo)
+    # print(W_t_covar)
 
     # tempM = np.matmul(T, np.linalg.pinv(A))
     # W_t_tomo = np.matmul(tempM, L)
@@ -431,7 +471,9 @@ def gen_layer(altitude, modes, gs_azi_pos, tg_azi_pos=(0,0)):
         wF = GeoWFS.circle(rT * (asize / 2), asize, pos)
         guideStar = StarAberration(pos, rT, wF, pMatrix)
         gs.append(guideStar)
-    
+
+    gs.append(gs.pop(0))
+
     # generate projection matrix for target
     tMatrix = projectionMatrix((0, 0), rT, nModes, modeOffset)
     tWF = GeoWFS.circle(rT * (asize / 2), asize)
