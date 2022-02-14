@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib import cm
 from numpy.random import poisson, set_state
-import csv
 
 import GeoWFS
 from func import pol2cart
@@ -56,14 +55,15 @@ class SimulationOutput:
     layers = None
     theta = 0
     def __init__(self, W_t_tomo, W_t_sum, W_t_actual, layers, theta, W_t_covar=None):
-        act_v = W_t_actual / np.linalg.norm(W_t_actual)
-        self.W_t_tomo = W_t_tomo / np.linalg.norm(W_t_tomo)
-        self.W_t_sum = W_t_sum / np.linalg.norm(W_t_sum)
-        self.mse = ((act_v - self.W_t_tomo)**2).mean()
-        self.corr = np.correlate(act_v, self.W_t_tomo)
+        # act_v = W_t_actual / np.linalg.norm(W_t_actual)
+        self.W_t_actual = W_t_actual # / np.linalg.norm(W_t_actual)
+        self.W_t_tomo = W_t_tomo # / np.linalg.norm(W_t_tomo)
+        self.W_t_sum = W_t_sum # / np.linalg.norm(W_t_sum)
+        self.mse = ((self.W_t_actual - self.W_t_tomo)**2).mean()
+        self.corr = np.correlate(self.W_t_actual, self.W_t_tomo)
         self.layers = layers
         self.theta = theta
-        self.W_t_covar = W_t_covar
+        self.W_t_covar = W_t_covar #/ np.linalg.norm(W_t_tomo)
 
 def arcsec2rad(t):
     return np.radians(t / 60 / 60)
@@ -151,11 +151,6 @@ def run_simulation(theta):
     X, Y = np.meshgrid(range(asize), range(asize))
     mask = (X - asize / 2 + 0.5) ** 2 + (Y - asize/2 + 0.5) ** 2 <= r * r
 
-    with open("mode.txt", 'w') as f:
-        writer = csv.writer(f)
-        for row in modes_normalSize[5]:
-            writer.writerow(["{:.5g}".format(v) for v in row])
-
     counter = 0
     for l_idx, l in enumerate(layers):
         z = []
@@ -188,31 +183,13 @@ def run_simulation(theta):
 
     IM = np.transpose(IM)
 
-    with open("IM.txt", 'w') as f:
-        writer = csv.writer(f)
-        for row in IM:
-            writer.writerow(["{:.5g}".format(v) for v in row])
-
     eps = 1e-12
     temp = np.matmul(IM, np.matmul(C, np.transpose(IM)))
-    with open("temp.txt", 'w') as f:
-        writer = csv.writer(f)
-        for row in temp:
-            writer.writerow(["{:.5g}".format(v) for v in row])
     u, s, v = np.linalg.svd(temp)
     tol = s[0]*eps
     pseudoinv = np.linalg.pinv(temp, rcond=tol)
-    with open("pseudoinv.txt", 'w') as f:
-        writer = csv.writer(f)
-        for row in pseudoinv:
-            writer.writerow(["{:.5g}".format(v) for v in row])
 
     estim = np.matmul(C, np.matmul(np.transpose(IM), pseudoinv))     # Minimum variance tomographic estimator
-
-    with open("estim.txt", 'w') as f:
-        writer = csv.writer(f)
-        for row in estim:
-            writer.writerow(["{:.5g}".format(v) for v in row])
 
     # generate A and T matrices from pMatrices and tMatrix outputs for each layer
     A = np.concatenate([np.concatenate([gs.projMatrix for gs in layer.guideStars], 0) for layer in layers], 1)
@@ -226,6 +203,7 @@ def run_simulation(theta):
             L[n*nModes:(n+1)*nModes] += gs.modes
         W_t_total += layer.target.modes
 
+    mode_truth = np.zeros(nModes)
     Lcovar = np.zeros(nGS * nModes)
     for layer, layer_mode in zip(layers, layer_modes):
         dim = int(pix_scale * ((diameter / 2) / layer.rT) + 0.5) * 2
@@ -240,7 +218,9 @@ def run_simulation(theta):
 
             m1 = screen[int(x-asize/2 + 0.5):int(x+asize/2 + 0.5), int(y-asize/2 + 0.5):int(y+asize/2 + 0.5)]
             circular = m1 * mask
-            Lcovar[n*nModes:(n+1)*nModes] += [np.sum(circular*mode)/np.sum(mode*mode) for mode in modes_normalSize[modeOffset:]]
+            m2 = [np.sum(circular*mode)/np.sum(mode*mode) for mode in modes_normalSize[modeOffset:]]
+            Lcovar[n*nModes:(n+1)*nModes] += m2
+            mode_truth += m2
 
     tempM = np.matmul(A, np.linalg.pinv(T))
     W_t_tomo = np.matmul(np.linalg.pinv(tempM), L)
@@ -253,7 +233,7 @@ def run_simulation(theta):
     # tempM = np.matmul(T, np.linalg.pinv(A))
     # W_t_tomo = np.matmul(tempM, L)
 
-    return SimulationOutput(W_t_tomo, W_t_total, actual_modes, layers, theta, W_t_covar)
+    return SimulationOutput(W_t_tomo, W_t_total, mode_truth, layers, theta, W_t_covar)
 
 def plot_simulation_modesonly(sim):
     fig, axes = plt.subplots(1 + len(sim.layers))
@@ -263,10 +243,10 @@ def plot_simulation_modesonly(sim):
     for i, layer in enumerate(sim.layers):
         legend = ['Layer Ground Truth', 'Target (WFS)']
         axes[i].set_title('Layer @ {}m Simulation Data'.format(layer.altitude))
-        axes[i].plot(x, layer.modes / np.linalg.norm(layer.modes), 'r')
-        axes[i].plot(x, layer.target.modes / np.linalg.norm(layer.target.modes), '--c')
+        axes[i].plot(x, layer.modes, 'r') # / np.linalg.norm(layer.modes)
+        axes[i].plot(x, layer.target.modes, '--c') # / np.linalg.norm(layer.target.modes)
         for n, gs in enumerate(layer.guideStars):
-            axes[i].plot(x, gs.modes / np.linalg.norm(gs.modes), '+:')
+            axes[i].plot(x, gs.modes, '+:') # / np.linalg.norm(gs.modes)
             legend.append('Guidestar {}'.format(n+1))
         axes[i].legend(legend, loc='upper left', fancybox=True, shadow=True, bbox_to_anchor=(1.04, 1), fontsize=8)
         axes[i].set_xlabel("Zernike Mode Index")
@@ -275,10 +255,10 @@ def plot_simulation_modesonly(sim):
         print(layer.modes)
 
     axes[-1].set_title('Tomography Comparison')
-    axes[-1].plot(x, actual_modes / np.linalg.norm(actual_modes), 'r')
-    axes[-1].plot(x, sim.W_t_sum / np.linalg.norm(sim.W_t_sum), '--c')
-    axes[-1].plot(x, sim.W_t_tomo / np.linalg.norm(sim.W_t_tomo), '+:')
-    axes[-1].plot(x, sim.W_t_covar / np.linalg.norm(sim.W_t_covar), 'o:')
+    axes[-1].plot(x, actual_modes, 'r') # / np.linalg.norm(actual_modes)
+    axes[-1].plot(x, sim.W_t_sum, '--c') #  / np.linalg.norm(sim.W_t_sum)
+    axes[-1].plot(x, sim.W_t_tomo, '+:') # / np.linalg.norm(sim.W_t_tomo)
+    axes[-1].plot(x, sim.W_t_covar, 'o:') # / np.linalg.norm(sim.W_t_covar)
     axes[-1].legend(('Ground Truth', 'Target (WFS) Output', 'Tomography Output (Proj)', 'Tomography Output (Covar)'), loc='upper left', fancybox=True, shadow=True, bbox_to_anchor=(1.04, 1), fontsize=8)
     axes[-1].set_xlabel("Zernike Mode Index")
     axes[-1].set_ylabel("Normalised Mode Coefficient")
@@ -308,8 +288,8 @@ def plot_simulation(sim):
         plotcirc(axes[1, 0], (0, 0), (asize / 2), 'k')
         plotcirc(axes[1, 0], layer.target.pos, layer.target.rT * (asize / 2), 'b--')
         axes[2, 0].set_title('Layer modes')
-        axes[2, 0].plot(layer.modes / np.linalg.norm(layer.modes))
-        axes[2, 0].plot(layer.target.modes / np.linalg.norm(layer.target.modes), '--')
+        axes[2, 0].plot(layer.modes) # / np.linalg.norm(layer.modes)
+        axes[2, 0].plot(layer.target.modes, '--') # / np.linalg.norm(layer.target.modes)
         axes[0, 1].set_title('Target aperture')
         img = layer.target.wf * layer.phaseScreen
         axes[0, 1].imshow(img, aspect='equal', extent=(iMin, iMax, iMin, iMax), vmax=mx, vmin=-mx)
@@ -326,43 +306,53 @@ def plot_simulation(sim):
             axes[1, 2 + n].imshow(np.abs(gs.imP), aspect='equal', extent=(iMin, iMax, iMin, iMax))
             axes[2, 2 + n].set_title('Intra-focal image for guidestar {}'.format(n+1))
             axes[2, 2 + n].imshow(np.abs(gs.imM), aspect='equal', extent=(iMin, iMax, iMin, iMax))
-            axes[2, 0].plot(gs.modes / np.linalg.norm(gs.modes), '-x')
+            axes[2, 0].plot(gs.modes, '-x') # / np.linalg.norm(gs.modes)
             plotcirc(axes[1, 0], gs.pos, gs.rT * (asize / 2), 'g--')
             legend.append('Guidestar {}'.format(n+1))
         axes[2, 0].legend(legend)
 
     tomoWF = createPhaseScreenFromModes(sim.W_t_tomo)
-    tomoWF /= np.linalg.norm(tomoWF)
+    # tomoWF /= np.linalg.norm(tomoWF)
     fig, axes = plt.subplots(2, 3)
     fig.suptitle("Tomography output for Theta: {}'".format(sim.theta))
     mx = np.amax(np.abs(tomoWF))
     axes[0, 0].set_title('Target Phase Screen (Modal Tomography)')
     axes[0, 0].imshow(tomoWF, aspect='equal', cmap='viridis', vmax=mx, vmin=-mx)
 
+    actual_modes = np.sum(layer_modes, 0)
+
+    print(sim.W_t_covar)
+    print(sim.W_t_actual)
+
     covarWF = createPhaseScreenFromModes(sim.W_t_covar)
-    covarWF /= np.linalg.norm(covarWF)
+    actualWF = createPhaseScreenFromModes(actual_modes)
+    diffWF = actualWF - covarWF
+    # covarWF /= np.linalg.norm(covarWF)
     mx = np.amax(np.abs(covarWF))
     axes[0, 1].set_title('Target Phase Screen (Covariance Tomography)')
     axes[0, 1].imshow(covarWF, aspect='equal', cmap='viridis', vmax=mx, vmin=-mx)
 
     targetWF = createPhaseScreenFromModes(sim.W_t_sum)
-    targetWF /= np.linalg.norm(targetWF)
+    # targetWF /= np.linalg.norm(targetWF)
     mx = np.amax(np.abs(targetWF))
     axes[1, 0].set_title('Target Phase Screen (Sum of Layer Outputs)')
     axes[1, 0].imshow(targetWF, aspect='equal', cmap='viridis', vmax=mx, vmin=-mx)
 
-    actual_modes = np.sum(layer_modes, 0)
-    actualWF = createPhaseScreenFromModes(actual_modes)
-    actualWF /= np.linalg.norm(actualWF)
+    # actualWF /= np.linalg.norm(actualWF)
     mx = np.amax(np.abs(actualWF))
     axes[1, 1].set_title('Target Phase Screen (Actual)')
     axes[1, 1].imshow(actualWF, aspect='equal', cmap='viridis', vmax=mx, vmin=-mx)
 
+    # diffWF /= np.linalg.norm(diffWF)
+    mx = np.amax(np.abs(diffWF))
+    axes[1, 2].set_title('Wavefront Error')
+    axes[1, 2].imshow(diffWF, aspect='equal', cmap='viridis', vmax=mx, vmin=-mx)
+
     axes[0, 2].set_title('Calculated and Actual Geometric WFS modes')
-    axes[0, 2].plot(sim.W_t_tomo / np.linalg.norm(sim.W_t_tomo), '--')
-    axes[0, 2].plot(sim.W_t_covar / np.linalg.norm(sim.W_t_covar), '-x')
-    axes[0, 2].plot(sim.W_t_sum / np.linalg.norm(sim.W_t_sum), '-0')
-    axes[0, 2].plot(actual_modes / np.linalg.norm(actual_modes))
+    axes[0, 2].plot(sim.W_t_tomo, '--') # / np.linalg.norm(sim.W_t_tomo)
+    axes[0, 2].plot(sim.W_t_covar, '-x') # / np.linalg.norm(sim.W_t_covar)
+    axes[0, 2].plot(sim.W_t_sum, '-0') # / np.linalg.norm(sim.W_t_sum)
+    axes[0, 2].plot(sim.W_t_actual) # / np.linalg.norm(actual_modes)
     axes[0, 2].legend(('Tomo', 'Covar', 'Sum', 'Actual'))
 
 # Generate m and minv matrices for calculating zernike orders from geo wf sensor
