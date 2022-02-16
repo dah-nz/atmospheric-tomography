@@ -1,11 +1,10 @@
 import numpy as np
 import scipy.io as sio
-# from conv import cconv2d
 from scipy.signal import convolve2d
 
-import matplotlib.pyplot as plt
+from zernike import zernike
 
-def phase_screen(grid_size, D_r0):
+def kolmogorov(grid_size, D_r0):
 #   Simulation of a phase screen with Kolmogorv Statistics.
 #   Starts from an exact 15 x 15 phase screen.
 #   Based on function written by Rachel Johnston and Cressida Harding
@@ -22,7 +21,7 @@ def phase_screen(grid_size, D_r0):
         calculated_size = 2 * calculated_size - 11
         n_increases += 1
     
-    full_screen = generate_phase_screen(n_increases)
+    full_screen = _generate_phase_screen(n_increases)
     chopped_screen = full_screen[:grid_size, :grid_size]
 
     # Rescale screen for appropriate D_r0 after cropping
@@ -35,7 +34,7 @@ def phase_screen(grid_size, D_r0):
     # return sio.loadmat("phase.mat", struct_as_record=False)['phase']
     return scaled_screen * (D_r0 ** (5/6))
 
-def generate_phase_screen(n_increases):
+def _generate_phase_screen(n_increases):
 #  Generates a phase screen with Kolmogorov statistics.
 #  Based on function written by Rachel Johnston and Cressida Harding
 #  Inputs	num_increases	- the number of times the original 15x15
@@ -123,8 +122,10 @@ def generate_phase_screen(n_increases):
     
     return phase
 
-if __name__ == "__main__":
-    scr = phase_screen(250, 1/0.05)
-    print(np.amax(scr))
-    plt.imshow(np.abs(scr), aspect='equal')
-    plt.show()
+# Create a distortion/aberration phase screen from a set of Zernike modes
+def createFromModes(modes, sz, ignoreModes=1):
+    sz = int(sz)
+    phase = np.zeros((sz, sz))
+    for m, z0 in enumerate(modes):
+        phase += z0 * zernike(sz, sz, m + ignoreModes + 1)
+    return phase

@@ -43,3 +43,33 @@ def fresnel_propagation(fieldStart, fieldSize, fresnelExtent, wavelength, z, ove
     fresnelKernel = np.exp(j * fresnelPhase)
 
     return cconv2d(fresnelKernel, fieldStart)
+
+# Generate two defocused pupil planes using Fresnel diffraction
+# Generation of intra and extra focal planes (fplus, fminus),
+# seperated by distance z, measured either side of the focal point. These planes
+# are used by the geometric wavefront sensor and in effect are defocussed sensors
+# that can be represented in the lb or on-sky by a pair of CCD or sCMOS detector planes
+# simply by using two cameras at a distance of 'z' either side of a focal point from a 
+# simple plano-convex lens of focal length 'f'
+def generateIMatrices(wavefront, phase, wavelength, z):
+    iMin = validRegion[0]
+    iMax = validRegion[-1]
+    j = complex(0, 1)
+    fplus = fresnel_propagation(wavefront*np.exp(j * phase), 1, 2, wavelength, z, 0)
+    fminus = fresnel_propagation(wavefront*np.exp(j * phase), 1, 2, wavelength, -z, 0)
+    im_plus = np.abs(fplus[iMin:iMax, iMin:iMax]) ** 2
+    im_minus = np.abs(fminus[iMin:iMax, iMin:iMax]) ** 2
+    Ip = im_plus
+    Im = im_minus
+    Ip /= np.sum(Ip)
+    Im /= np.sum(Im)
+
+    # NOISY I MATRICES
+    # IpNoise = Ip * total_photons
+    # ImNoise = Im * total_photons
+    # IpNoise = fast_poisson(IpNoise)
+    # ImNoise = fast_poisson(ImNoise)
+    # IpNoise /= np.linalg.norm(IpNoise)
+    # ImNoise /= np.linalg.norm(ImNoise)
+
+    return Ip, Im
