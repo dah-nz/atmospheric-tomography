@@ -182,7 +182,7 @@ for timestep in progressbar(range(num_iterations)):
     camera.integrate(wf_after_wfs, delta_t)
     wfs_image = camera.read_out()
     wfs_image = large_poisson(wfs_image).astype('float')
-    # wfs_image /= np.sum(wfs_image)
+    wfs_image /= np.sum(wfs_image)
 
     # Calculate slopes from WFS image
     diff_image = wfs_image - image_ref

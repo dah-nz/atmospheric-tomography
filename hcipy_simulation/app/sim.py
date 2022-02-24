@@ -39,6 +39,16 @@ class Parameters():
         dm_modes = ModeBasis([mode / np.ptp(mode) for mode in dm_modes], self.pupil_grid)
         self.deformable_mirror = DeformableMirror(dm_modes)
 
+        # Set up atmospheric simulation
+        seeing = 0.6 # arcsec @ 500nm 
+        outer_scale = 40 # m
+        tau0 = 0.005 # seconds
+
+        fried_parameter = seeing_to_fried_parameter(seeing)
+        Cn_squared = Cn_squared_from_fried_parameter(fried_parameter, 500e-9)
+        velocity = 0.314 * fried_parameter / tau0
+        self.layer = InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity)
+
 
 def simulate(parameters, wfs):
     # Display telescope pupil
@@ -55,6 +65,7 @@ def simulate(parameters, wfs):
     wavelength_sci = parameters.wavelength_sci
     wavelength_wfs = parameters.wavelength_wfs
     num_modes = parameters.num_modes
+    layer = parameters.layer
 
     # Specify wavefront parameters
     wf = Wavefront(aperture, wavelength_sci)
@@ -70,6 +81,7 @@ def simulate(parameters, wfs):
 
     # Display ideal PSF for aperture
     plt.figure()
+    plt.suptitle("{} WFS Ideal PSF".format(wfs.name))
     imshow_field(np.log10(unaberrated_PSF / unaberrated_PSF.max()), cmap='inferno', vmin=-6)
     plt.colorbar()
 
@@ -82,6 +94,7 @@ def simulate(parameters, wfs):
     image_ref = camera.read_out()
 
     plt.figure()
+    plt.suptitle("{} WFS Reference Field Image".format(wfs.name))
     imshow_field(image_ref, cmap='inferno')
     plt.colorbar()
 
@@ -100,6 +113,7 @@ def simulate(parameters, wfs):
     for i in progressbar(range(num_modes)):
         slope = 0
         amps = [-probe_amp, probe_amp]
+        var = np.var(amps)
         for amp in amps:
             deformable_mirror.flatten()
             deformable_mirror.actuators[i] = amp
@@ -110,15 +124,17 @@ def simulate(parameters, wfs):
             camera.integrate(wfs_wf, 1)
             image = camera.read_out()
 
-            slope += wfs.interaction_slopes(image, amp, np.var(amps))
+            slope += wfs.interaction_slopes(image, amp, var)
 
         response_matrix.append(slope.ravel())
+        # response_matrix.append(slope)
+
 
         if i > 40 and (i + 1) % 20 != 0:
             continue
 
         plt.clf()
-        plt.suptitle("Mode {} / {}: DM Shape".format(i + 1, num_modes))
+        plt.suptitle("{} WFS: Mode {} / {}: DM Shape".format(wfs.name, i + 1, num_modes))
 
         plt.subplot(1, 2, 1)
         plt.title('DM Surface')
@@ -126,7 +142,7 @@ def simulate(parameters, wfs):
 
         plt.subplot(1, 2, 2)
         plt.title(wfs.name + " WFS")
-        im2 = imshow_field(image)
+        im2 = imshow_field(image, cmap='inferno')
         if wfs.name == "Shack-Hartmann":
             plt.quiver(wfs.wfs.mla_grid.subset(wfs.estimator.estimation_subapertures).x, \
                 wfs.wfs.mla_grid.subset(wfs.estimator.estimation_subapertures).y, \
@@ -146,6 +162,8 @@ def simulate(parameters, wfs):
     # Initialise DM to random values
     deformable_mirror.actuators = np.random.randn(num_modes) / (np.arange(num_modes) + 10)
     deformable_mirror.actuators *= 0.3 * wavelength_sci / np.std(deformable_mirror.surface)
+    plt.figure()
+    plt.suptitle("{} WFS: Deformable Mirror Phase".format(wfs.name))
     imshow_field(deformable_mirror.phase_for(wavelength_wfs), mask=aperture, cmap='RdBu')
     plt.colorbar()
 
@@ -161,25 +179,25 @@ def simulate(parameters, wfs):
 
     print("Photon flux per WFS frame {:g}".format(wf_wfs.total_power * delta_t))
 
-    deformable_mirror.actuators = np.random.randn(num_modes) / (np.arange(num_modes) + 10)
-    deformable_mirror.actuators *= 0.3 * wavelength_sci / np.std(deformable_mirror.surface)
+    # deformable_mirror.actuators = np.random.randn(num_modes) / (np.arange(num_modes) + 10)
+    # deformable_mirror.actuators *= 0.3 * wavelength_sci / np.std(deformable_mirror.surface)
+    deformable_mirror.random(0.2 * wavelength_wfs)
 
-    gain = 0.6
+    gain = 0.65
     leakage = 0.01
-    num_iterations = 20
+    num_iterations = 100
 
     long_exposure = 0
 
     plt.figure(figsize=(8,8))
-    anim = FFMpegWriter(wfs.prefix + 'AO_simulation_without_turbulence.mp4', framerate=1)
+    anim = FFMpegWriter(wfs.prefix + 'AO_simulation_without_turbulence.mp4', framerate=10)
 
     for timestep in progressbar(range(num_iterations)):
-        # Propagate through SH-WFS
-        wf_after_dm = deformable_mirror(wf_wfs)
+        wf_after_dm = wfs.propagate_past_dm(deformable_mirror, wf_wfs)
         wf_after_wfs = wfs.propagate_through_wfs(wf_after_dm)
 
         # Propagate the NIR wavefront
-        wf_sci_after_dm = propagator(deformable_mirror(wf_sci))
+        wf_sci_after_dm = propagator(wfs.propagate_past_dm(deformable_mirror, wf_sci))
 
         # Read out WFS camera
         camera.integrate(wf_after_wfs, delta_t)
@@ -194,7 +212,7 @@ def simulate(parameters, wfs):
 
         # Plotting
         plt.clf()
-        plt.suptitle('Timestep {} / {}'.format(timestep, num_iterations))
+        plt.suptitle('{} WFS: Timestep {} / {}'.format(wfs.name, timestep, num_iterations))
 
         plt.subplot(2, 2, 1)
         plt.title('DM surface [$\\mu$m]')
@@ -216,21 +234,13 @@ def simulate(parameters, wfs):
     plt.close()
     anim.close()
 
-    # Add atmospheric simulation
-    seeing = 0.6 # arcsec @ 500nm 
-    outer_scale = 40 # m
-    tau0 = 0.005 # seconds
-
-    fried_parameter = seeing_to_fried_parameter(seeing)
-    Cn_squared = Cn_squared_from_fried_parameter(fried_parameter, 500e-9)
-    velocity = 0.314 * fried_parameter / tau0
-
-    print('r0   = {0:.1f}cm'.format(fried_parameter * 100))
-    print('L0   = {0:.1f}m'.format(outer_scale))
-    print('tau0 = {0:.1f}ms'.format(tau0 * 1000))
-    print('v    = {0:.1f}m/s'.format(velocity))
-
-    layer = InfiniteAtmosphericLayer(pupil_grid, Cn_squared, outer_scale, velocity)
+    # Run Atmospheric simulation
+    # print('r0   = {0:.1f}cm'.format(fried_parameter * 100))
+    # print('L0   = {0:.1f}m'.format(outer_scale))
+    # print('tau0 = {0:.1f}ms'.format(tau0 * 1000))
+    # print('v    = {0:.1f}m/s'.format(velocity))
+    
+    print("V0 = {}".format(layer.velocity))
     phase_screen_phase = layer.phase_for(wavelength_wfs) # in radian
     phase_screen_opd = phase_screen_phase * (wavelength_wfs / (2 * np.pi)) * 1e6
 
@@ -243,12 +253,12 @@ def simulate(parameters, wfs):
     n = 51
 
     for t in progressbar(np.linspace(0, t_end, n)):
-        layer.t = t
+        layer.t = 0
         phase_screen_phase = layer.phase_for(wavelength_wfs) # in radian
         phase_screen_opd = phase_screen_phase * (wavelength_wfs / (2 * np.pi)) * 1e6 # in um
 
         plt.clf()
-        plt.suptitle('Time {}s'.format(t))
+        plt.suptitle('{} WFS: Atmospheric Turbulence at time {}s'.format(wfs.name, t))
         plt.subplot(1,1,1)
         plt.title('Turbulent wavefront [$\\mu$m]')
         imshow_field(phase_screen_opd, vmin=-6, vmax=6, cmap='RdBu')
@@ -258,8 +268,12 @@ def simulate(parameters, wfs):
 
     anim.close()
 
+    print("V1 = {}".format(layer.velocity))
+
+    return
+
     # Close the loop "on-sky"
-    layer.reset()
+    # layer.reset()
     deformable_mirror.flatten()
 
     gain = 0.3
@@ -281,7 +295,7 @@ def simulate(parameters, wfs):
 
         # Propagate through atmosphere and deformable mirror
         wf_wfs_after_atmos = layer(wf_wfs)
-        wf_wfs_after_dm = deformable_mirror(wf_wfs_after_atmos)
+        wf_wfs_after_dm = wfs.propagate_past_dm(deformable_mirror, wf_wfs_after_atmos)
 
         # Propagate through WFS
         wf_after_wfs = wfs.propagate_through_wfs(wf_wfs_after_dm)
@@ -310,7 +324,7 @@ def simulate(parameters, wfs):
         if timestep % 20 == 0:
             plt.clf()
 
-            plt.suptitle('Timestep {} / {}'.format(timestep, num_iterations))
+            plt.suptitle('{} WFS: Timestep {} / {}'.format(wfs.name, timestep, num_iterations))
 
             plt.subplot(2, 2, 1)
             plt.title('DM surface [$\\mu$m]')
@@ -349,6 +363,7 @@ def simulate(parameters, wfs):
 
     rad_to_arcsec = 206265
 
+    plt.suptitle("{} WFS: Radial PSF profiles".format(wfs.name))
     plt.plot(r * rad_to_arcsec, y_noncoro, label="Non-coronagraphic")
     plt.plot(r * rad_to_arcsec, y_coro, label="Coronagraphic")
     plt.plot(r * rad_to_arcsec, y_unaber, label="Unaberrated")
@@ -363,7 +378,7 @@ def simulate(parameters, wfs):
 if __name__ == "__main__":
     p = Parameters()
 
-    # Specify Shack-Hartmann WFS parameters
+    # Run Shack-Hartmann WFS simulation
     f_number = 50
     num_lenslets = 40
     sh_diameter = 5e-3
@@ -371,6 +386,7 @@ if __name__ == "__main__":
 
     simulate(p, sh_wfs)
 
+    # Run Pyramid Sensor simulation
     pyr_wfs = PYRAMID_WFS(p.wavelength_wfs, p.pupil_grid)
     simulate(p, pyr_wfs)
 

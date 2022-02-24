@@ -1,34 +1,53 @@
+import numpy as np
+import zernike
+from projection import projectionMatrix
+import util
+from geometric_wfs import geometric_wfs 
+
 def projection(sim):
     # generate A and T matrices from pMatrices and tMatrix outputs for each layer
-    A = np.concatenate([np.concatenate([gs.projMatrix for gs in layer.guideStars], 0) for layer in layers], 1)
-    T = np.concatenate([layer.target.projMatrix for layer in layers], 1)
+    asize = sim.p.asize
+    wfs = geometric_wfs(sim.p)
+    def proj(gs, layer):
+        return projectionMatrix(gs.position(layer.altitude), asize / layer.dim, sim.p.nModes, sim.p.modeIgnore)
 
+    A = np.concatenate([np.concatenate([proj(gs, layer) for gs in layer.guideStars], 0) for layer in sim.layers], 1)
+    T = np.concatenate([proj(layer.target, layer) for layer in sim.layers], 1)
+
+    nGS = sim.p.nGS
+    nModes = sim.p.nModes
     # generate L vector from simulated modes for each guide star
-    L = np.zeros(nGS * nModes)
+    L = np.zeros(nGS * nModes) # * len(sim.layers))
     W_t_total = np.zeros(nModes)
-    for layer in layers:
+
+    r = asize / 2
+    mask = util.circle(r, asize)
+    totalModes = nModes + sim.p.modeIgnore
+    modes_normalSize = zernike.zernikeModes(asize, totalModes)
+
+    for l, layer in enumerate(sim.layers):
+        z = zernike.zernikeModes(layer.dim, totalModes)
+
         for n, gs in enumerate(layer.guideStars):
-            L[n*nModes:(n+1)*nModes] += gs.modes
-        W_t_total += layer.target.modes
-
-    mode_truth = np.zeros(nModes)
-    Lcovar = np.zeros(nGS * nModes)
-    for layer, layer_mode in zip(layers, layer_modes):
-        dim = int(pix_scale * ((diameter / 2) / layer.rT) + 0.5) * 2
-        screen = np.zeros((dim, dim))
-        for z, lm in enumerate(layer_mode):
-            screen += lm * GeoWFS.zernike(dim, dim, z + modeOffset + 1)
-
-        for n, g in enumerate(layer.guideStars):
             circular = np.ones((asize, asize))
-            x = (g.pos[0] + asize / 2) * dim / asize
-            y = (g.pos[1] + asize / 2) * dim / asize
+            pos = gs.position(layer.altitude) 
+            x = (pos[0] + asize / 2) * layer.dim / asize
+            y = (pos[1] + asize / 2) * layer.dim / asize
 
-            m1 = screen[int(x-asize/2 + 0.5):int(x+asize/2 + 0.5), int(y-asize/2 + 0.5):int(y+asize/2 + 0.5)]
-            circular = m1 * mask
-            m2 = [np.sum(circular*mode)/np.sum(mode*mode) for mode in modes_normalSize[modeOffset:]]
-            Lcovar[n*nModes:(n+1)*nModes] += m2
-            mode_truth += m2
+            for m in z[sim.p.modeIgnore:]:
+                m1 = m[int(x-asize/2 + 0.5):int(x+asize/2 + 0.5), int(y-asize/2 + 0.5):int(y+asize/2 + 0.5)]
+                circular = m1 * mask
+
+                avec_real = wfs.calculate_modes(sim.p, circular, mask)
+                # avec_real = [np.sum(circular*mode)/np.sum(mode*mode) for mode in modes_normalSize[sim.p.modeIgnore:]]
+
+                #L[(l*nGS*nModes)+(n*nModes):(l*nGS*nModes)+(n+1)*nModes] += avec_real
+                L[(n*nModes):(n+1)*nModes] += avec_real[sim.p.modeIgnore:]
+
+    print(L)
 
     tempM = np.matmul(A, np.linalg.pinv(T))
     W_t_tomo = np.matmul(np.linalg.pinv(tempM), L)
+
+    print(W_t_tomo)
+    return W_t_tomo

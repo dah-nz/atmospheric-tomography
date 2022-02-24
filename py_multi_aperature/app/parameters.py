@@ -4,15 +4,15 @@ import numpy as np
  #  Simulation parameters
 ###
 class parameters():
-    r0 = 0.15                                           # metres; Fried parameter
-    D = 30                                              # metres; telescope diameter
+    r0 = 0.05                                           # metres; Fried parameter
+    D = 1                                              # metres; telescope diameter
     asize = 256                                         # pixels; Aperture size
     
     nModes = 20                                         # number of Zernike modes
     modeIgnore = 1                                      # number of Zernike modes to ignore
 
-    layer_alt = [1000, 10000]                            # altitudes of different layers
-    layer_modes = [[0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0]]
+    layer_alt = [0, 10000]                            # altitudes of different layers
+    layer_modes = [[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0]]
     nLayers = len(layer_alt)
 
     theta = (500 / 2)                                   # angular separation between guide stars and centre of viewpoint (arcseconds)

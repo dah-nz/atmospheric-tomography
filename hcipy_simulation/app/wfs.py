@@ -28,6 +28,8 @@ class SH_WFS():
         return amp * slopes / var
     def propagate_through_wfs(self, wavefront):
         return self.wfs(self.magnifier(wavefront))
+    def propagate_past_dm(self, dm, wavefront):
+        return dm(wavefront)
 
 class PYRAMID_WFS():
     prefix = "pyramid_wfs_"
@@ -35,11 +37,14 @@ class PYRAMID_WFS():
     def __init__(self, wavelength, pupil_grid):
         self.wfs = PyramidWavefrontSensorOptics(pupil_grid, wavelength_0=wavelength)
     def calculate_ref_slopes(self, image_ref):
-        self.image_ref = image_ref / image_ref.sum()
+        self.image_ref = image_ref # / image_ref.sum()
     def estimate_slopes(self, wfs_image):
+        wfs_image /= np.sum(wfs_image)
         return wfs_image - self.image_ref
     def interaction_slopes(self, image, amp, var):
         image /= np.sum(image)
-        return (image - self.image_ref) / 2 * amp
+        return (image - self.image_ref) / (2 * amp)
     def propagate_through_wfs(self, wavefront):
         return self.wfs.forward(wavefront)
+    def propagate_past_dm(self, dm ,wavefront):
+        return dm.forward(wavefront)

@@ -6,7 +6,10 @@ import numpy as np
 import phase_screen
 import util
 
-def plot_tomography(title, sim, modes):
+def show():
+    plt.show()
+
+def plot_tomography(title, sim, modes, final=False):
     # Preamble
     if sim.p.outputType == "pgf":
         matplotlib.use("pgf")
@@ -42,13 +45,16 @@ def plot_tomography(title, sim, modes):
     for lIdx, layer in enumerate(sim.layers):
         estimated_modes = modes[(lIdx*sim.p.nModes):((lIdx + 1)*sim.p.nModes)]
         axes[0, 0].plot(mode_scale, layer.modes, 'r')
-        axes[0, 0].plot(mode_scale, estimated_modes, 'c')
+        try:
+            axes[0, 0].plot(mode_scale, estimated_modes, 'c')
+        except ValueError:
+            pass
         axes[0, lIdx + 2].set_title('Layer {} phase screen'.format(lIdx + 1))
+        axes[1, lIdx + 2].set_title('Layer {} Asterism'.format(lIdx + 1))
         img = layer.phaseScreen
         mx = max(abs(np.amax(img)), abs(np.amin(img)))
-        axes[0, lIdx + 2].imshow(img, aspect='equal', vmax=mx, vmin=-mx)
-        axes[1, lIdx + 2].imshow(img, aspect='equal', vmax=mx, vmin=-mx)
-        axes[1, lIdx + 2].set_title('Layer {} Asterism'.format(lIdx + 1))
+        axes[0, lIdx + 2].imshow(img, aspect='equal', vmax=mx, vmin=-mx, extent=(0, layer.dim, 0, layer.dim))
+        axes[1, lIdx + 2].imshow(img, aspect='equal', vmax=mx, vmin=-mx, extent=(0, layer.dim, 0, layer.dim))
         plotcirc(axes[1, lIdx + 2], (int(layer.dim / 2), int(layer.dim / 2)), layer.dim / 2, 'k')
         x, y = layer.target.position(layer.altitude)
         x = (x * asize / sim.p.D) + (layer.dim / 2)
@@ -69,7 +75,7 @@ def plot_tomography(title, sim, modes):
     tomoWF *= mask
     actualWF *= mask
     # wf = phase_screen.createFromModes(modes, sim.p.asize)
-    axes[1, 0].set_title('Tomography estimated wavefront')
+    axes[1, 0].set_title('Tomography estimated target wavefront')
     mx = np.amax(np.abs(tomoWF))
     axes[1, 0].imshow(tomoWF, aspect='equal', cmap='viridis', vmax=mx, vmin=-mx)
 
@@ -77,7 +83,7 @@ def plot_tomography(title, sim, modes):
     diffWF = actualWF - tomoWF
 
     mx = np.amax(np.abs(actualWF))
-    axes[1, 1].set_title('Actual wavefront')
+    axes[1, 1].set_title('Actual target wavefront')
     axes[1, 1].imshow(actualWF, aspect='equal', cmap='viridis', vmax=mx, vmin=-mx)
 
     mx = np.amax(np.abs(diffWF))
@@ -87,12 +93,13 @@ def plot_tomography(title, sim, modes):
     fig.tight_layout()
 
     #Postamble
-    if sim.p.outputType == "pgf":
-        fig = matplotlib.pyplot.gcf()
-        fig.set_size_inches(6, 4.5)
-        plt.savefig("work.pgf")
-    else:
-        plt.show()
+    if final:
+        if sim.p.outputType == "pgf":
+            fig = matplotlib.pyplot.gcf()
+            fig.set_size_inches(6, 4.5)
+            plt.savefig("work.pgf")
+        else:
+            plt.show()
 
 def plot_wfs(sim, title, modes):
     pass

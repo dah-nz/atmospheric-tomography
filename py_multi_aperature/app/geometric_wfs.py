@@ -1,43 +1,58 @@
 import numpy as np
-from skimage.transform import radon
+# from skimage.transform import radon
+from scipy.ndimage import rotate as imrotate
 
 from fresnel_propagation import *
 import zernike
 import util
 
+import csv
+
+cache_enabled = False
+
 class geometric_wfs():
     def __init__(self, p):
-        self.radonSize = 495                                     # size of matrix for Radon transform
-        self.radonAngles = np.arange(0, 180, 22.5)               # degrees; angles for Radon transform
+        self.radonSize = 497                                     # size of matrix for Radon transform
+        self.radonAngles = np.arange(0, 180, 5.625)               # degrees; angles for Radon transform
         self.fresnelExtent = 2                                   # Strength of fresnel diffraction
         self.z = 14000                                           # Offset from focal plane for fresnel propagation
         self.boundingOffset = 10                                  # Offset around each guidestar for WFS calculation
         self.rangeMin = 200
         self.rangeMax = 550
-        self.H = HMatrix(p)
-        Ht = np.transpose(self.H)
-        self.HInv = np.matmul(np.linalg.pinv(np.matmul(Ht, self.H)), Ht)
+        self.H, self.Hinv = self.HMatrix(p)
+
+    def calculate_modes(self, p, phase, mask):
+        # mask = np.zeros_like(wavefront)
+        # mask[wavefront != 0] = 1
+        Ip, Im = generateIMatrices(self, mask, phase, p.wavelength, self.z)
+
+        # x = position[0]
+        # y = position[1]
+        # ip_l = util.shift2darray(Ip, -int(x), -int(y), fill_value=0)
+        # im_l = util.shift2darray(Im, -int(x), -int(y), fill_value=0)
+        return np.matmul(self.Hinv, self.calculate_wfs(Ip, Im))
 
     #   Runs a simulation over a layer
-    def simulate(p, layer):
+    def simulate(self, p, layer):
         # Generate or acquire signal for decomposition into Zernikes
         #   This is going to generate a single column vector of Zernikes for the Geometric WFS, i.e, "est2".
         #   Note that this is effectivelty a matrix multiplication of the pre-derived respective inverse matrices with an unknown projected wavefront.
         
         # Calculate target modes with WFS sensor
         target_wf = layer.target.wavefront(p.asize, layer.altitude, layer.dim)
-        Ip, Im = generateIMatrices(target_wf, layer.phaseScreen, p.wavelength, self.z)
+        Ip, Im = generateIMatrices(self, target_wf, layer.phaseScreen, p.wavelength, self.z)
         (x, y) = layer.target.position(layer.altitude)
-        ip_l = shift2darray(Ip, -int(x), -int(y), fill_value=0)
-        im_l = shift2darray(Im, -int(x), -int(y), fill_value=0)
-        self.layer.target.wfs_modes = calculate_wfs(ip_l, im_l)
+        ip_l = util.shift2darray(Ip, -int(x), -int(y), fill_value=0)
+        im_l = util.shift2darray(Im, -int(x), -int(y), fill_value=0)
+        M = calculate_wfs(ip_l, im_l)
+        layer.target.wfs_modes = np.matmul(self.Hinv, M)
         
         # Calculate guide star modes with WFS sensor
         wf = np.zeros_like(target_wf)
         wf += target_wf
         for gs in layer.guideStars:
             wf += gs.wavefront(p.asize, layer.altitude, layer.dim)
-        Ip, Im = generateIMatrices(wf, layer.phaseScreen, p.wavelength, self.z)
+        Ip, Im = generateIMatrices(self, wf, layer.phaseScreen, p.wavelength, self.z)
         # wf = np.clip(wf, 0, 1)
         extent = None
         for gs in layer.guideStars:
@@ -45,8 +60,8 @@ class geometric_wfs():
             # gs_wf = gs.wavefront(p.asize, layer.altitude, layer.dim)
             # Shift location of WFS images to account for offset
             (x, y) = gs.position(layer.altitude)
-            ip_l = shift2darray(Ip, -int(x), -int(y), fill_value=0)
-            im_l = shift2darray(Im, -int(x), -int(y), fill_value=0)
+            ip_l = util.shift2darray(Ip, -int(x), -int(y), fill_value=0)
+            im_l = util.shift2darray(Im, -int(x), -int(y), fill_value=0)
             if not separateGuidestars:
                 if boundingOffset >= 0:
                     if extent is None:
@@ -73,8 +88,11 @@ class geometric_wfs():
         #	                          specification over all projection angles.
         #	                          The number of modes estimated, order of modes, etc are
         #	                          determined by Hmatrix.
-        radonIp = radon(Ip, self.radonAngles, circle=False)
-        radonIm = radon(Im, self.radonAngles, circle=False)
+
+        radonIp = radon_projection(Ip, self.radonAngles) # , circle=False)
+        radonIm = radon_projection(Im, self.radonAngles) #, circle=False)
+        # for line in radonIp:
+        #     print(["{:.5g}".format(v) for v in line])
         radonSize = len(radonIp)
         nAngles= len(self.radonAngles)
 
@@ -84,10 +102,15 @@ class geometric_wfs():
         M = np.zeros(radonSize * nAngles)
 
         for projection in range(nAngles):
-            hdiff = horizontalDiff(cumIm[:, projection], cumIp[:, projection])
+            hdiff = self.horizontalDiff(cumIm[:, projection], cumIp[:, projection])
             iMin = projection * radonSize
             iMax = (projection * radonSize) + radonSize
             M[iMin:iMax] = -hdiff * radonIm[:, projection] / self.z
+
+        # with open('hinv.txt', 'w', newline='') as csvfile:  
+        #     writer = csv.writer(csvfile)
+        #     # for row in M:
+        #     writer.writerows([["{:.5g}".format(v)] for v in M])
 
         return M
 
@@ -107,22 +130,26 @@ class geometric_wfs():
         numAngles = len(self.radonAngles)
 
         # Check hash data of existing models
-        meta_data = (p.asize, p.D, self.fresnelExtent, p.wavelength, self.z, self.rangeMin, self.rangeMax, self.radonSize, numAngles, p.nModes, p.modeIgnore)
-        md_hash = hash(meta_data)
-        try:
-            Hdata = np.load("zernike_mode_data.npy", allow_pickle=True).item()
-            if md_hash in Hdata.keys():
-                return Hdata[md_hash]
-        except FileNotFoundError:
-            Hdata = {}
+        if cache_enabled:
+            meta_data = (p.asize, p.D, self.fresnelExtent, p.wavelength, self.z, self.rangeMin, self.rangeMax, self.radonSize, numAngles, p.nModes, p.modeIgnore)
+            md_hash = hash(meta_data)
+            try:
+                Hdata = np.load("zernike_mode_data.npy", allow_pickle=True).item()
+                if md_hash in Hdata.keys():
+                    return Hdata[md_hash]
+            except FileNotFoundError:
+                Hdata = {}
         
         j = complex(0, 1) # complex
-        Hmatrix = np.zeros((radonSize * numAngles, p.nModes))
+        # H = np.zeros((self.radonSize * numAngles, p.nModes + p.modeIgnore))
+        H = np.zeros((self.radonSize * numAngles, p.nModes))
         overrideError = 1
         scaling_factor = 1e-8  # Make sure it is really small
-        for mode in range(p.nModes):
-            zer = zernike.zernike(p.asize, p.asize, mode + p.modeIgnore) * scaling_factor
-            wf = circle(p.asize / 2, p.asize) * np.exp(j * zer * 2 * np.pi / wavelength)
+        # for mode, zer in enumerate(zernike.zernikeModes(p.asize, p.nModes + p.modeIgnore)):
+        for mode, zer in enumerate(zernike.zernikeModes(p.asize, p.nModes)):
+            # zer = zernike.zernike(p.asize, p.asize, mode + p.modeIgnore) * scaling_factor
+            zer *= scaling_factor
+            wf = util.circle(p.asize / 2, p.asize) * np.exp(j * zer * 2 * np.pi / p.wavelength)
 
             image_plus = fresnel_propagation(wf, p.D, self.fresnelExtent, p.wavelength, self.z, overrideError)
             image_minus = fresnel_propagation(wf, p.D, self.fresnelExtent, p.wavelength, -self.z, overrideError)
@@ -135,16 +162,22 @@ class geometric_wfs():
             image_minus = image_minus[self.rangeMin:self.rangeMax, self.rangeMin:self.rangeMax]
             image_minus /= np.sum(image_minus)
 
-            Hmatrix[:, mode] = calculate_wfs(image_plus, image_minus)
+            H[:, mode] = self.calculate_wfs(image_plus, image_minus)
         
-        Hmatrix = (Hmatrix / scaling_factor)
+        H /= scaling_factor
 
-        Hdata[md_hash] = Hmatrix
-        np.save("zernike_mode_data.npy", Hdata, allow_pickle=True)
+        if cache_enabled:
+            Hdata[md_hash] = H
+            np.save("zernike_mode_data.npy", Hdata, allow_pickle=True)
 
-        return Hdata[md_hash]
+            return Hdata[md_hash]
 
-    def horizontalDiff(cumI1, cumI2):
+        Ht = np.transpose(H)
+        Hinv = np.matmul(np.linalg.pinv(np.matmul(Ht, H)), Ht)
+
+        return H, Hinv
+
+    def horizontalDiff(self, cumI1, cumI2):
     # Histogram specification for Geometric wavefront sensor
     # Given two cumulative intensity functions, return the horizontal differences
     # needed for geometric wavefront sensing. The array returned will be a column vector
@@ -174,3 +207,30 @@ class geometric_wfs():
                 hdiff[i] = bitLess - i + (val-cumI2[bitLess]) / (cumI2[bitMore] - cumI2[bitLess]) * (bitMore - bitLess)
 
         return hdiff
+
+def radon_projection(image, theta):
+    (iLength, iWidth) = np.shape(image)
+    iDiag = np.sqrt(iLength**2 + iWidth**2)
+    LengthPad = int(np.ceil(iDiag - iLength) + 2)
+    WidthPad = int(np.ceil(iDiag - iWidth) + 2)
+    padIMG = np.zeros((iLength + LengthPad, iWidth + WidthPad))
+
+    x0 = int(np.ceil(LengthPad/2))
+    x1 = int(np.ceil(LengthPad/2)+iLength)
+    y0 = int(np.ceil(WidthPad/2))
+    y1 = int(np.ceil(WidthPad/2)+iWidth)
+    padIMG[x0:x1, y0:y1] = image
+
+    n = len(theta)
+    PR = np.zeros((np.shape(padIMG)[1], n))
+    for i in range(n):
+        tmpimg = imrotate(padIMG, 90-theta[i], reshape=False)
+        PR[:,i] = np.transpose(np.sum(tmpimg, 0))
+    return PR
+
+
+def main():
+    pass
+
+if __name__ == "__main__":
+    main()

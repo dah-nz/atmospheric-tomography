@@ -46,5 +46,4 @@ temp = temp / numPixels * fieldSize;
 fresnelPhase = k / 2 / z * (temp.^2 + (temp').^2);
 fresnelKernel = exp(sqrt(-1) * fresnelPhase);
 
-
 field = cconv2(fresnelKernel, fieldStart);

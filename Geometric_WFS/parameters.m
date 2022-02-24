@@ -2,18 +2,18 @@ addpath ./turbulence
 addpath ./tools
 
 % Basic parameters
-asize = 250;            % pixels. Aperture size
+asize = 256;            % pixels. Aperture size
 r_0 = 0.05;             % meters. Fried paramter - strength of turbulence
 tel = circle(asize/2, asize);
 new_asize = 256;
 
 % Extra parameters
 diameter = 1;           % in metres
-radonSize = 499;        % ?
+radonSize = 497;        % ?
 D_r0 = diameter / r_0;  % ?
 
 fresnelExtent = 2;      % ?
-angles = 0:22.5:179;    % in degrees
+angles = 0:1:179;    % in degrees
 numModes = 20;          % number of Zernike modes
 
 % Wavelength information

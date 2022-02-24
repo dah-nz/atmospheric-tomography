@@ -1,6 +1,6 @@
 import numpy as np
-from GeoWFS import zerni
-from func import pol2cart
+from zernike import zerni
+from util import pol2cart
 
 import matplotlib.pyplot as plt
 
