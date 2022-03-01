@@ -1,5 +1,6 @@
 import numpy as np
 # from skimage.transform import radon
+from scipy.linalg import pinvh as pinv
 from scipy.ndimage import rotate as imrotate
 
 from fresnel_propagation import *
@@ -13,7 +14,7 @@ cache_enabled = False
 class geometric_wfs():
     def __init__(self, p):
         self.radonSize = 497                                     # size of matrix for Radon transform
-        self.radonAngles = np.arange(0, 180, 5.625)               # degrees; angles for Radon transform
+        self.radonAngles = np.arange(0, 180, 22.5)               # degrees; angles for Radon transform
         self.fresnelExtent = 2                                   # Strength of fresnel diffraction
         self.z = 14000                                           # Offset from focal plane for fresnel propagation
         self.boundingOffset = 10                                  # Offset around each guidestar for WFS calculation
@@ -30,7 +31,9 @@ class geometric_wfs():
         # y = position[1]
         # ip_l = util.shift2darray(Ip, -int(x), -int(y), fill_value=0)
         # im_l = util.shift2darray(Im, -int(x), -int(y), fill_value=0)
-        return np.matmul(self.Hinv, self.calculate_wfs(Ip, Im))
+        wfs = self.calculate_wfs(Im, Ip)
+        # return np.matmul(self.Hinv, wfs)
+        return np.linalg.lstsq(self.H, wfs, rcond=None)[0]
 
     #   Runs a simulation over a layer
     def simulate(self, p, layer):
@@ -103,14 +106,15 @@ class geometric_wfs():
 
         for projection in range(nAngles):
             hdiff = self.horizontalDiff(cumIm[:, projection], cumIp[:, projection])
+
+            # with open('hinv.txt', 'w', newline='') as csvfile:  
+            #     writer = csv.writer(csvfile)
+            #     # for row in hdiff:
+            #     writer.writerows([["{:.5g}".format(v)] for v in hdiff])
+
             iMin = projection * radonSize
             iMax = (projection * radonSize) + radonSize
             M[iMin:iMax] = -hdiff * radonIm[:, projection] / self.z
-
-        # with open('hinv.txt', 'w', newline='') as csvfile:  
-        #     writer = csv.writer(csvfile)
-        #     # for row in M:
-        #     writer.writerows([["{:.5g}".format(v)] for v in M])
 
         return M
 
@@ -173,7 +177,7 @@ class geometric_wfs():
             return Hdata[md_hash]
 
         Ht = np.transpose(H)
-        Hinv = np.matmul(np.linalg.pinv(np.matmul(Ht, H)), Ht)
+        Hinv = np.matmul(pinv(np.matmul(Ht, H)), Ht)
 
         return H, Hinv
 

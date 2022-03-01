@@ -35,7 +35,6 @@ for mode  = 1:numModes
     % phase = phase_screen(asize, D_r0);
     phase = zernike(asize, asize, mode);
 
-
     %%
     % Next, we generate two defocused pupil planes using Fresnel diffraction
     % Generation of the intra and extra focal planes P {fplus, fminus),

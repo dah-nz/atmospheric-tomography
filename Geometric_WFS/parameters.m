@@ -13,7 +13,7 @@ radonSize = 497;        % ?
 D_r0 = diameter / r_0;  % ?
 
 fresnelExtent = 2;      % ?
-angles = 0:1:179;    % in degrees
+angles = 0:22.5:179;    % in degrees
 numModes = 20;          % number of Zernike modes
 
 % Wavelength information

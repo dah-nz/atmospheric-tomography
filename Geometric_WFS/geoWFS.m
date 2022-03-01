@@ -48,16 +48,17 @@ end
 cumIp = cumsum(radonIp);
 cumIm = cumsum(radonIm);
 
+
+
 data = zeros([radonSize*numAngles 1]);
 
 for projection = 1:numAngles
 
 	hdiff = horizontalDiff(cumIm(:,projection), cumIp(:,projection));
+    % csvwrite("hinv.txt", hdiff)
 	data((projection-1)*radonSize+(1:radonSize)) = -hdiff.*radonIm(:,projection) / z;
 
 end
-
-% csvwrite("hinv.txt", data);
 
 coef = HmatrixInverse * data;
 
