@@ -42,7 +42,7 @@ def projection(sim):
                 # avec_real = [np.sum(circular*mode)/np.sum(mode*mode) for mode in modes_normalSize[sim.p.modeIgnore:]]
 
                 #L[(l*nGS*nModes)+(n*nModes):(l*nGS*nModes)+(n+1)*nModes] += avec_real
-                L[(n*nModes):(n+1)*nModes] += avec_real[sim.p.modeIgnore:]
+                L[(n*nModes):(n+1)*nModes] += avec_real #[sim.p.modeIgnore:]
 
     print(L)
 
