@@ -14,12 +14,13 @@ cache_enabled = False
 class geometric_wfs():
     def __init__(self, p):
         self.radonSize = 497                                     # size of matrix for Radon transform
-        self.radonAngles = np.arange(0, 180, 22.5)               # degrees; angles for Radon transform
+        self.radonAngles = np.arange(0, 180, 180/45)               # degrees; angles for Radon transform
         self.fresnelExtent = 2                                   # Strength of fresnel diffraction
         self.z = 14000                                           # Offset from focal plane for fresnel propagation
         self.boundingOffset = 10                                  # Offset around each guidestar for WFS calculation
         self.rangeMin = 200
         self.rangeMax = 550
+        self.scaling_factor = 1e-8
         self.H, self.Hinv = self.HMatrix(p)
 
     def calculate_modes(self, p, phase, mask):
@@ -32,8 +33,13 @@ class geometric_wfs():
         # ip_l = util.shift2darray(Ip, -int(x), -int(y), fill_value=0)
         # im_l = util.shift2darray(Im, -int(x), -int(y), fill_value=0)
         wfs = self.calculate_wfs(Im, Ip)
+        print(wfs)
         # return np.matmul(self.Hinv, wfs)
-        return np.linalg.lstsq(self.H, wfs, rcond=None)[0]
+        m = np.linalg.lstsq(self.H, wfs, rcond=None)[0] / -self.scaling_factor
+        mx = np.amax(m)
+        print(mx)
+        m /= mx
+        return m
 
     #   Runs a simulation over a layer
     def simulate(self, p, layer):
@@ -47,7 +53,7 @@ class geometric_wfs():
         (x, y) = layer.target.position(layer.altitude)
         ip_l = util.shift2darray(Ip, -int(x), -int(y), fill_value=0)
         im_l = util.shift2darray(Im, -int(x), -int(y), fill_value=0)
-        M = calculate_wfs(ip_l, im_l)
+        M = self.calculate_wfs(ip_l, im_l)
         layer.target.wfs_modes = np.matmul(self.Hinv, M)
         
         # Calculate guide star modes with WFS sensor
@@ -65,14 +71,14 @@ class geometric_wfs():
             (x, y) = gs.position(layer.altitude)
             ip_l = util.shift2darray(Ip, -int(x), -int(y), fill_value=0)
             im_l = util.shift2darray(Im, -int(x), -int(y), fill_value=0)
-            if not separateGuidestars:
-                if boundingOffset >= 0:
-                    if extent is None:
-                        extent = util.circle((p.asize / 2) + self.boundingOffset, layer.dim)
-                    ip_l *= extent
-                    im_l *= extent
-            M = calculate_wfs(ip_l, im_l)
-            gs.wfs_modes = np.matmul(self.Hinv, M)
+            # if not self.separateGuidestars:
+            #     if self.boundingOffset >= 0:
+            #         if extent is None:
+            #             extent = util.circle((p.asize / 2) + self.boundingOffset, layer.dim)
+            #         ip_l *= extent
+            #         im_l *= extent
+            M = self.calculate_wfs(ip_l, im_l)
+            gs.wfs_modes = np.matmul(self.Hinv, M) / self.scaling_factor
 
     def calculate_wfs(self, Im, Ip):
         # Performs wavefront sensing using Marcos' geometric wavefront sensor.
@@ -145,14 +151,13 @@ class geometric_wfs():
                 Hdata = {}
         
         j = complex(0, 1) # complex
-        # H = np.zeros((self.radonSize * numAngles, p.nModes + p.modeIgnore))
-        H = np.zeros((self.radonSize * numAngles, p.nModes))
+        H = np.zeros((self.radonSize * numAngles, p.nModes + p.modeIgnore))
+        # H = np.zeros((self.radonSize * numAngles, p.nModes))
         overrideError = 1
-        scaling_factor = 1e-8  # Make sure it is really small
-        # for mode, zer in enumerate(zernike.zernikeModes(p.asize, p.nModes + p.modeIgnore)):
-        for mode, zer in enumerate(zernike.zernikeModes(p.asize, p.nModes)):
+        for mode, zer in enumerate(zernike.zernikeModes(p.asize, p.nModes + p.modeIgnore)):
+        # for mode, zer in enumerate(zernike.zernikeModes(p.asize, p.nModes)):
             # zer = zernike.zernike(p.asize, p.asize, mode + p.modeIgnore) * scaling_factor
-            zer *= scaling_factor
+            zer *= self.scaling_factor
             wf = util.circle(p.asize / 2, p.asize) * np.exp(j * zer * 2 * np.pi / p.wavelength)
 
             image_plus = fresnel_propagation(wf, p.D, self.fresnelExtent, p.wavelength, self.z, overrideError)
@@ -168,7 +173,7 @@ class geometric_wfs():
 
             H[:, mode] = self.calculate_wfs(image_plus, image_minus)
         
-        H /= scaling_factor
+        H /= self.scaling_factor
 
         if cache_enabled:
             Hdata[md_hash] = H
@@ -234,7 +239,21 @@ def radon_projection(image, theta):
 
 
 def main():
-    pass
+    class TestData:
+        wavelength = 600e-9
+        asize = 256
+        D = 1
+        nModes = 5
+        modeIgnore = 1
+    p = TestData()
+    wfs = geometric_wfs(p)
+    modes1 = zernike.zernikeModes(p.asize, p.nModes + p.modeIgnore)
+    modes2 = zernike.zernikeModes(p.asize, p.nModes + p.modeIgnore)
+    mask = util.circle(p.asize / 2, p.asize)
+    for i1, m1 in enumerate(modes1):
+        for i2, m2 in enumerate(modes2[i1:]):
+            result = wfs.calculate_modes(p, 0.5*m1 + 0.5*m2, mask)
+            print("{}: {}".format((i1 + 1, i2 + i1 + 1), ["{:.5}".format(r) for r in result]))
 
 if __name__ == "__main__":
     main()

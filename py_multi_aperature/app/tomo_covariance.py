@@ -53,14 +53,14 @@ def covariance(sim):
             counter += 1
     
     eps = 1e-12
-    IM = np.transpose(IM)
+    # IM = np.transpose(IM)
 
-    temp = np.matmul(IM, np.matmul(C, np.transpose(IM)))
+    temp = np.matmul(np.transpose(IM), np.matmul(C, IM))
     u, s, v = np.linalg.svd(temp)
     tol = s[0]*eps
     pseudoinv = np.linalg.pinv(temp, rcond=tol)
 
-    estim = np.matmul(C, np.matmul(np.transpose(IM), pseudoinv))     # Minimum variance tomographic estimator
+    estim = np.matmul(C, np.matmul(IM, pseudoinv))     # Minimum variance tomographic estimator
 
     mode_truth = np.zeros(nM)
     Lcovar = np.zeros(nGS * nM)
