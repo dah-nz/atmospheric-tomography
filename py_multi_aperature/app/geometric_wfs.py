@@ -14,14 +14,15 @@ cache_enabled = False
 class geometric_wfs():
     def __init__(self, p):
         self.radonSize = 497                                     # size of matrix for Radon transform
-        self.radonAngles = np.arange(0, 180, 180/45)               # degrees; angles for Radon transform
+        self.radonAngles = np.arange(0, 180, 180/8)              # degrees; angles for Radon transform
         self.fresnelExtent = 2                                   # Strength of fresnel diffraction
         self.z = 14000                                           # Offset from focal plane for fresnel propagation
-        self.boundingOffset = 10                                  # Offset around each guidestar for WFS calculation
+        self.boundingOffset = 10                                 # Offset around each guidestar for WFS calculation
         self.rangeMin = 200
         self.rangeMax = 550
         self.scaling_factor = 1e-8
         self.H, self.Hinv = self.HMatrix(p)
+        self.mode_scaling_factor = 4.75
 
     def calculate_modes(self, p, phase, mask):
         # mask = np.zeros_like(wavefront)
@@ -33,13 +34,10 @@ class geometric_wfs():
         # ip_l = util.shift2darray(Ip, -int(x), -int(y), fill_value=0)
         # im_l = util.shift2darray(Im, -int(x), -int(y), fill_value=0)
         wfs = self.calculate_wfs(Im, Ip)
-        print(wfs)
+        # print(wfs)
         # return np.matmul(self.Hinv, wfs)
         m = np.linalg.lstsq(self.H, wfs, rcond=None)[0] / -self.scaling_factor
-        mx = np.amax(m)
-        print(mx)
-        m /= mx
-        return m
+        return m / self.mode_scaling_factor
 
     #   Runs a simulation over a layer
     def simulate(self, p, layer):
