@@ -44,6 +44,6 @@ def circle(radius, dimension, location=(0,0)):
 
 def cart2imagespace(image_dim, location):
     center = image_dim / 2
-    x = center + (-location[1] * center) - 0.5
-    y = center + ( location[0] * center) - 0.5
+    x = center + (-location[1] * center)# - 0.5
+    y = center + ( location[0] * center)# - 0.5
     return (int(x), int(y))

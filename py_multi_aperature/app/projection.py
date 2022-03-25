@@ -32,7 +32,7 @@ def getGrid(N):
 
 # Translate points on a grid
 def translateGrid(grid, shift):
-    return [(x + shift[0], y + shift[1]) for x, y in grid]
+    return [(x + shift[0], y - shift[1]) for x, y in grid]
 
 # Scale points on a grid
 def scaleGrid(grid, scale):
@@ -43,36 +43,39 @@ def scaleGrid(grid, scale):
 #   Inputs      location     - location of circular portion
 #               diameter     - relative diameter of circular portion (1 = same size as metapupil)
 #               nModes       - number of Zernike modes
-def projectionMatrix(location, diameter, nModes):
+def projectionMatrix(location, diameter, nModes, display=False):
     global g_matrices
-    gridSize = 50 * nModes
+    gridSize = 1 * nModes
     unitGrid = getGrid(gridSize)
-    plt.figure()
-    plt.axis('equal')
-    X = [x for x,_ in unitGrid]
-    Y = [y for _,y in unitGrid]
-    plt.scatter(X, Y, c='k')
+    if display:
+        plt.figure()
+        plt.axis('equal')
+        X = [x for x,_ in unitGrid]
+        Y = [y for _,y in unitGrid]
+        plt.scatter(X, Y, c='k')
     try:
         Ginv = g_matrices[nModes]
     except KeyError:
         G = np.zeros((nModes, gridSize))
         for j in range(nModes):
-            for i, g in enumerate(unitGrid):
-                G[j, i] = zerni(g[0], g[1], j + 1)
+            for i, (x, y) in enumerate(unitGrid):
+                G[j, i] = zerni(x, y, j + 1)
         Ginv = np.linalg.pinv(G)
         g_matrices[nModes] = Ginv   # cache for later
     portGrid = scaleGrid(unitGrid, diameter)
     portGrid = translateGrid(portGrid, location)
-    X = [x for x,_ in portGrid]
-    Y = [y for _,y in portGrid]
-    plt.scatter(X, Y, c='r')
+    if display:
+        X = [x for x,_ in portGrid]
+        Y = [y for _,y in portGrid]
+        plt.scatter(X, Y, c='r')
     Y = np.zeros((nModes, gridSize))
     for j in range(nModes):
-        for i, g in enumerate(portGrid):
-            Y[j, i] = zerni(g[0], g[1], j + 1)
+        for i, (x,y) in enumerate(portGrid):
+            Y[j, i] = zerni(x, y, j + 1)
 
     P = np.matmul(Y, Ginv)
-    P *= np.tri(nModes)
+    eps = 1e-12
+    P = (np.abs(P) > eps) * P
     return P
 
 if __name__ == "__main__":
@@ -90,77 +93,84 @@ if __name__ == "__main__":
         plt.scatter(X, Y, c=dsp)
         plt.hist2d(X, Y, bins=21, alpha=0.5)
 
-    grid = getGrid(n_points)
-    plt.figure()
-    plt.axis('equal')
-    plotgrid(grid, (0, 0), 1, 'k')
-    plt.figure()
-    plt.axis('equal')
-    plotgrid(grid, (0.25, 0), 0.5, 'k')
+    # grid = getGrid(n_points)
+    # plt.figure()
+    # plt.axis('equal')
+    # plotgrid(grid, (0, 0), 1, 'k')
+    # plt.figure()
+    # plt.axis('equal')
+    # plotgrid(grid, (0.25, 0), 0.5, 'k')
     
-    plt.plot([x for x,_ in circlePoints], [y for _,y in circlePoints], 'r')
+    # plt.plot([x for x,_ in circlePoints], [y for _,y in circlePoints], 'r')
 
 
     from phase_screen import createFromModes
     plt.figure()
 
     size = 256
-    location = np.array((-0.25, 0.10))
-    scale = 0.5
-    modes = [0,0,0,1,0,0,0,1]
+    modes = [0,0,0,1,0,0,0,0]
+    scale = 0.711111
+    l = 0.1
+    # location = np.array((-0.25, 0.10))
+    locs = [np.array((0, 0)),
+            np.array((l, 0)),
+            np.array((l, l)),
+            np.array((0, l)),
+            np.array((-l, l)),
+            np.array((-l, 0)),
+            np.array((-l, -l)),
+            np.array((0, -l)),
+            np.array((l, -l))]
+        
     mode_screen = createFromModes(modes, size, 0)
+    plt.title("Metapupil Phase Screen from actual modes")
     plt.imshow(mode_screen)
+
+    for location in locs:
     
-    P = projectionMatrix(location, scale, len(modes))
-    plt.figure()
-    plt.imshow(P)
+        
+        P = projectionMatrix(location, scale, len(modes))
+        P = np.transpose(P)
+        fig, axes = plt.subplots(1,3)
+        fig.suptitle("Location: {}".format(location))
+        axes[0].set_title("Projection Matrix")
+        axes[0].imshow(P)
 
-    sub_modes = np.matmul(P, modes)
+        sub_modes = np.matmul(P, modes)
 
-    print(sub_modes)
-    sub_mode_screen = createFromModes(sub_modes, scale * size, 0)
-    plt.figure()
-    plt.imshow(sub_mode_screen)
+        print(location)
+        print(sub_modes)
+        sub_mode_screen = createFromModes(sub_modes, scale * size, 0)
+        
+        axes[1].set_title("Calculated Subpupil Phase Screen")
+        axes[1].imshow(sub_mode_screen)
 
-    sub_mode_mask = np.zeros((size, size))
+        sub_mode_mask = np.zeros((size, size))
 
-    img_loc = util.cart2imagespace(size, location)
-    radius = int(size * scale / 2)
+        img_loc = util.cart2imagespace(size, location)
+        radius = int(size * scale / 2)
 
-    c_loc = (size * -location[1] / 2, size * location[0] / 2)
+        c_loc = (size * -location[1] / 2, size * location[0] / 2)
 
-    c = circle(int(size * scale / 2), size, c_loc)
-    mode_mask = c * mode_screen
-    
-    sub_mode_mask[(img_loc[0]-radius):(img_loc[0]+radius), (img_loc[1]-radius):(img_loc[1]+radius)] = sub_mode_screen
+        c = circle(int(size * scale / 2), size, c_loc)
+        mode_mask = c * mode_screen
+        
+        sub_mode_mask[(img_loc[0]-radius):(img_loc[0]+radius), (img_loc[1]-radius):(img_loc[1]+radius)] = sub_mode_screen
 
-    plt.figure()
-    plt.imshow(mode_mask)
-    plt.figure()
-    plt.imshow(sub_mode_mask)
-    plt.figure()
-    plt.imshow(mode_screen - mode_mask)
-    plt.figure()
-    plt.imshow(mode_screen - sub_mode_mask)
-    plt.figure()
-    plt.imshow(mode_mask - sub_mode_mask)
+        # plt.figure()
+        # plt.title("Metapupil Phase Screen Masked")
+        # plt.imshow(mode_mask)
+        # plt.figure()
+        # plt.title("Subpupil Phase Screen in Metapupil")
+        # plt.imshow(sub_mode_mask)
+        # plt.figure()
+        # plt.title("Metapupil Phase Screen difference from Masked Metapupil Phase Screen")
+        # plt.imshow(mode_screen - mode_mask)
+        # plt.figure()
+        # plt.title("Metapupil Phase Screen difference from calculated phase screen")
+        # plt.imshow(mode_screen - sub_mode_mask)
+        # plt.figure()
+        axes[2].set_title("Mask Difference")
+        axes[2].imshow(mode_mask - sub_mode_mask)
 
-    # plotgrid((0.5, 0.5), 0.5, 'r')
-    # offset = 1
-    # nModes = 7
-    # l1 = (0.1, 0.1)
-    # d1 = 0.4
-    # plotcirc(l1, d1, 'r')
-    # P1 = projectionMatrix(l1, d1, nModes, offset)
-    # l2 = (-0.1, -0.1)
-    # d2 = 0.4
-    # plotcirc(l2, d2, 'b')
-    # g2 = transformUnitGrid(l2, d2, grid)
-    # P2 = projectionMatrix(l2, d2, nModes, offset)
-    # l3 = (0, 0)
-    # d3 = 0.4
-    # plotcirc(l3, d3, 'g')
-    # P3 = projectionMatrix(l3, d3, nModes, offset)
-    # plotcirc((0.0, 0.0), 1, 'k')
-    
     plt.show()
