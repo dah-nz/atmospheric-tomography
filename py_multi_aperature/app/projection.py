@@ -45,7 +45,7 @@ def scaleGrid(grid, scale):
 #               nModes       - number of Zernike modes
 def projectionMatrix(location, diameter, nModes, display=False):
     global g_matrices
-    gridSize = 1 * nModes
+    gridSize = 5 * nModes
     unitGrid = getGrid(gridSize)
     if display:
         plt.figure()
