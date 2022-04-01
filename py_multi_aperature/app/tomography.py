@@ -18,7 +18,7 @@ def main():
     # plot.plot_tomography("Tomography - Projection", sim, t_proj)
 
     t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
-    plot.plot_tomography("Tomography - Projection (No WFS)", sim, t_nowfs, final=True)
+    plot.plot_tomography("Tomography - Projection (No WFS)", sim, t_nowfs, target_modes=True, final=True)
 
     plot.show()
 

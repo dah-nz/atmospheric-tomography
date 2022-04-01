@@ -81,6 +81,8 @@ def covariance(sim):
             mode_truth += m2
 
     W_t_covar = np.matmul(estim, Lcovar)
+
+    # print(W_t_covar)
     return W_t_covar
     
 

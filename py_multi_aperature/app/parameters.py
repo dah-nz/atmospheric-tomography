@@ -11,7 +11,7 @@ class parameters():
     nModes = 20                                         # number of Zernike modes
     modeIgnore = 1                                      # number of Zernike modes to ignore
 
-    layer_alt = [5000, 10000]                           # altitudes of different layers
+    layer_alt = [1000, 10000]                           # altitudes of different layers
     layer_modes = [[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0]]
     # layer_modes = [[0,0,0,1], [0,0,1,0]]
     nLayers = len(layer_alt)

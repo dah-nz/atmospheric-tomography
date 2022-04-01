@@ -11,7 +11,8 @@ def projection(sim):
     asize = sim.p.asize
     wfs = geometric_wfs(sim.p)
     def proj(gs, layer):
-        return projectionMatrix(gs.position(layer.altitude), layer.dim / asize, sim.p.nModes + sim.p.modeIgnore)
+        P = projectionMatrix(gs.position(layer.altitude), layer.dim / asize, sim.p.nModes + sim.p.modeIgnore)
+        return np.transpose(P)
 
     print([layer.dim for layer in sim.layers])
 

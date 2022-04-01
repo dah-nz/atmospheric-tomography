@@ -1,3 +1,4 @@
+from itertools import filterfalse
 import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib import cm
@@ -9,7 +10,7 @@ import util
 def show():
     plt.show()
 
-def plot_tomography(title, sim, modes, final=False):
+def plot_tomography(title, sim, modes, target_modes=False, final=False):
     # Preamble
     if sim.p.outputType == "pgf":
         matplotlib.use("pgf")
@@ -68,7 +69,10 @@ def plot_tomography(title, sim, modes, final=False):
         
         low = int((layer.dim - asize) / 2 + 0.5)
         high = int((layer.dim + asize) / 2 + 0.5)
-        tomoWF += phase_screen.createFromModes(estimated_modes, layer.dim)[low:high, low:high]
+        if target_modes:
+            tomoWF += phase_screen.createFromModes(estimated_modes, asize)
+        else:
+            tomoWF += phase_screen.createFromModes(estimated_modes, layer.dim)[low:high, low:high]
         actualWF += phase_screen.createFromModes(layer.modes, layer.dim)[low:high, low:high]
 
     mask = util.circle(asize/2, asize)
