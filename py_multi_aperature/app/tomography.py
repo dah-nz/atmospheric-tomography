@@ -14,8 +14,8 @@ def main():
     t_covar = tomo_covariance.covariance(sim)
     plot.plot_tomography("Tomography - Covariance", sim, t_covar)
 
-    # t_proj = tomo_projection.projection(sim)
-    # plot.plot_tomography("Tomography - Projection", sim, t_proj)
+    t_proj = tomo_projection.projection(sim)
+    plot.plot_tomography("Tomography - Projection", sim, t_proj, target_modes=True)
 
     t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
     plot.plot_tomography("Tomography - Projection (No WFS)", sim, t_nowfs, target_modes=True, final=True)
