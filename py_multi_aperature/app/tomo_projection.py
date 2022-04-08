@@ -22,11 +22,11 @@ def projection(sim):
     A = np.concatenate([np.concatenate([proj(gs, layer) for gs in layer.guideStars], 0) for layer in sim.layers], 1)
     T = np.concatenate([proj(layer.target, layer) for layer in sim.layers], 1)
 
-    plt.figure()
-    plt.imshow(A)
+    # plt.figure()
+    # plt.imshow(A)
 
-    plt.figure()
-    plt.imshow(T)
+    # plt.figure()
+    # plt.imshow(T)
 
     r = asize / 2
     mask = util.circle(r, asize)

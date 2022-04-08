@@ -10,7 +10,7 @@ class Star():
     def position(self, altitude):
         return util.azimuth2cart(altitude, self.theta, self.phi)
     def wavefront(self, diameter, altitude, dim):
-        return util.circle(diameter / 2, dim, position(altitude))
+        return util.circle(diameter / 2, dim, self.position(altitude))
 
 def generateGuideStars(n, theta):
     gs = []

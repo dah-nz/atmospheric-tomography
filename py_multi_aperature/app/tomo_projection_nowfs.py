@@ -21,11 +21,11 @@ def projection_nowfs(sim):
     A = np.concatenate([np.concatenate([proj(gs, layer) for gs in layer.guideStars], 0) for layer in sim.layers], 1)
     T = np.concatenate([proj(layer.target, layer) for layer in sim.layers], 1)
 
-    plt.figure()
-    plt.imshow(A)
+    # plt.figure()
+    # plt.imshow(A)
 
-    plt.figure()
-    plt.imshow(T)
+    # plt.figure()
+    # plt.imshow(T)
    
     L = np.zeros(nGS * totalModes)
 
@@ -46,5 +46,9 @@ def projection_nowfs(sim):
 
     W = np.matmul(np.linalg.pinv(A), L)
     W_t_tomo = np.matmul(T, W)
+
+    W_t = W.reshape((2, -1))
+    W_t = W_t[:, sim.p.modeIgnore:]
+    W_t = W_t.flatten()
 
     return W_t_tomo[sim.p.modeIgnore:]

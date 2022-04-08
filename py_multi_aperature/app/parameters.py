@@ -11,18 +11,19 @@ class parameters():
     nModes = 20                                         # number of Zernike modes
     modeIgnore = 1                                      # number of Zernike modes to ignore
 
-    layer_alt = [1000, 10000]                           # altitudes of different layers
-    layer_modes = [[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0]]
+    layer_alt = [1000, 8000]
+    layer_modes = [[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]
+    # layer_alt = [1000, 3000, 10000]                           # altitudes of different layers
+    # layer_modes = [[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], [0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0]]
     # layer_modes = [[0,0,0,1], [0,0,1,0]]
     nLayers = len(layer_alt)
 
     theta = (500 / 2)                                   # angular separation between guide stars and centre of viewpoint (arcseconds)
-    targetPos = (0, 0)                                  # position of target
-    nGS = 5                                             # Number of guide stars
+    # targetPos = (0, 0)
+    targetPos = (0, 0)                         # position of target (arcseconds, radians)
+    nGS = 3                                             # Number of guide stars
     
-    wavelength = 600e-9                                 # metres; narrowband wavelength
-
-    
+    wavelength = 600e-9                                 # metres; narrowband wavelengthW
     
     # zDistances = np.array([14000, 15000, 23000, 33000, 43000, 53000, 63000, 73000, 100000, 150000, 200000])
     # turbLevels = np.array([0.1, 0.2, 0.5, 1, 2, 4, 8, 16, 25])
@@ -34,4 +35,4 @@ class parameters():
 
     noiseLevel = 5e1
 
-    outputType = "plt"                                   # "pgf" for latex, "plt" for matplotlib
+    outputType = "png"                                   # "pgf" for latex, "plt" for matplotlib, "png" for images
