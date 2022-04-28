@@ -27,8 +27,15 @@ def main():
         [[m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5)], [m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5)]]
     ]
     
+    last =  False
+
     for modes in test_modes:
         for target in target_positions:
+            if p.outputType == "plt":
+                if modes == test_modes[-1] and target == target_positions[-1]:
+                    last = True
+            else:
+                last = True
             p.layer_modes = modes
             p.targetPos = target
             sim = Sim(p)
@@ -40,7 +47,7 @@ def main():
             # plot.plot_tomography("Tomography - Projection", sim, t_proj, target_modes=True)
 
             t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
-            plot.plot_tomography("Tomography - Projection (No WFS)", sim, t_nowfs, target_modes=True, final=True)
+            plot.plot_tomography("Tomography - Projection (No WFS)", sim, t_nowfs, target_modes=True, final=last)
 
 
 if __name__ == "__main__":
