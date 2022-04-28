@@ -37,3 +37,7 @@ packages/
 *.svn
 *.DS_Store
 *.mp4
+*.png
+*.jpg
+*.jpeg
+*.gif
