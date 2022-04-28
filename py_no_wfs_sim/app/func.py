@@ -9,3 +9,6 @@ def cart2pol(x, y):
     rho = np.sqrt(x**2 + y**2)
     phi = np.arctan2(y, x)
     return (rho, phi)
+
+def arcmin2rad(t):
+    return (t/60) * (np.pi / 180)

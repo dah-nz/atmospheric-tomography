@@ -30,6 +30,8 @@ pack_f_ft = fft2(zeropack_f);
 
 result_ft = (ifft2(pack_h_ft.*pack_f_ft));
 
+result_ft = round(result_ft, 10);
+
 if (nargin < 3)
     extent = 'f';
 end
@@ -49,5 +51,7 @@ if real(h_est)==h_est
 	if real(f_est)==f_est
 		result=real(result);
 	end
-end		
+end
+
+
 

@@ -43,8 +43,8 @@ for mode = 1:numModes
     Im = Im(validRange, validRange);
     Im = Im / sum(sum(Im));
 
-    [radonIp, Ixp] = radon(Ip,angles);
-    [radonIm, Mxp] = radon(Im,angles);
+    radonIp = radon_projection(Ip,angles);
+    radonIm = radon_projection(Im,angles);
     %%
     % Here, the CDF is calcuated for both the intra and extra pupil planes.
     % Refer to van Damm's PhD thesis, partcularly Fig. 10.7.

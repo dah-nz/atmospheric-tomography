@@ -1,5 +1,7 @@
 import numpy as np
-from conv import cconv2d
+from conv import cconv2
+
+import csv
 
 def fresnel_propagation(fieldStart, fieldSize, fresnelExtent, wavelength, z, overrideError):
 # Fresnel propagation for a finite aperture to a certain finite distance
@@ -41,5 +43,37 @@ def fresnel_propagation(fieldStart, fieldSize, fresnelExtent, wavelength, z, ove
     fresnelTempTranspose = np.transpose(fresnelTemp)
     fresnelPhase = k / 2 / z * (fresnelTemp ** 2 + fresnelTempTranspose ** 2)
     fresnelKernel = np.exp(j * fresnelPhase)
+    cc = cconv2(fresnelKernel, fieldStart)
 
-    return cconv2d(fresnelKernel, fieldStart)
+    return cc
+
+# Generate two defocused pupil planes using Fresnel diffraction
+# Generation of intra and extra focal planes (fplus, fminus),
+# seperated by distance z, measured either side of the focal point. These planes
+# are used by the geometric wavefront sensor and in effect are defocussed sensors
+# that can be represented in the lb or on-sky by a pair of CCD or sCMOS detector planes
+# simply by using two cameras at a distance of 'z' either side of a focal point from a 
+# simple plano-convex lens of focal length 'f'
+def generateIMatrices(wfs, wavefront, phase, wavelength, z):
+    iMin = wfs.rangeMin
+    iMax = wfs.rangeMax
+    j = complex(0, 1)
+    field = wavefront*np.exp(j * phase)
+    fplus = fresnel_propagation(field, 1, 2, wavelength, z, 0)
+    fminus = fresnel_propagation(field, 1, 2, wavelength, -z, 0)
+    im_plus = np.abs(fplus[iMin:iMax, iMin:iMax]) ** 2
+    im_minus = np.abs(fminus[iMin:iMax, iMin:iMax]) ** 2
+    Ip = im_plus
+    Im = im_minus
+    Ip /= np.sum(Ip)
+    Im /= np.sum(Im)
+
+    # NOISY I MATRICES
+    # IpNoise = Ip * total_photons
+    # ImNoise = Im * total_photons
+    # IpNoise = fast_poisson(IpNoise)
+    # ImNoise = fast_poisson(ImNoise)
+    # IpNoise /= np.linalg.norm(IpNoise)
+    # ImNoise /= np.linalg.norm(ImNoise)
+
+    return Ip, Im

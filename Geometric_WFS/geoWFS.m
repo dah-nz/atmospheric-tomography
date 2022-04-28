@@ -36,8 +36,9 @@ numAngles = max(size(angles));
 %radonIp = myradon(Ip, angles);
 %radonIm = myradon(Im, angles);
 % Was: (requires Image processing license)
-radonIp = radon(Ip, angles);
-radonIm = radon(Im, angles);
+
+radonIp = radon_projection(Ip, angles);
+radonIm = radon_projection(Im, angles);
 
 radonSize = size(radonIp,1);
 if(radonSize*numAngles ~= size(HmatrixInverse,2))
@@ -47,11 +48,14 @@ end
 cumIp = cumsum(radonIp);
 cumIm = cumsum(radonIm);
 
+
+
 data = zeros([radonSize*numAngles 1]);
 
 for projection = 1:numAngles
 
 	hdiff = horizontalDiff(cumIm(:,projection), cumIp(:,projection));
+    % csvwrite("hinv.txt", hdiff)
 	data((projection-1)*radonSize+(1:radonSize)) = -hdiff.*radonIm(:,projection) / z;
 
 end
