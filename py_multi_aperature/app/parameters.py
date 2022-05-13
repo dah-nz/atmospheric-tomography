@@ -35,4 +35,4 @@ class parameters():
 
     noiseLevel = 5e1
 
-    outputType = "png"                                   # "pgf" for latex, "plt" for matplotlib, "png" for images
+    outputType = "plt"                                   # "pgf" for latex, "plt" for matplotlib, "png" for images

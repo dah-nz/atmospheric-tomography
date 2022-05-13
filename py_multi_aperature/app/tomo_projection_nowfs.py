@@ -51,4 +51,5 @@ def projection_nowfs(sim):
     W_t = W_t[:, sim.p.modeIgnore:]
     W_t = W_t.flatten()
 
+    # return W_t
     return W_t_tomo[sim.p.modeIgnore:]
