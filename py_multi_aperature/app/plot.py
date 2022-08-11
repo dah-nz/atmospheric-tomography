@@ -49,6 +49,7 @@ def plot_target(title, sim, data):
         axes.plot([pos[0] + x for x,_ in g], [pos[1] + y for _,y in g], dsp)
 
     asize = sim.p.asize
+
     for modes, d in data.items():
         filename = set_output(title, sim)
         actual_modes = np.sum(np.array([list(m) for m in modes]), 0)
@@ -70,9 +71,9 @@ def plot_target(title, sim, data):
 
         rms = np.array([])
 
-        axes[0].plot(mode_scale, actual_modes, color='k', label="Actual modes")
+        axes[0].plot(mode_scale, actual_modes, color='k', label="Actual target modes")
 
-        for i, (t_pos, t_modes) in enumerate(d):
+        for i, (t_pos, t_modes, layer_modes) in enumerate(d):
             diff = np.array(t_modes) - np.array(actual_modes)
             rms = np.append(rms, diff)
             rms = np.sqrt(np.mean(rms * rms))
@@ -95,20 +96,21 @@ def plot_target(title, sim, data):
         fig, axes = plt.subplots(nLayers + 2, len(d))
         fig.suptitle(title + ' - Phase Screen')
 
-        for l, layer in enumerate(sim.layers):
-            layer_modes = list(modes[l])
-            l_img = phase_screen.createFromModes(layer_modes, asize)
-            mx = max(abs(np.amax(l_img)), abs(np.amin(l_img)))
-            for i in range(len(d)):
-                showImg(l_img, axes[l, i], mx, asize)
+        mask = util.circle(asize/2, asize)
 
         # axes[0, 0].set_title('Pupil Phase Screen')
         # img = phase_screen.createFromModes(actual_modes, asize)
         # mx = max(abs(np.amax(img)), abs(np.amin(img)))
         # showImg(img, axes[0, 0], mx, asize)
-        mask = util.circle(asize/2, asize)
 
-        for i, (t_pos, t_modes) in enumerate(d):
+        for i, (t_pos, t_modes, layer_modes) in enumerate(d):
+
+            for l, layer in enumerate(sim.layers):
+                l_modes = list(layer_modes[l])
+                l_img = phase_screen.createFromModes(l_modes, asize)
+                mx = max(abs(np.amax(l_img)), abs(np.amin(l_img)))
+                showImg(l_img, axes[l, i], mx, asize)
+
             actualWF = np.zeros((asize, asize))
             for l in range(nLayers):
                 axes[l, i].set_title('Layer {}: Target Location {}'.format(l + 1, t_pos))
@@ -118,7 +120,7 @@ def plot_target(title, sim, data):
             for l, layer in enumerate(sim.layers):
                 plotcirc(axes[l, i], (int(asize / 2), int(asize / 2)), asize / 2, 'k')
                 # Plot Target Location
-                x, y = util.azimuth2cart(layer.altitude, util.arcsec2rad(t_pos[0]), t_pos[1])
+                x, y = util.azimuth2cart(layer.altitude, t_pos[0], t_pos[1])
                 tx = (x * asize / sim.p.D) * (asize / layer.dim) + (asize / 2)
                 ty = (y * asize / sim.p.D) * (asize / layer.dim) + (asize / 2)
                 plotcirc(axes[l, i], (tx, ty), ((asize ** 2) / layer.dim) / 2, 'k:')
@@ -130,15 +132,15 @@ def plot_target(title, sim, data):
                     plotcirc(axes[l, i], (gx, gy), ((asize ** 2) / layer.dim) / 2, 'k--')
 
 
-                x, y = util.azimuth2cart(layer.altitude, util.arcsec2rad(t_pos[0]), t_pos[1])
+                x, y = util.azimuth2cart(layer.altitude, t_pos[0], t_pos[1])
                 tx = (x * asize / sim.p.D) + (layer.dim / 2)
                 ty = (y * asize / sim.p.D) + (layer.dim / 2)
                 lowX = int(tx - asize / 2 + 0.5)
                 lowY = int(ty - asize / 2 + 0.5)
                 highX = int(tx + asize / 2 + 0.5)
                 highY = int(ty + asize / 2 + 0.5)
-                layer_modes = list(modes[l])
-                wf = phase_screen.createFromModes(layer_modes, layer.dim)
+                l_modes = list(layer_modes[l])
+                wf = phase_screen.createFromModes(l_modes, layer.dim)
                 actualWF += wf[(layer.dim-highY):(layer.dim-lowY), lowX:highX]
 
             t_img = phase_screen.createFromModes(t_modes, asize)

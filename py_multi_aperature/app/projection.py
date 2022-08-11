@@ -105,12 +105,11 @@ if __name__ == "__main__":
 
 
     from phase_screen import createFromModes
-    plt.figure()
-
     size = 256
-    modes = [0,0,0,1,0,0,0,0]
-    scale = 0.711111
-    l = 0.1
+    nModes = 50
+    test_modes = [list(m * np.exp(-(i+1)/100) for i, m in enumerate(np.random.rand(nModes) - 0.5))]
+    scale = 0.54
+    l = 0.25
     # location = np.array((-0.25, 0.10))
     locs = [np.array((0, 0)),
             np.array((l, 0)),
@@ -122,55 +121,63 @@ if __name__ == "__main__":
             np.array((0, -l)),
             np.array((l, -l))]
         
-    mode_screen = createFromModes(modes, size, 0)
-    plt.title("Metapupil Phase Screen from actual modes")
-    plt.imshow(mode_screen)
 
-    for location in locs:
+    for modes in test_modes:
+        for location in locs:
     
-        
-        P = projectionMatrix(location, scale, len(modes))
-        P = np.transpose(P)
-        fig, axes = plt.subplots(1,3)
-        fig.suptitle("Location: {}".format(location))
-        axes[0].set_title("Projection Matrix")
-        axes[0].imshow(P)
+            P = projectionMatrix(location, scale, len(modes))
+            P = np.transpose(P)
+            fig, axes = plt.subplots(1,5)
+            fig.suptitle("Modes: {} - Location: {}".format(modes, location))
 
-        sub_modes = np.matmul(P, modes)
+            axes[0].set_title("Projection Matrix")
+            axes[0].imshow(P)
 
-        print(location)
-        print(sub_modes)
-        sub_mode_screen = createFromModes(sub_modes, scale * size, 0)
-        
-        axes[1].set_title("Calculated Subpupil Phase Screen")
-        axes[1].imshow(sub_mode_screen)
+            mode_screen = createFromModes(modes, size, 0)
+            axes[1].set_title("Initial Metapupil")
+            axes[1].imshow(mode_screen)
 
-        sub_mode_mask = np.zeros((size, size))
+            sub_modes = np.matmul(P, modes)
 
-        img_loc = util.cart2imagespace(size, location)
-        radius = int(size * scale / 2)
+            # print(location)
+            # print(sub_modes)
+            sub_mode_screen = createFromModes(sub_modes, scale * size, 0)
+            axes[2].set_title("Projected Subpupil Phase Screen")
+            axes[2].imshow(sub_mode_screen)
 
-        c_loc = (size * -location[1] / 2, size * location[0] / 2)
+            reconstructed_modes = np.matmul(np.linalg.pinv(P), sub_modes)
+            reconstructed_screen = createFromModes(reconstructed_modes, size, 0)
+            axes[3].set_title("Reconstructed Metapupil")
+            axes[3].imshow(reconstructed_screen)
 
-        c = circle(int(size * scale / 2), size, c_loc)
-        mode_mask = c * mode_screen
-        
-        sub_mode_mask[(img_loc[0]-radius):(img_loc[0]+radius), (img_loc[1]-radius):(img_loc[1]+radius)] = sub_mode_screen
+            axes[4].set_title("Ground Truth to Reconstruction Difference")
+            axes[4].imshow(mode_screen - reconstructed_screen)
 
-        # plt.figure()
-        # plt.title("Metapupil Phase Screen Masked")
-        # plt.imshow(mode_mask)
-        # plt.figure()
-        # plt.title("Subpupil Phase Screen in Metapupil")
-        # plt.imshow(sub_mode_mask)
-        # plt.figure()
-        # plt.title("Metapupil Phase Screen difference from Masked Metapupil Phase Screen")
-        # plt.imshow(mode_screen - mode_mask)
-        # plt.figure()
-        # plt.title("Metapupil Phase Screen difference from calculated phase screen")
-        # plt.imshow(mode_screen - sub_mode_mask)
-        # plt.figure()
-        axes[2].set_title("Mask Difference")
-        axes[2].imshow(mode_mask - sub_mode_mask)
+            # sub_mode_mask = np.zeros((size, size))
+
+            # img_loc = util.cart2imagespace(size, location)
+            # radius = int(size * scale / 2)
+
+            # c_loc = (size * -location[1] / 2, size * location[0] / 2)
+
+            # c = circle(int(size * scale / 2), size, c_loc)
+            # mode_mask = c * mode_screen
+            
+            # sub_mode_mask[(img_loc[0]-radius):(img_loc[0]+radius), (img_loc[1]-radius):(img_loc[1]+radius)] = sub_mode_screen
+
+            # plt.figure()
+            # plt.title("Metapupil Phase Screen Masked")
+            # plt.imshow(mode_mask)
+            # plt.figure()
+            # plt.title("Subpupil Phase Screen in Metapupil")
+            # plt.imshow(sub_mode_mask)
+            # plt.figure()
+            # plt.title("Metapupil Phase Screen difference from Masked Metapupil Phase Screen")
+            # plt.imshow(mode_screen - mode_mask)
+            # plt.figure()
+            # plt.title("Metapupil Phase Screen difference from calculated phase screen")
+            # plt.imshow(mode_screen - sub_mode_mask)
+            # plt.figure()
+
 
     plt.show()

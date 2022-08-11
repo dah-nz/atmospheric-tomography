@@ -129,3 +129,14 @@ def createFromModes(modes, sz, ignoreModes=1):
     for m, z0 in enumerate(modes):
         phase += z0 * zernike(sz, sz, m + ignoreModes + 1)
     return phase
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    for m in range(20):
+        modes = [0] * 20
+        modes[m] = 0.2
+        screen = createFromModes(modes, 512)
+        plt.figure()
+        plt.title("Phase screen for mode {}".format(m + 1))
+        plt.imshow(screen)
+    plt.show()
