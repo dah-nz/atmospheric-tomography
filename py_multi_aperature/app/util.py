@@ -17,6 +17,10 @@ def cart2pol(x, y):
 def arcsec2rad(t):
     return np.radians(t / 60 / 60)
 
+def rad2arcsec(t):
+    return np.degrees(t) * 60 * 60
+    
+
 # Shift data in 2D array in x and y directions
 def shift2darray(arr, x, y, fill_value=np.nan):
     arr = np.roll(arr, x, 0)

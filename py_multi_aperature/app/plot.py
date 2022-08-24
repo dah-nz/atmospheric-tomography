@@ -77,8 +77,8 @@ def plot_target(title, sim, data):
             diff = np.array(t_modes) - np.array(actual_modes)
             rms = np.append(rms, diff)
             rms = np.sqrt(np.mean(rms * rms))
-            axes[0].plot(mode_scale, t_modes, color='r', linestyle=line_type[i], label="Modes for target at {}".format(t_pos))
-            axes[1].plot(mode_scale, t_modes - actual_modes, color='r', linestyle=line_type[i], label="Mode error for target at {} [RMS:{}]".format(t_pos, rms))
+            axes[0].plot(mode_scale, t_modes, color='r', linestyle=line_type[i], label="Modes for target at {}, {}".format(util.rad2arcsec(t_pos[0]), t_pos[1]))
+            axes[1].plot(mode_scale, t_modes - actual_modes, color='r', linestyle=line_type[i], label="Mode error for target at {}, {} [RMS:{}]".format(util.rad2arcsec(t_pos[0]), t_pos[1], rms))
 
 
         axes[0].legend(fancybox=True, shadow=True, fontsize=8)
@@ -93,7 +93,7 @@ def plot_target(title, sim, data):
         def showImg(img, ax, mx, size):
             ax.imshow(img, cmap='bwr', aspect='equal', vmax=mx, vmin=-mx, extent=(0, size, 0, size))
 
-        fig, axes = plt.subplots(nLayers + 2, len(d))
+        fig, axes = plt.subplots(nLayers + 3, len(d))
         fig.suptitle(title + ' - Phase Screen')
 
         mask = util.circle(asize/2, asize)
@@ -113,9 +113,10 @@ def plot_target(title, sim, data):
 
             actualWF = np.zeros((asize, asize))
             for l in range(nLayers):
-                axes[l, i].set_title('Layer {}: Target Location {}'.format(l + 1, t_pos))
+                axes[l, i].set_title('Layer {}: Target Location {}, {}'.format(l + 1, util.rad2arcsec(t_pos[0]), t_pos[1]))
             axes[nLayers, i].set_title('Target Phase Screen')
-            axes[nLayers + 1, i].set_title('Phase Screen Error')
+            axes[nLayers + 1, i].set_title('Calculated Phase Screen')
+            axes[nLayers + 2, i].set_title('Phase Screen Error')
             # Plot Metapupil
             for l, layer in enumerate(sim.layers):
                 plotcirc(axes[l, i], (int(asize / 2), int(asize / 2)), asize / 2, 'k')
@@ -144,13 +145,20 @@ def plot_target(title, sim, data):
                 actualWF += wf[(layer.dim-highY):(layer.dim-lowY), lowX:highX]
 
             t_img = phase_screen.createFromModes(t_modes, asize)
+
+            # remove piston affect from phase screens
+            actualWF -= np.average(actualWF)
+            t_img -= np.average(t_img)
+
             t_img *= mask
             actualWF *= mask
             diff = t_img - actualWF
+            mx = max(abs(np.amax(actualWF)), abs(np.amin(actualWF)))
+            showImg(actualWF, axes[nLayers, i], mx, asize)
             mx = max(abs(np.amax(t_img)), abs(np.amin(t_img)))
-            showImg(t_img, axes[nLayers, i], mx, asize)
+            showImg(t_img, axes[nLayers + 1, i], mx, asize)
             mx = max(abs(np.amax(diff)), abs(np.amin(diff)))
-            showImg(diff, axes[nLayers + 1, i], mx, asize)
+            showImg(diff, axes[nLayers + 2, i], mx, asize)
     
     if sim.p.outputType == "pgf":
         fig = matplotlib.pyplot.gcf()

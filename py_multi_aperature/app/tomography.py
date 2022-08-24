@@ -16,19 +16,29 @@ def main():
 
     target_positions = [
         (0, 0),
-        (util.arcsec2rad(100), 0),               # X
-        (util.arcsec2rad(100), np.pi / 2),       # Y
+        # (util.arcsec2rad(100), 0),               # X
+        # (util.arcsec2rad(100), np.pi / 2),       # Y
+        (util.arcsec2rad(50), np.pi / 3),       # X and Y
         (util.arcsec2rad(100), np.pi / 3),       # X and Y
+        (util.arcsec2rad(200), np.pi / 3),       # X and Y
     ]
 
+    l1 = list(m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))
+    l2 = list(m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))
+
     test_modes = [
-        ((0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)),
-        ((1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)),
-        ((0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0)),
-        ((0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0)),
-        ((0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0)),
-        ((1,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0)),
-        (tuple(list(m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))), tuple((m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))))
+        # ((0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)),
+        # ((1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)),
+        # ((0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0)),
+        # ((0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0)),
+        # ((0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0)),
+        # ((1,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0), (0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0)),
+        (tuple(l1.copy()), tuple(l2.copy())),
+        # (tuple([10e-4 * x for x in l1]), tuple([10e-4 * x for x in l2])),
+        # (tuple([10e-8 * x for x in l1]), tuple([10e-8 * x for x in l2])),
+        # (tuple(list(m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))), tuple((m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5)))),
+        # (tuple(list(0.01 * m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))), tuple((0.01 * m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5)))),
+        # (tuple(list(0.0001 * m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))), tuple((0.0001 * m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))))
     ]
     
     last =  False
@@ -65,12 +75,12 @@ def main():
             # data[modes].append((target, t_covar, p.layer_modes))
             # plot.plot_tomography("Tomography - Covariance", sim, t_covar)
 
-            t_proj = tomo_projection.projection(sim)
-            data[modes].append((target, t_proj, p.layer_modes))
+            # t_proj = tomo_projection.projection(sim)
+            # data[modes].append((target, t_proj, p.layer_modes))
             # plot.plot_tomography("Tomography - Projection", sim, t_proj, target_modes=True)
 
-            # t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
-            # data[modes].append((target, t_nowfs, p.layer_modes))
+            t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
+            data[modes].append((target, t_nowfs, p.layer_modes))
 
     plot.plot_target("Tomography - Projection (No WFS)", sim, data)
 
