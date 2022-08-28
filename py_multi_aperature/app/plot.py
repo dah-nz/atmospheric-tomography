@@ -40,6 +40,87 @@ def set_output(title, sim):
         return filename
     return None
 
+def plot_data(title, sim, data, test_data):
+    n_points = 256
+    nLayers = len(sim.p.layer_alt)
+    def plotcirc(axes, pos, rad, dsp):
+        g = [util.pol2cart(rad,t/n_points*(2*np.pi)) for t in range(n_points + 1)]
+        axes.plot([pos[0] + x for x,_ in g], [pos[1] + y for _,y in g], dsp)
+
+    asize = sim.p.asize
+
+    filename = set_output(title, sim)
+    fig, axes = plt.subplots(3)
+    fig.suptitle(title + ' - RMS Errors')
+
+    # # Plot for test modes
+    # modes_rmse = []
+    # modes_x = []
+
+    # for i, test_modes in test_data[0]:
+
+    #     rms = np.array([])
+    #     actual_modes = np.sum(np.array([list(m) for m in test_modes]), 0)
+    #     mode_scale = [i + 1 for i in range(len(actual_modes))]
+
+    #     for modes, target, asterism, tomo_modes, layer_modes in data:
+    #         if modes == test_modes:
+    #             diff = np.array(tomo_modes) - np.array(actual_modes)
+    #             rms = np.append(rms, diff)
+        
+    #     modes_rmse.append(np.sqrt(np.mean(rms * rms)))
+    #     modes_x = 
+
+    # Plot for target position
+    target_rmse = []
+    target_x = []
+
+    for i, test_target_pos in enumerate(test_data[1]):
+        rms = np.array([])
+        for modes, target_pos, asterism, tomo_modes, layer_modes in data:
+            if target_pos == test_target_pos:
+                actual_modes = np.sum(np.array([list(m) for m in modes]), 0)
+                diff = np.array(tomo_modes) - np.array(actual_modes)
+                rms = np.append(rms, diff)
+        target_rmse.append(np.sqrt(np.mean(rms * rms)))
+        target_x.append(i)
+
+    # Plot for asterism
+    asterism_rmse = []
+    asterism_x = []
+
+    for i, test_asterism in enumerate(test_data[2]):
+        rms = np.array([])
+        for modes, target, asterism, tomo_modes, layer_modes in data:
+            if test_asterism == asterism:
+                actual_modes = np.sum(np.array([list(m) for m in modes]), 0)
+                diff = np.array(tomo_modes) - np.array(actual_modes)
+                rms = np.append(rms, diff)
+        asterism_rmse.append(np.sqrt(np.mean(rms * rms)))
+        asterism_x.append(i)
+        
+    axes[0].set_title("Target Position Errors")
+    axes[0].set_xlabel("Target Position Index")
+    axes[0].set_ylabel("RMS Error")
+
+    axes[1].set_title("Asterism Errors")
+    axes[1].set_xlabel("Asterism Index")
+    axes[1].set_ylabel("RMS Error")
+
+    axes[2].set_title("Mode Errors")
+    axes[2].set_xlabel("Asterism Index")
+    axes[2].set_ylabel("RMS Error")
+        
+    axes[0].plot(target_x, target_rmse)
+    axes[1].plot(asterism_x, asterism_rmse)
+    
+    if sim.p.outputType == "pgf":
+        fig = matplotlib.pyplot.gcf()
+        fig.set_size_inches(6, 4.5)
+        plt.savefig("work.pgf")
+    else:
+        plt.show()
+
 def plot_target(title, sim, data):
 
     n_points = 256

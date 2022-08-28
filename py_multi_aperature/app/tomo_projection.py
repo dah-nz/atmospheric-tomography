@@ -33,9 +33,11 @@ def projection(sim):
     L = np.zeros(nGS * totalModes)
 
     for l, layer in enumerate(sim.layers):
+        print("l:{}".format(l))
         z = zernike.zernikeModes(layer.dim, totalModes)
 
         for n, gs in enumerate(layer.guideStars):
+            print("gs:{}".format(n))
             circular = np.ones((asize, asize))
             pos = gs.position(layer.altitude) 
             x = (pos[0] + asize / 2) * layer.dim / asize

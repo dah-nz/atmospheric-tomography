@@ -14,15 +14,22 @@ def main():
     np.random.seed(1)
     p = parameters
 
-    target_positions = [
-        (0, 0),
-        # (util.arcsec2rad(100), 0),               # X
-        # (util.arcsec2rad(100), np.pi / 2),       # Y
-        (util.arcsec2rad(50), np.pi / 3),       # X and Y
-        (util.arcsec2rad(100), np.pi / 3),       # X and Y
-        (util.arcsec2rad(200), np.pi / 3),       # X and Y
-    ]
+    target_positions_azi = [util.arcsec2rad(x) for x in np.linspace(0, 200, 10)]
+    target_positions_theta = [0, np.pi/4, np.pi/2]
+    target_positions = [(x, y) for x in target_positions_azi for y in target_positions_theta]
 
+    base_modes = [0.0] * p.nModes
+    test_modes = []
+    for x in range(p.nModes):
+        for y in range(p.nModes):
+            l1 = base_modes.copy()
+            l2 = base_modes.copy()
+            l1[x] = 1.0
+            l2[y] = 1.0            
+            test_modes.append((tuple(l1), tuple(l2)))
+
+    """
+    OLD RANDOM TEST MODES
     l1 = list(m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))
     l2 = list(m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))
 
@@ -40,49 +47,48 @@ def main():
         # (tuple(list(0.01 * m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))), tuple((0.01 * m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5)))),
         # (tuple(list(0.0001 * m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))), tuple((0.0001 * m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(p.nModes) - 0.5))))
     ]
+    """
+
+    asterisms = [
+        [(util.arcsec2rad(250), x) for x in np.linspace(0, 2 * np.pi, 3, endpoint=False)],
+        [(util.arcsec2rad(250), x) for x in np.linspace(0, 2 * np.pi, 4, endpoint=False)],
+        [(util.arcsec2rad(250), x) for x in np.linspace(0, 2 * np.pi, 5, endpoint=False)],
+        [(util.arcsec2rad(250), x) for x in [0, 2* np.pi / 3, 1.5 * np.pi]],
+        [(util.arcsec2rad(250), x) for x in [0.2, 2* np.pi / 3, 1.5 * np.pi]],
+    ]
     
     last =  False
 
-    data = {}
+    data = []
 
-    for modes in test_modes:
-        data[modes] = []
+    base_sim = Sim(p)
+    def proj(ts, layer):
+        x, y = ts.position(layer.altitude)
+        s = base_sim.p.asize / layer.dim
+        P = projectionMatrix((x/base_sim.p.D, y/base_sim.p.D), s, base_sim.p.nModes + base_sim.p.modeIgnore)
+        return P.T
+    for asterism in asterisms:
+        print("Testing Asterism: {}".format(asterism))
+        gs = [Star(t, p) for t, p in asterism] 
         for target in target_positions:
+            print("\tTesting Target Position: {}".format(target))
+            proj_matrices = [(proj(Star(target[0], target[1]), layer)) for layer in base_sim.layers]
+            for modes in test_modes:
+                print("\t\tTesting Modes: {}".format(modes))
 
-            temp_sim = Sim(p)
-            def proj(ts, layer):
-                x, y = ts.position(layer.altitude)
-                s = temp_sim.p.asize / layer.dim
-                P = projectionMatrix((x/temp_sim.p.D, y/temp_sim.p.D), s, temp_sim.p.nModes + temp_sim.p.modeIgnore)
-                return P.T
+                # generate layer modes from target modes
+                target_modes = [[0] + list(m) for m in modes]
+                p.layer_modes = [np.matmul(np.linalg.pinv(pm), tm)[base_sim.p.modeIgnore:] for pm, tm in zip(proj_matrices, target_modes)]
 
-            # generate layer modes from target modes
-            proj_matrices = [(proj(Star(target[0], target[1]), layer)) for layer in temp_sim.layers]
-            target_modes = [[0] + list(m) for m in modes]
-            p.layer_modes = [np.matmul(np.linalg.pinv(pm), tm)[temp_sim.p.modeIgnore:] for pm, tm in zip(proj_matrices, target_modes)]
+                p.targetPos = target
+                sim = Sim(p, guidestars=gs)
+                p.nGS = len(gs)
 
-            # run simulations
-            if p.outputType == "plt":
-                if modes == test_modes[-1] and target == target_positions[-1]:
-                    last = True
-            else:
-                last = True
-            p.targetPos = target
-            sim = Sim(p)
+                t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
+                data.append((modes, target, asterism, t_nowfs, p.layer_modes))
 
-            # t_covar = tomo_covariance.covariance(sim)
-            # t_covar = np.sum(np.reshape(t_covar, (2, -1)), 0)
-            # data[modes].append((target, t_covar, p.layer_modes))
-            # plot.plot_tomography("Tomography - Covariance", sim, t_covar)
-
-            # t_proj = tomo_projection.projection(sim)
-            # data[modes].append((target, t_proj, p.layer_modes))
-            # plot.plot_tomography("Tomography - Projection", sim, t_proj, target_modes=True)
-
-            t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
-            data[modes].append((target, t_nowfs, p.layer_modes))
-
-    plot.plot_target("Tomography - Projection (No WFS)", sim, data)
+    test_data = (test_modes, target_positions, asterisms)
+    plot.plot_data("Tomography", sim, data, test_data)
 
 
 if __name__ == "__main__":
