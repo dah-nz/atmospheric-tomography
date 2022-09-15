@@ -131,37 +131,34 @@ def main():
     plt.plot(pos_data.keys(), pos_data.values())
 
     # plot average error for different asterisms
-    ast_rad_data = {}
-    ast_rad_count = {}
-    ast_num_data = {}
-    ast_num_count = {}
-    ast_equi_data = {}
-    ast_equi_count = {}
+    asterism_types = ['equal', 'random_single', 'full_random']
+    def setup(d):
+        for t in asterism_types:
+            d[t] = {}
+        return d
+    ast_rad_data = setup({})
+    ast_rad_count = setup({})
+    ast_num_data = setup({})
+    ast_num_count = setup({})
     for k, err in output_rmse.items():
-        asterism = asterisms[k[1]]
-        radius = util.rad2arcsec(asterism[1][0])
-        num = len(asterism)
-        equi = asterism[0][1] == 0.0
+        a = asterisms[k[1]]
+        ast_type = a[0]
+        ast_pos = a[1]
+        radius = util.rad2arcsec(ast_pos[0])
+        num = len(ast_pos)
         try:
-            ast_rad_data[radius] += err
-            ast_rad_count[radius] += 1
+            ast_rad_data[ast_type][radius] += err
+            ast_rad_count[ast_type][radius] += 1
         except KeyError:
-            ast_rad_data[radius] = err
-            ast_rad_count[radius] = 1
+            ast_rad_data[ast_type][radius] = err
+            ast_rad_count[ast_type][radius] = 1
 
         try:
-            ast_num_data[num] += err
-            ast_num_count[num] += 1
+            ast_num_data[ast_type][num] += err
+            ast_num_count[ast_type][num] += 1
         except KeyError:
-            ast_num_data[num] = err
-            ast_num_count[num] = 1
-
-        try:
-            ast_equi_data[equi] += err
-            ast_equi_count[equi] += 1
-        except KeyError:
-            ast_equi_data[equi] = err
-            ast_equi_count[equi] = 1
+            ast_num_data[ast_type][num] = err
+            ast_num_count[ast_type][num] = 1
     
     for k in ast_rad_count.keys():
         ast_rad_data[k] /= ast_rad_count[k]
@@ -169,26 +166,21 @@ def main():
     for k in ast_num_count.keys():
         ast_num_data[k] /= ast_num_count[k]
     
-    for k in ast_equi_count.keys():
-        ast_equi_data[k] /= ast_equi_count[k]
-    
     plt.figure()
     plt.title("Error based on asterism radius")
     plt.xlabel("Asterism Radius [arcseconds]")
     plt.ylabel("Tomography RMSE")
-    plt.plot(ast_rad_data.keys(), ast_rad_data.values())
+    for t in asterism_types:
+        plt.plot(ast_rad_data[t].keys(), ast_rad_data[t].values(), label=t)
+    plt.legend()
 
     plt.figure()
     plt.title("Error based on asterism star count")
     plt.xlabel("Number of Stars")
     plt.ylabel("Tomography RMSE")
-    plt.plot(ast_num_data.keys(), ast_num_data.values())
-
-    plt.figure()
-    plt.title("Error based on asterism spacing")
-    plt.xlabel("Asterism Spacing (equidistant or not)")
-    plt.ylabel("Tomography RMSE")
-    plt.plot(ast_equi_data.keys(), ast_equi_data.values())
+    for t in asterism_types:
+        plt.plot(ast_num_data[t].keys(), ast_num_data[t].values(), label=t)
+    plt.legend()
 
     # plot average error for different mode combinations
     mode_data = {}
