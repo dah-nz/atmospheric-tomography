@@ -56,3 +56,6 @@ def zerni(x, y, j):
 
 def zernikeModes(dim, num_modes):
     return [zernike(dim, dim, m + 1) for m in range(num_modes)]
+
+def randomModes(num_modes, num_ignores):
+    return [0.0] * num_ignores + list(m * np.exp(-(i+1)/10) for i, m in enumerate(np.random.rand(num_modes) - 0.5))
