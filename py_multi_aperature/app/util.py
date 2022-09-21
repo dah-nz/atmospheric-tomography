@@ -35,16 +35,22 @@ def shift2darray(arr, x, y, fill_value=np.nan):
         arr[:, :y] = fill_value
     return arr
 
+_circle_cache = dict()
+
 def circle(radius, dimension, location=(0,0)):
-    mask = np.zeros((dimension, dimension))
-    sqr_radius = radius ** 2
-    center = dimension / 2 - 0.5
-    center_x = center + location[0]
-    center_y = center + location[1]
-    for i in range(dimension):
-        for j in range(dimension):
-            mask[i, j] = (i - center_x) ** 2 + (j - center_y) ** 2 <= sqr_radius
-    return mask
+    try:
+        return _circle_cache[(radius, dimension, location)]
+    except KeyError:
+        mask = np.zeros((dimension, dimension))
+        sqr_radius = radius ** 2
+        center = dimension / 2 - 0.5
+        center_x = center + location[0]
+        center_y = center + location[1]
+        for i in range(dimension):
+            for j in range(dimension):
+                mask[i, j] = (i - center_x) ** 2 + (j - center_y) ** 2 <= sqr_radius
+        _circle_cache[(radius, dimension, location)] = mask
+        return mask
 
 def cart2imagespace(image_dim, location):
     center = image_dim / 2

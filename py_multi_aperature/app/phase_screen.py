@@ -132,13 +132,28 @@ def createFromModes(modes, sz, ignoreModes=1):
 
 def main():
     import matplotlib.pyplot as plt
+    import matplotlib as mpl
+    from matplotlib.colors import ListedColormap
+
+    top = mpl.colormaps['bone'].resampled(128)
+    bottom = mpl.colormaps['hot'].resampled(128)
+
+    newcolors = np.vstack((top(np.linspace(0, 1, 128)), bottom(np.linspace(1, 0, 128))))
+    newcmp = ListedColormap(newcolors, name='NewCMap')
+
     for m in range(20):
         modes = [0] * 20
         modes[m] = 1
-        screen = createFromModes(modes, 256, ignoreModes=0)
+        size = 256
+        screen = createFromModes(modes, size, ignoreModes=0)
+        screen2 = np.zeros((size*2, size*2))
+        screen2[int(size/2):(size + int(size/2)), int(size/2):(size + int(size/2))] = screen
+        screen2 /= np.amax(screen2)
+        
         plt.figure()
         plt.title("Phase screen for mode {}".format(m + 1))
-        plt.imshow(screen)
+        plt.imshow(screen2, cmap="RdBu", vmax=1.0, vmin=-1.0)
+        plt.savefig("img/Mode{}.png".format(m+1), format='png')
     plt.show()
 
 if __name__ == "__main__":

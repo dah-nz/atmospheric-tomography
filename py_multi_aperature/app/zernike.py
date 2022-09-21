@@ -1,28 +1,34 @@
 import numpy as np
 
+_zernike_cache = dict()
+
 def zernike(dim, diameter, order):
     # Function to calculate Zernike coefficients in a unit circle
     # Based on function by R. Irwan and R.G. Lane, modified by Marcos van Dam
 
-    N = (dim + 1) / 2
-    radius = diameter / 2
-    sq_radius = radius ** 2
+    try:
+        return _zernike_cache[(dim, diameter, order)]
+    except KeyError:
+        N = (dim + 1) / 2
+        radius = diameter / 2
+        sq_radius = radius ** 2
 
-    x = np.arange(-N, N)
-    y = np.arange(-N, N)
+        x = np.arange(-N, N)
+        y = np.arange(-N, N)
 
-    [l, k] = np.meshgrid(x, y)
+        [l, k] = np.meshgrid(x, y)
 
-    sq_distance = k ** 2 + l ** 2
+        sq_distance = k ** 2 + l ** 2
 
-    x = l/radius
-    y = k/radius
+        x = l/radius
+        y = k/radius
 
-    zernicoef = zerni(x, y, order)
-    zernicoef *= sq_distance <= sq_radius
-    zernicoef = zernicoef[1:(dim + 1), 1:(dim + 1)]
+        zernicoef = zerni(x, y, order)
+        zernicoef *= sq_distance <= sq_radius
+        zernicoef = zernicoef[1:(dim + 1), 1:(dim + 1)]
 
-    return zernicoef
+        _zernike_cache[(dim, diameter, order)] = zernicoef
+        return zernicoef
 
 def zerni(x, y, j):
     Rnm = 0

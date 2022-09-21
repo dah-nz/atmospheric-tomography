@@ -1,20 +1,17 @@
 import numpy as np
 import phase_screen as ps
+import util
 
-def wavefront_variance(phase_screen, area):
-    var = np.var(phase_screen) / area
-    return var
+def strehl_from_pupil(phase_screen, size=256, wavelength=600e-9):
+    j = complex(0, 1)
+    wf_ideal = util.circle(size / 2, size)
+    wf = wf_ideal * np.exp(j * phase_screen * 2 * np.pi / wavelength)
 
-def strehl_ratio(variance, wavelength):
-    S = np.exp((-2*np.pi*np.sqrt(variance)))
-    return S
+    return np.abs(np.sum(wf) / np.sum(wf_ideal)) ** 2
 
-def strehl(phase_screen, area, wavelength):
-    return strehl_ratio(wavefront_variance(phase_screen), wavelength)
-
-def strehl_from_modes(zernike_modes, area, wavelength, size=256, ignoreModes=1):
+def strehl_from_modes(zernike_modes, size=256, wavelength=600e-9, ignoreModes=1):
     phase_screen = ps.createFromModes(zernike_modes, size, ignoreModes)
-    return strehl_ratio(wavefront_variance(phase_screen, area), wavelength)
+    return strehl_from_pupil(phase_screen, size, wavelength)
 
 def main():
     for m in range(20):
