@@ -21,4 +21,6 @@ def fast_poisson(mu):
     return noise
 
 if __name__ == "__main__":
-    print(fast_poisson(100 * np.ones((100, 100))))
+    import matplotlib.pyplot as plt
+    plt.imshow(fast_poisson(100 * np.ones((100, 100))))
+    plt.show()

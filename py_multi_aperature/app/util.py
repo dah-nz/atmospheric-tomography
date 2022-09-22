@@ -57,3 +57,9 @@ def cart2imagespace(image_dim, location):
     x = center + (-location[1] * center)# - 0.5
     y = center + ( location[0] * center)# - 0.5
     return (int(x), int(y))
+
+def rmse(expected, actual):
+    e = expected - actual
+    se = e * e
+    mse = np.mean(se)
+    return np.sqrt(mse)

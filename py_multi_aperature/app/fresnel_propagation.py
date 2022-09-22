@@ -1,5 +1,6 @@
 import numpy as np
 from conv import cconv2
+import poisson
 
 import csv
 
@@ -54,7 +55,7 @@ def fresnel_propagation(fieldStart, fieldSize, fresnelExtent, wavelength, z, ove
 # that can be represented in the lb or on-sky by a pair of CCD or sCMOS detector planes
 # simply by using two cameras at a distance of 'z' either side of a focal point from a 
 # simple plano-convex lens of focal length 'f'
-def generateIMatrices(wfs, wavefront, phase, wavelength, z):
+def generateIMatrices(wfs, wavefront, phase, wavelength, z, total_photons=0):
     iMin = wfs.rangeMin
     iMax = wfs.rangeMax
     j = complex(0, 1)
@@ -69,11 +70,12 @@ def generateIMatrices(wfs, wavefront, phase, wavelength, z):
     Im /= np.sum(Im)
 
     # NOISY I MATRICES
-    # IpNoise = Ip * total_photons
-    # ImNoise = Im * total_photons
-    # IpNoise = fast_poisson(IpNoise)
-    # ImNoise = fast_poisson(ImNoise)
-    # IpNoise /= np.linalg.norm(IpNoise)
-    # ImNoise /= np.linalg.norm(ImNoise)
+    if total_photons > 0:
+        IpNoise = Ip * total_photons
+        ImNoise = Im * total_photons
+        IpNoise = poisson.fast_poisson(IpNoise)
+        ImNoise = poisson.fast_poisson(ImNoise)
+        Ip /= np.linalg.norm(IpNoise)
+        Im /= np.linalg.norm(ImNoise)
 
     return Ip, Im

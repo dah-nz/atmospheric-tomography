@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 del_theta = np.pi
 del_rad = 1
 
+_cache_PROJ_MATRICES = {}
 grids = {}
 g_matrices = {}
 # _G = np.array(None)     # cached G matrix           (modes in unit circle at grid points)
@@ -44,39 +45,44 @@ def scaleGrid(grid, scale):
 #               diameter     - relative diameter of circular portion (1 = same size as metapupil)
 #               nModes       - number of Zernike modes
 def projectionMatrix(location, diameter, nModes, display=False):
-    global g_matrices
-    gridSize = 5 * nModes
-    unitGrid = getGrid(gridSize)
-    if display:
-        plt.figure()
-        plt.axis('equal')
-        X = [x for x,_ in unitGrid]
-        Y = [y for _,y in unitGrid]
-        plt.scatter(X, Y, c='k')
     try:
-        Ginv = g_matrices[nModes]
+        global _cache_PROJ_MATRICES
+        return _cache_PROJ_MATRICES[(location, diameter, nModes)]
     except KeyError:
-        G = np.zeros((nModes, gridSize))
+        global g_matrices
+        gridSize = 5 * nModes
+        unitGrid = getGrid(gridSize)
+        if display:
+            plt.figure()
+            plt.axis('equal')
+            X = [x for x,_ in unitGrid]
+            Y = [y for _,y in unitGrid]
+            plt.scatter(X, Y, c='k')
+        try:
+            Ginv = g_matrices[nModes]
+        except KeyError:
+            G = np.zeros((nModes, gridSize))
+            for j in range(nModes):
+                for i, (x, y) in enumerate(unitGrid):
+                    G[j, i] = zerni(x, y, j + 1)
+            Ginv = np.linalg.pinv(G)
+            g_matrices[nModes] = Ginv   # cache for later
+        portGrid = scaleGrid(unitGrid, diameter)
+        portGrid = translateGrid(portGrid, location)
+        if display:
+            X = [x for x,_ in portGrid]
+            Y = [y for _,y in portGrid]
+            plt.scatter(X, Y, c='r')
+        Y = np.zeros((nModes, gridSize))
         for j in range(nModes):
-            for i, (x, y) in enumerate(unitGrid):
-                G[j, i] = zerni(x, y, j + 1)
-        Ginv = np.linalg.pinv(G)
-        g_matrices[nModes] = Ginv   # cache for later
-    portGrid = scaleGrid(unitGrid, diameter)
-    portGrid = translateGrid(portGrid, location)
-    if display:
-        X = [x for x,_ in portGrid]
-        Y = [y for _,y in portGrid]
-        plt.scatter(X, Y, c='r')
-    Y = np.zeros((nModes, gridSize))
-    for j in range(nModes):
-        for i, (x,y) in enumerate(portGrid):
-            Y[j, i] = zerni(x, y, j + 1)
+            for i, (x,y) in enumerate(portGrid):
+                Y[j, i] = zerni(x, y, j + 1)
 
-    P = np.matmul(Y, Ginv)
-    eps = 1e-12
-    P = (np.abs(P) > eps) * P
-    return P
+        P = np.matmul(Y, Ginv)
+        eps = 1e-12
+        P = (np.abs(P) > eps) * P
+        _cache_PROJ_MATRICES[(location, diameter, nModes)] = P
+        return P
 
 if __name__ == "__main__":
     n_points = 250

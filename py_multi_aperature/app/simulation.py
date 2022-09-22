@@ -11,6 +11,7 @@ class Sim():
             self.guidestars = star.generateGuideStars(self.p.nGS, util.arcsec2rad(self.p.theta))
         else:
             self.guidestars = guidestars
+            self.p.nGS = len(guidestars)
         self.layers = layer.generate_all(self.p, self.guidestars, self.target)
         return
         
