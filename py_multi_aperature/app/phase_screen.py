@@ -135,6 +135,8 @@ def main():
     import matplotlib as mpl
     from matplotlib.colors import ListedColormap
 
+    mpl.use('pgf')
+
     top = mpl.colormaps['bone'].resampled(128)
     bottom = mpl.colormaps['hot'].resampled(128)
 
@@ -153,7 +155,45 @@ def main():
         plt.figure()
         plt.title("Phase screen for mode {}".format(m + 1))
         plt.imshow(screen2, cmap="RdBu", vmax=1.0, vmin=-1.0)
-        plt.savefig("img/Mode{}.png".format(m+1), format='png')
+        plt.savefig("img/Mode{}.pgf".format(m+1))
+
+    kScreen = np.float64(kolmogorov(256, 20))
+    n = 20
+    np.random.seed(0)
+    z = [0.0] + list(m * np.exp(-(i+1)/n) for i, m in enumerate(np.random.rand(n) - 0.5))
+    n = 50
+    np.random.seed(0)
+    z50 = [0.0] + list(m * np.exp(-(i+1)/n) for i, m in enumerate(np.random.rand(n) - 0.5))
+    zScreen = createFromModes(z, 256)
+    z50Screen = createFromModes(z50, 256)
+
+    plt.figure()
+    kMax = max(-np.amin(kScreen), np.amax(kScreen))
+    plt.imshow(kScreen, cmap="RdBu", vmax=kMax, vmin=-kMax)
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("Kolmogorov Phase Screen")
+    # plt.savefig("img/KolmogorovScreen.png".format(m+1), format='png')
+    plt.savefig("img/KolmogorovScreen.pgf")
+
+    plt.figure()
+    zMax = max(-np.amin(zScreen), np.amax(zScreen))
+    plt.imshow(zScreen, cmap="RdBu", vmax=zMax, vmin=-zMax)
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("Phase Screen constructed from 20 Zernike modes")
+    # plt.savefig("img/ZernikeScreen.png".format(m+1), format='png')
+    plt.savefig("img/ZernikeScreen.pgf")
+
+    plt.figure()
+    zMax = max(-np.amin(z50Screen), np.amax(z50Screen))
+    plt.imshow(z50Screen, cmap="RdBu", vmax=zMax, vmin=-zMax)
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("Phase Screen constructed from {} Zernike modes".format(n))
+    # plt.savefig("img/Zernike50Screen.png".format(m+1), format='png')
+    plt.savefig("img/Zernike50Screen.pgf")
+    
     plt.show()
 
 if __name__ == "__main__":

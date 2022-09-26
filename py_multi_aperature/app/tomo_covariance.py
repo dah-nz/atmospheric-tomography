@@ -3,8 +3,9 @@ from zernike import zernikeModes
 import util
 from covar_kolmogorov import CovarianceKolmogorov
 import phase_screen
+import poisson
 
-def covariance(sim):
+def covariance(sim, total_photons=0):
     nL = sim.p.nLayers
     nM = sim.p.nModes
     mIgn = sim.p.modeIgnore
@@ -43,6 +44,13 @@ def covariance(sim):
                 y = (pos[1] + asize / 2) * l.dim / asize
                 
                 m1 = m[int(x-asize/2 + 0.5):int(x+asize/2 + 0.5), int(y-asize/2 + 0.5):int(y+asize/2 + 0.5)]
+
+                if total_photons > 0:
+                    m1Noise = m1 * total_photons
+                    m1Noise = poisson.fast_poisson(m1Noise)
+                    m1Noise /= np.linalg.norm(m1Noise)
+                    m1 = m1Noise
+
                 circular = m1 * mask
 
                 avec_real = [np.sum(circular*mode)/np.sum(mode*mode) for mode in modes_normalSize[mIgn:]]
