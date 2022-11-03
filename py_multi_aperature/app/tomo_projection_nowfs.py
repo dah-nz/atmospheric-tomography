@@ -47,8 +47,9 @@ def projection_nowfs(sim):
     W = np.matmul(np.linalg.pinv(A), L)
     W_t_tomo = np.matmul(T, W)
 
-    W_t = W.reshape((2, -1))
-    W_t = W_t[:, sim.p.modeIgnore:]
-    W_t = W_t.flatten()
+    # W_t = W.reshape((2, -1))
+    # W_t = W_t[:, sim.p.modeIgnore:]
+    # W_t = W_t.flatten()
 
+    # return W_t
     return W_t_tomo[sim.p.modeIgnore:]

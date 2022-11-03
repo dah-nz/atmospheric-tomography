@@ -24,10 +24,10 @@ class geometric_wfs():
         self.H, self.Hinv = self.HMatrix(p)
         self.mode_scaling_factor = 4.75
 
-    def calculate_modes(self, p, phase, mask):
+    def calculate_modes(self, p, phase, mask, total_photons=0):
         # mask = np.zeros_like(wavefront)
         # mask[wavefront != 0] = 1
-        Ip, Im = generateIMatrices(self, mask, phase, p.wavelength, self.z)
+        Ip, Im = generateIMatrices(self, mask, phase, p.wavelength, self.z, total_photons)
 
         # x = position[0]
         # y = position[1]

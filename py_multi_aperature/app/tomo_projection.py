@@ -6,7 +6,7 @@ from geometric_wfs import geometric_wfs
 
 import matplotlib.pyplot as plt
 
-def projection(sim):
+def projection(sim, total_photons=0):
     # generate A and T matrices from pMatrices and tMatrix outputs for each layer
     asize = sim.p.asize
     nGS = sim.p.nGS
@@ -44,7 +44,7 @@ def projection(sim):
             for m in z:
                 m1 = m[int(x-asize/2 + 0.5):int(x+asize/2 + 0.5), int(y-asize/2 + 0.5):int(y+asize/2 + 0.5)]
                 circular = m1 * mask
-                avec_real = wfs.calculate_modes(sim.p, circular, mask)
+                avec_real = wfs.calculate_modes(sim.p, circular, mask, total_photons=total_photons)
                 L[(n*totalModes):(n+1)*totalModes] += avec_real
 
     W = np.matmul(np.linalg.pinv(A), L)

@@ -1,5 +1,6 @@
 import numpy as np
 from conv import cconv2
+import poisson
 
 import csv
 
@@ -54,7 +55,7 @@ def fresnel_propagation(fieldStart, fieldSize, fresnelExtent, wavelength, z, ove
 # that can be represented in the lb or on-sky by a pair of CCD or sCMOS detector planes
 # simply by using two cameras at a distance of 'z' either side of a focal point from a 
 # simple plano-convex lens of focal length 'f'
-def generateIMatrices(wfs, wavefront, phase, wavelength, z):
+def generateIMatrices(wfs, wavefront, phase, wavelength, z, total_photons=0):
     iMin = wfs.rangeMin
     iMax = wfs.rangeMax
     j = complex(0, 1)
@@ -69,11 +70,65 @@ def generateIMatrices(wfs, wavefront, phase, wavelength, z):
     Im /= np.sum(Im)
 
     # NOISY I MATRICES
-    # IpNoise = Ip * total_photons
-    # ImNoise = Im * total_photons
-    # IpNoise = fast_poisson(IpNoise)
-    # ImNoise = fast_poisson(ImNoise)
-    # IpNoise /= np.linalg.norm(IpNoise)
-    # ImNoise /= np.linalg.norm(ImNoise)
+    if total_photons > 0:
+        IpNoise = Ip * total_photons
+        ImNoise = Im * total_photons
+        IpNoise = poisson.fast_poisson(IpNoise)
+        ImNoise = poisson.fast_poisson(ImNoise)
+        IpNoise /= np.linalg.norm(IpNoise)
+        ImNoise /= np.linalg.norm(ImNoise)
+        Ip = IpNoise
+        Im = ImNoise
 
     return Ip, Im
+
+def main():
+    import matplotlib.pyplot as plt
+    import util
+    class wfs_temp:
+        def __init__(self):
+            self.rangeMin = 200
+            self.rangeMax = 550
+    import phase_screen
+
+    sz = 256
+    mask = util.circle(sz/2, sz)
+    phase = phase_screen.kolmogorov(256, 20)
+    wl = 600e-9
+    z = 14000
+    wfs = wfs_temp()
+    cmap = 'bone'
+
+    fig, axs = plt.subplots(1, 2)
+    Ip, Im = generateIMatrices(wfs, mask, phase, wl, z)
+    fig.suptitle("Geometric WFS images - No noise")
+    axs[0].imshow(Ip, cmap=cmap, vmax=np.amax(Ip), vmin=0)
+    axs[0].set_title("Extra-focal Image")
+    axs[0].set_xlabel("X Position")
+    axs[0].set_ylabel("Y Position")
+    axs[1].imshow(Im, cmap=cmap, vmax=np.amax(Ip), vmin=0)
+    axs[1].set_title("Intra-focal Image")
+    axs[1].set_xlabel("X Position")
+    axs[1].set_ylabel("Y Position")
+    plt.savefig("img/ImIp.png", format='png')
+
+    for m in range(5):
+        fig, axs = plt.subplots(1, 2)
+        noise = 10**(m+2)
+        Ip, Im = generateIMatrices(wfs, mask, phase, wl, z, total_photons=noise)
+        fig.suptitle("Noisy Geometric WFS images - {} photons".format(noise))
+        axs[0].imshow(Ip, cmap=cmap, vmax=np.amax(Ip), vmin=0)
+        axs[0].set_title("Extra-focal Image")
+        axs[0].set_xlabel("X Position")
+        axs[0].set_ylabel("Y Position")
+        axs[1].imshow(Im, cmap=cmap, vmax=np.amax(Ip), vmin=0)
+        axs[1].set_title("Intra-focal Image")
+        axs[1].set_xlabel("X Position")
+        axs[1].set_ylabel("Y Position")
+        plt.savefig("img/Noisy{}ImIp.png".format(noise), format='png')
+
+
+    plt.show()
+
+if __name__ == "__main__":
+    main()
