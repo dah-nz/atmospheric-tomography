@@ -4,7 +4,7 @@ from scipy.signal import convolve2d
 
 from zernike import zernike
 
-def kolmogorov(grid_size, D_r0):
+def kolmogorov(grid_size, D_r0, seed=None):
 #   Simulation of a phase screen with Kolmogorv Statistics.
 #   Starts from an exact 15 x 15 phase screen.
 #   Based on function written by Rachel Johnston and Cressida Harding
@@ -21,7 +21,7 @@ def kolmogorov(grid_size, D_r0):
         calculated_size = 2 * calculated_size - 11
         n_increases += 1
     
-    full_screen = _generate_phase_screen(n_increases)
+    full_screen = _generate_phase_screen(n_increases, seed)
     chopped_screen = full_screen[:grid_size, :grid_size]
 
     # Rescale screen for appropriate D_r0 after cropping
@@ -34,7 +34,7 @@ def kolmogorov(grid_size, D_r0):
     # return sio.loadmat("phase.mat", struct_as_record=False)['phase']
     return scaled_screen * (D_r0 ** (5/6))
 
-def _generate_phase_screen(n_increases):
+def _generate_phase_screen(n_increases, seed=None):
 #  Generates a phase screen with Kolmogorov statistics.
 #  Based on function written by Rachel Johnston and Cressida Harding
 #  Inputs	num_increases	- the number of times the original 15x15
@@ -42,7 +42,7 @@ def _generate_phase_screen(n_increases):
 #
 #  Outputs	phase		    - the interpolated phase screen with the 
 #				              edges removed
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed)
     data = sio.loadmat("phase_data.mat")
     d = np.array(data['d'])
     u = np.array(data['u'])
@@ -130,12 +130,16 @@ def createFromModes(modes, sz, ignoreModes=1):
         phase += z0 * zernike(sz, sz, m + ignoreModes + 1)
     return phase
 
+latex = False
+
 def main():
     import matplotlib.pyplot as plt
     import matplotlib as mpl
     from matplotlib.colors import ListedColormap
 
-    mpl.use('pgf')
+    np.random.seed(1)
+    if latex:
+        mpl.use('pgf')
 
     top = mpl.colormaps['bone'].resampled(128)
     bottom = mpl.colormaps['hot'].resampled(128)
@@ -143,6 +147,7 @@ def main():
     newcolors = np.vstack((top(np.linspace(0, 1, 128)), bottom(np.linspace(1, 0, 128))))
     newcmp = ListedColormap(newcolors, name='NewCMap')
 
+    """
     for m in range(20):
         modes = [0] * 20
         modes[m] = 1
@@ -155,9 +160,11 @@ def main():
         plt.figure()
         plt.title("Phase screen for mode {}".format(m + 1))
         plt.imshow(screen2, cmap="RdBu", vmax=1.0, vmin=-1.0)
-        plt.savefig("img/Mode{}.pgf".format(m+1))
+        if latex:
+            plt.savefig("img/Mode{}.pgf".format(m+1))
+    """
 
-    kScreen = np.float64(kolmogorov(256, 20))
+    kScreen = np.float64(kolmogorov(256, 20, 0))
     n = 20
     np.random.seed(0)
     z = [0.0] + list(m * np.exp(-(i+1)/n) for i, m in enumerate(np.random.rand(n) - 0.5))
@@ -173,8 +180,9 @@ def main():
     plt.xlabel("X Position")
     plt.ylabel("Y Position")
     plt.title("Kolmogorov Phase Screen")
-    # plt.savefig("img/KolmogorovScreen.png".format(m+1), format='png')
-    plt.savefig("img/KolmogorovScreen.pgf")
+    if latex:
+        # plt.savefig("img/KolmogorovScreen.png".format(m+1), format='png')
+        plt.savefig("img/KolmogorovScreen.pgf")
 
     plt.figure()
     zMax = max(-np.amin(zScreen), np.amax(zScreen))
@@ -182,8 +190,9 @@ def main():
     plt.xlabel("X Position")
     plt.ylabel("Y Position")
     plt.title("Phase Screen constructed from 20 Zernike modes")
-    # plt.savefig("img/ZernikeScreen.png".format(m+1), format='png')
-    plt.savefig("img/ZernikeScreen.pgf")
+    if latex:
+        # plt.savefig("img/ZernikeScreen.png".format(m+1), format='png')
+        plt.savefig("img/ZernikeScreen.pgf")
 
     plt.figure()
     zMax = max(-np.amin(z50Screen), np.amax(z50Screen))
@@ -191,8 +200,9 @@ def main():
     plt.xlabel("X Position")
     plt.ylabel("Y Position")
     plt.title("Phase Screen constructed from {} Zernike modes".format(n))
-    # plt.savefig("img/Zernike50Screen.png".format(m+1), format='png')
-    plt.savefig("img/Zernike50Screen.pgf")
+    if latex:
+        # plt.savefig("img/Zernike50Screen.png".format(m+1), format='png')
+        plt.savefig("img/Zernike50Screen.pgf")
     
     plt.show()
 
