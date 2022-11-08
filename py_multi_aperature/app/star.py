@@ -2,7 +2,7 @@ import numpy as np
 import util
 
 class Star():
-    theta = 0               # Angle of guide star from azimuth (radians)
+    theta = 0               # Angle of guide star from zenith (radians)
     phi = 0                 # Angle of guide star around centre of aperture (radians)
     def __init__(self, theta, phi):
         self.theta = theta

@@ -5,6 +5,7 @@ from util import circle, pol2cart
 import util
 
 import matplotlib.pyplot as plt
+import matplotlib
 
 del_theta = np.pi
 del_rad = 1
@@ -111,9 +112,11 @@ if __name__ == "__main__":
 
 
     from phase_screen import createFromModes
+
     size = 256
     nModes = 50
-    test_modes = [list(m * np.exp(-(i+1)/100) for i, m in enumerate(np.random.rand(nModes) - 0.5))]
+    np.random.seed(3)
+    test_modes = [list(m * np.exp(-(i+1)/nModes) for i, m in enumerate(np.random.rand(nModes) - 0.5))]
     scale = 0.54
     l = 0.25
     # location = np.array((-0.25, 0.10))
@@ -126,64 +129,158 @@ if __name__ == "__main__":
             np.array((-l, -l)),
             np.array((0, -l)),
             np.array((l, -l))]
-        
 
-    for modes in test_modes:
-        for location in locs:
+    cmap = "RdBu"
+    # matplotlib.use('pgf')
+
+    modes = test_modes[0]
+    errors = []
+    for loc in locs:
+        P = projectionMatrix(tuple(loc), scale, len(modes))
+        P = np.transpose(P)
+        mode_screen = createFromModes(modes, size, 0)
+        sub_modes = np.matmul(P, modes)
+        sub_mode_screen = createFromModes(sub_modes, scale * size, 0)
+        reconstructed_modes = np.matmul(np.linalg.pinv(P), sub_modes)
+        reconstructed_screen = createFromModes(reconstructed_modes, size, 0)
+        error = mode_screen - reconstructed_screen
+        errors.append(np.sqrt(np.average(error * error)))
     
-            P = projectionMatrix(location, scale, len(modes))
-            P = np.transpose(P)
-            fig, axes = plt.subplots(1,5)
-            fig.suptitle("Modes: {} - Location: {}".format(modes, location))
+    fig = plt.figure()
+    fig.set_size_inches(5.5,3)
+    plt.ylabel('RMS Error [radians]')
+    plt.xlabel("Location")
+    plt.plot(errors, 'k-')
+    plt.tight_layout()
+    # plt.savefig("img/ProjectionMatrixErrors.pgf")
 
-            axes[0].set_title("Projection Matrix")
-            axes[0].imshow(P)
+    location = locs[2]
+    modes = test_modes[0]
+    P = projectionMatrix(tuple(location), scale, len(modes))
+    P = np.transpose(P)
+    # Calculate subpupils
+    mode_screen = createFromModes(modes, size, 0)
+    sub_modes = np.matmul(P, modes)
+    sub_mode_screen = createFromModes(sub_modes, scale * size, 0)
+    reconstructed_modes = np.matmul(np.linalg.pinv(P), sub_modes)
+    reconstructed_screen = createFromModes(reconstructed_modes, size, 0)
 
-            mode_screen = createFromModes(modes, size, 0)
-            axes[1].set_title("Initial Metapupil")
-            axes[1].imshow(mode_screen)
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-            sub_modes = np.matmul(P, modes)
+    # Plot projection matrix
+    fig, ax = plt.subplots(1)
+    divider = make_axes_locatable(ax)
+    ax_cb = divider.append_axes("right", size="5%", pad=0.05)
+    fig = ax.get_figure()
+    fig.add_axes(ax_cb)
+    ax.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    ax.set_title("Projection Matrix")
+    im = ax.imshow(P, cmap='RdBu', vmax=1.0, vmin=-1.0)
+    plt.colorbar(im, cax=ax_cb)
+    ax_cb.yaxis.tick_right()
+    # plt.savefig("img/ProjectionMatrix.pgf")
 
-            # print(location)
-            # print(sub_modes)
-            sub_mode_screen = createFromModes(sub_modes, scale * size, 0)
-            axes[2].set_title("Projected Subpupil Phase Screen")
-            axes[2].imshow(sub_mode_screen)
+    # Show modes for subpupil and metapupil
+    fig = plt.figure()
+    fig.set_size_inches(5.5,3)
+    plt.ylabel('Mode Coefficients [radians]')
+    plt.xlabel("Zernike Mode Index")
+    plt.plot(test_modes[0], 'k-', label="Metapupil Modes")
+    plt.plot(sub_modes, 'r-', label="Subpupil Modes")
+    plt.legend()
+    plt.tight_layout()
+    # plt.savefig("img/ProjectionMatrixModes.pgf")
 
-            reconstructed_modes = np.matmul(np.linalg.pinv(P), sub_modes)
-            reconstructed_screen = createFromModes(reconstructed_modes, size, 0)
-            axes[3].set_title("Reconstructed Metapupil")
-            axes[3].imshow(reconstructed_screen)
+    # Show initial, reconstructed and errors of metapupils
+    fig, axes = plt.subplots(1, 3)
+    fig.set_size_inches(5.8,3)
+    for ax in axes:
+        ax.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
 
-            axes[4].set_title("Ground Truth to Reconstruction Difference")
-            axes[4].imshow(mode_screen - reconstructed_screen)
+    axes[0].set_title("Initial Metapupil")
+    divider = make_axes_locatable(axes[0])
+    ax_cb = divider.append_axes("right", size="5%", pad=0.05)
+    fig = axes[0].get_figure()
+    fig.add_axes(ax_cb)
+    im = axes[0].imshow(mode_screen, cmap=cmap)
+    plt.colorbar(im, cax=ax_cb)
+    ax_cb.yaxis.tick_right()
 
-            # sub_mode_mask = np.zeros((size, size))
+    axes[1].set_title("Reconstructed Metapupil")
+    divider = make_axes_locatable(axes[1])
+    ax_cb = divider.append_axes("right", size="5%", pad=0.05)
+    fig = axes[1].get_figure()
+    fig.add_axes(ax_cb)
+    im = axes[1].imshow(reconstructed_screen, cmap=cmap)
+    plt.colorbar(im, cax=ax_cb)
+    ax_cb.yaxis.tick_right()
 
-            # img_loc = util.cart2imagespace(size, location)
-            # radius = int(size * scale / 2)
+    axes[2].set_title("Reconstruction Error\n")
+    divider = make_axes_locatable(axes[2])
+    ax_cb = divider.append_axes("right", size="5%", pad=0.05)
+    fig = axes[2].get_figure()
+    fig.add_axes(ax_cb)
+    im = axes[2].imshow(mode_screen - reconstructed_screen, cmap=cmap)
+    plt.colorbar(im, cax=ax_cb)
+    ax_cb.yaxis.tick_right()
+    plt.tight_layout()
+    # plt.savefig("img/ProjectionMatrixReconstruction.pgf")
 
-            # c_loc = (size * -location[1] / 2, size * location[0] / 2)
+    # Show subpupil location and projection
+    fig, axes = plt.subplots(1, 2)
+    fig.set_size_inches(5.5,4)
+    for ax in axes:
+        ax.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    
+    axes[0].set_title("Subpupil Location")
+    divider = make_axes_locatable(axes[0])
+    ax_cb = divider.append_axes("right", size="5%", pad=0.05)
+    fig = axes[0].get_figure()
+    fig.add_axes(ax_cb)
+    mx = np.amax(mode_screen)
+    mn = np.amin(mode_screen)
+    im = axes[0].imshow(mode_screen, cmap=cmap, vmax=mx, vmin=mn)
+    loc = ((size*location[0] + size) / 2, (size*-location[1] + size) / 2)
+    util.plotcirc(axes[0], loc, scale * size / 2, 'k--', alpha=0.5)
+    plt.colorbar(im, cax=ax_cb)
+    ax_cb.yaxis.tick_right()
 
-            # c = circle(int(size * scale / 2), size, c_loc)
-            # mode_mask = c * mode_screen
-            
-            # sub_mode_mask[(img_loc[0]-radius):(img_loc[0]+radius), (img_loc[1]-radius):(img_loc[1]+radius)] = sub_mode_screen
+    axes[1].set_title("Projected Subpupil")
+    divider = make_axes_locatable(axes[1])
+    ax_cb = divider.append_axes("right", size="5%", pad=0.05)
+    fig = axes[1].get_figure()
+    fig.add_axes(ax_cb)
+    im = axes[1].imshow(sub_mode_screen, cmap=cmap, vmax=mx, vmin=mn)
+    plt.colorbar(im, cax=ax_cb)
+    ax_cb.yaxis.tick_right()
+    plt.tight_layout()
+    # plt.savefig("img/ProjectionMatrixSubpupil.pgf")
 
-            # plt.figure()
-            # plt.title("Metapupil Phase Screen Masked")
-            # plt.imshow(mode_mask)
-            # plt.figure()
-            # plt.title("Subpupil Phase Screen in Metapupil")
-            # plt.imshow(sub_mode_mask)
-            # plt.figure()
-            # plt.title("Metapupil Phase Screen difference from Masked Metapupil Phase Screen")
-            # plt.imshow(mode_screen - mode_mask)
-            # plt.figure()
-            # plt.title("Metapupil Phase Screen difference from calculated phase screen")
-            # plt.imshow(mode_screen - sub_mode_mask)
-            # plt.figure()
+    # sub_mode_mask = np.zeros((size, size))
+
+    # img_loc = util.cart2imagespace(size, location)
+    # radius = int(size * scale / 2)
+
+    # c_loc = (size * -location[1] / 2, size * location[0] / 2)
+
+    # c = circle(int(size * scale / 2), size, c_loc)
+    # mode_mask = c * mode_screen
+    
+    # sub_mode_mask[(img_loc[0]-radius):(img_loc[0]+radius), (img_loc[1]-radius):(img_loc[1]+radius)] = sub_mode_screen
+
+    # plt.figure()
+    # plt.title("Metapupil Phase Screen Masked")
+    # plt.imshow(mode_mask)
+    # plt.figure()
+    # plt.title("Subpupil Phase Screen in Metapupil")
+    # plt.imshow(sub_mode_mask)
+    # plt.figure()
+    # plt.title("Metapupil Phase Screen difference from Masked Metapupil Phase Screen")
+    # plt.imshow(mode_screen - mode_mask)
+    # plt.figure()
+    # plt.title("Metapupil Phase Screen difference from calculated phase screen")
+    # plt.imshow(mode_screen - sub_mode_mask)
+    # plt.figure()
 
 
     plt.show()
