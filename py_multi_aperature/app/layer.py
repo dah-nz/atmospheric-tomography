@@ -61,3 +61,56 @@ def generate_all(p, gs, tgt):
         # P = projectionMatrix(tPos, layer.rT, nModes, modeOffset)
         # actual_modes += np.matmul(P, modes)
     return layers
+
+def main():
+    import matplotlib.pyplot as plt
+    import matplotlib
+    from star import Star
+    import phase_screen
+    # matplotlib.use("pgf")
+    stars = [Star(util.arcsec2rad(200), n) for n in [0., 2 * np.pi / 3, 4 * np.pi / 3]]
+    target = Star(0, 0)
+    class p_c:
+        def __init__(self):
+            self.D = 1
+            self.asize = 256
+    p = p_c()
+    l1 = Layer(p, stars, target, 1000)
+    l2 = Layer(p, stars, target, 8000)
+    l1_ps = np.float64(phase_screen.kolmogorov(p.asize, 15))
+    l2_ps = np.float64(phase_screen.kolmogorov(p.asize, 15))
+
+    fig, axs = plt.subplots(1, 2)
+    fig.set_size_inches(5.5, 4)
+    for ax in axs:
+        ax.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    axs[0].set_title("Layer at 1000m")
+    axs[1].set_title("Layer at 8000m")
+    # axs[0].imshow(l1_ps, cmap='GnBu')
+    # axs[1].imshow(l2_ps, cmap='GnBu')
+
+    # Plot Target Location
+    for ax, layer in zip(axs, [l1, l2]):
+        x, y = target.position(layer.altitude)
+        tx = (x * p.asize / p.D) * (p.asize / layer.dim) + (p.asize / 2)
+        ty = (y * p.asize / p.D) * (p.asize / layer.dim) + (p.asize / 2)
+        util.plotcirc(ax, (tx, ty), ((p.asize ** 2) / layer.dim) / 2, 'r:')
+        # Plot Guide stars
+        for gs in layer.guideStars:
+            x, y = gs.position(layer.altitude)
+            gx = (x * p.asize / p.D) * (p.asize / layer.dim) + (p.asize / 2)
+            gy = (y * p.asize / p.D) * (p.asize / layer.dim) + (p.asize / 2)
+            util.plotcirc(ax, (gx, gy), ((p.asize ** 2) / layer.dim) / 2, 'k--')
+
+    # util.plotcirc(axs[0], util.cart2imagespace(l1.dim, target.position(1000)), p.asize / 2, 'r--', alpha=0.7)
+    # util.plotcirc(axs[1], util.cart2imagespace(l2.dim, target.position(8000)), p.asize / 2, 'r--', alpha=0.7)
+    # for star in stars:
+    #     util.plotcirc(axs[0], util.cart2imagespace(l1.dim, star.position(1000)), p.asize / 2, 'k--', alpha=0.7)
+    #     util.plotcirc(axs[1], util.cart2imagespace(l2.dim, star.position(8000)), p.asize / 2, 'k--', alpha=0.7)
+    plt.tight_layout()
+    # plt.savefig("img/layer_asterism.pgf")
+    plt.show()
+
+if __name__ == "__main__":
+    main()
+

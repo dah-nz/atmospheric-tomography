@@ -90,7 +90,9 @@ def covariance(sim, total_photons=0):
 
     W_t_covar = np.matmul(estim, Lcovar)
 
+
+
     # print(W_t_covar)
-    return W_t_covar
+    return W_t_covar, mode_truth
     
 

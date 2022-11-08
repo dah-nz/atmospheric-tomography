@@ -19,7 +19,11 @@ def arcsec2rad(t):
 
 def rad2arcsec(t):
     return np.degrees(t) * 60 * 60
-    
+
+def plotcirc(axes, pos, rad, dsp, **kwargs):
+    n_points = 100
+    g = [pol2cart(rad,t/n_points*(2*np.pi)) for t in range(n_points + 1)]
+    axes.plot([pos[0] + x for x,_ in g], [pos[1] + y for _,y in g], dsp, **kwargs)
 
 # Shift data in 2D array in x and y directions
 def shift2darray(arr, x, y, fill_value=np.nan):

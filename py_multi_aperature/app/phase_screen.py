@@ -135,7 +135,7 @@ def main():
     import matplotlib as mpl
     from matplotlib.colors import ListedColormap
 
-    mpl.use('pgf')
+    # mpl.use('pgf')
 
     top = mpl.colormaps['bone'].resampled(128)
     bottom = mpl.colormaps['hot'].resampled(128)
@@ -143,56 +143,85 @@ def main():
     newcolors = np.vstack((top(np.linspace(0, 1, 128)), bottom(np.linspace(1, 0, 128))))
     newcmp = ListedColormap(newcolors, name='NewCMap')
 
-    for m in range(20):
-        modes = [0] * 20
-        modes[m] = 1
-        size = 256
-        screen = createFromModes(modes, size, ignoreModes=0)
-        screen2 = np.zeros((size*2, size*2))
-        screen2[int(size/2):(size + int(size/2)), int(size/2):(size + int(size/2))] = screen
-        screen2 /= np.amax(screen2)
+    # nModes = 21
+    # for m in range(nModes):
+    #     modes = [0] * nModes
+    #     modes[m] = 1
+    #     size = 256
+    #     screen = createFromModes(modes, size, ignoreModes=0)
+    #     screen /= np.amax(screen)
+    #     # screen2 = np.zeros((size*2, size*2))
+    #     # screen2[int(size/2):(size + int(size/2)), int(size/2):(size + int(size/2))] = screen
+    #     # screen2 /= np.amax(screen2)
         
-        plt.figure()
-        plt.title("Phase screen for mode {}".format(m + 1))
-        plt.imshow(screen2, cmap="RdBu", vmax=1.0, vmin=-1.0)
-        plt.savefig("img/Mode{}.pgf".format(m+1))
+    #     plt.figure()
+    #     plt.title("Phase screen for mode {}".format(m + 1))
+    #     plt.imshow(screen, cmap="RdBu", vmax=1.2, vmin=-1.2)
+    #     plt.savefig("img/Mode{}.pgf".format(m+1))
 
-    kScreen = np.float64(kolmogorov(256, 20))
-    n = 20
-    np.random.seed(0)
-    z = [0.0] + list(m * np.exp(-(i+1)/n) for i, m in enumerate(np.random.rand(n) - 0.5))
-    n = 50
-    np.random.seed(0)
-    z50 = [0.0] + list(m * np.exp(-(i+1)/n) for i, m in enumerate(np.random.rand(n) - 0.5))
-    zScreen = createFromModes(z, 256)
-    z50Screen = createFromModes(z50, 256)
+    size = 256
+    kScreen = np.float64(kolmogorov(size, 20))
 
-    plt.figure()
+    z = {}
+    nM = 100
+    for n in range(nM+1):
+        z[n] = np.float64(zernike(size, size, n))
+
+
+    z20 = [np.sum(kScreen*z[n])/np.sum(z[n]*z[n]) for n in range(1, 21)]
+    z50 = [np.sum(kScreen*z[n])/np.sum(z[n]*z[n]) for n in range(1, nM+1)]
+
+    # z20 = [np.dot(kScreen, zernike(size, size, m)) for m in range(21)]
+    # z50 = [np.dot(kScreen, zernike(size, size, m)) for m in range(51)]
+
+    # n = 20
+    # np.random.seed(0)
+    # z = [0.0] + list(m * np.exp(-(i+1)/n) for i, m in enumerate(np.random.rand(n) - 0.5))
+    # n = 50
+    # np.random.seed(0)
+    # z50 = [0.0] + list(m * np.exp(-(i+1)/n) for i, m in enumerate(np.random.rand(n) - 0.5))
+    zScreen = createFromModes(z20, 256, ignoreModes=0)
+    z50Screen = createFromModes(z50, 256, ignoreModes=0)
+
+    fig, axs = plt.subplots(1, 3)
+    fig.set_size_inches(6,2.6)
+    axs[0].tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    axs[1].tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    axs[2].tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    fig.suptitle("Phase Screens")
     kMax = max(-np.amin(kScreen), np.amax(kScreen))
-    plt.imshow(kScreen, cmap="RdBu", vmax=kMax, vmin=-kMax)
-    plt.xlabel("X Position")
-    plt.ylabel("Y Position")
-    plt.title("Kolmogorov Phase Screen")
+    axs[0].imshow(kScreen, cmap="RdBu", vmax=kMax, vmin=-kMax)
+    # axs[0].set_xlabel("X Position")
+    # axs[0].set_ylabel("Y Position")
+    axs[0].set_title("Kolmogorov")
     # plt.savefig("img/KolmogorovScreen.png".format(m+1), format='png')
-    plt.savefig("img/KolmogorovScreen.pgf")
 
-    plt.figure()
-    zMax = max(-np.amin(zScreen), np.amax(zScreen))
-    plt.imshow(zScreen, cmap="RdBu", vmax=zMax, vmin=-zMax)
-    plt.xlabel("X Position")
-    plt.ylabel("Y Position")
-    plt.title("Phase Screen constructed from 20 Zernike modes")
+    # plt.figure()
+    # zMax = max(-np.amin(zScreen), np.amax(zScreen))
+    axs[1].imshow(zScreen, cmap="RdBu", vmax=kMax, vmin=-kMax)
+    # axs[1].set_xlabel("X Position")
+    # axs[1].set_ylabel("Y Position")
+    axs[1].set_title("20 Zernike modes")
     # plt.savefig("img/ZernikeScreen.png".format(m+1), format='png')
-    plt.savefig("img/ZernikeScreen.pgf")
+    # plt.savefig("img/ZernikeScreen.pgf")
 
-    plt.figure()
-    zMax = max(-np.amin(z50Screen), np.amax(z50Screen))
-    plt.imshow(z50Screen, cmap="RdBu", vmax=zMax, vmin=-zMax)
-    plt.xlabel("X Position")
-    plt.ylabel("Y Position")
-    plt.title("Phase Screen constructed from {} Zernike modes".format(n))
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    divider = make_axes_locatable(axs[2])
+    ax_cb = divider.append_axes("right", size="5%", pad=0.05)
+    # fig = axs[2].get_figure()
+    fig.add_axes(ax_cb)
+
+    # plt.figure()
+    # zMax = max(-np.amin(z50Screen), np.amax(z50Screen))
+    im = axs[2].imshow(z50Screen, cmap="RdBu", vmax=kMax, vmin=-kMax)
+    # axs[2].set_xlabel("X Position")
+    # axs[2].set_ylabel("Y Position")
+    axs[2].set_title("{} Zernike modes".format(nM))
+    plt.colorbar(im, cax=ax_cb)
+    ax_cb.yaxis.tick_right()
     # plt.savefig("img/Zernike50Screen.png".format(m+1), format='png')
-    plt.savefig("img/Zernike50Screen.pgf")
+    # plt.savefig("img/Zernike50Screen.pgf")
+    # fig.savefig("img/PhaseScreen.pgf")
     
     plt.show()
 
