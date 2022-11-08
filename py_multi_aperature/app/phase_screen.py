@@ -4,7 +4,7 @@ from scipy.signal import convolve2d
 
 from zernike import zernike
 
-def kolmogorov(grid_size, D_r0):
+def kolmogorov(grid_size, D_r0, seed=None):
 #   Simulation of a phase screen with Kolmogorv Statistics.
 #   Starts from an exact 15 x 15 phase screen.
 #   Based on function written by Rachel Johnston and Cressida Harding
@@ -21,7 +21,7 @@ def kolmogorov(grid_size, D_r0):
         calculated_size = 2 * calculated_size - 11
         n_increases += 1
     
-    full_screen = _generate_phase_screen(n_increases)
+    full_screen = _generate_phase_screen(n_increases, seed)
     chopped_screen = full_screen[:grid_size, :grid_size]
 
     # Rescale screen for appropriate D_r0 after cropping
@@ -34,7 +34,7 @@ def kolmogorov(grid_size, D_r0):
     # return sio.loadmat("phase.mat", struct_as_record=False)['phase']
     return scaled_screen * (D_r0 ** (5/6))
 
-def _generate_phase_screen(n_increases):
+def _generate_phase_screen(n_increases, seed=None):
 #  Generates a phase screen with Kolmogorov statistics.
 #  Based on function written by Rachel Johnston and Cressida Harding
 #  Inputs	num_increases	- the number of times the original 15x15
@@ -42,7 +42,7 @@ def _generate_phase_screen(n_increases):
 #
 #  Outputs	phase		    - the interpolated phase screen with the 
 #				              edges removed
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed)
     data = sio.loadmat("phase_data.mat")
     d = np.array(data['d'])
     u = np.array(data['u'])
@@ -130,12 +130,16 @@ def createFromModes(modes, sz, ignoreModes=1):
         phase += z0 * zernike(sz, sz, m + ignoreModes + 1)
     return phase
 
+latex = False
+
 def main():
     import matplotlib.pyplot as plt
     import matplotlib as mpl
     from matplotlib.colors import ListedColormap
 
-    # mpl.use('pgf')
+    np.random.seed(1)
+    if latex:
+        mpl.use('pgf')
 
     top = mpl.colormaps['bone'].resampled(128)
     bottom = mpl.colormaps['hot'].resampled(128)
@@ -194,7 +198,9 @@ def main():
     # axs[0].set_xlabel("X Position")
     # axs[0].set_ylabel("Y Position")
     axs[0].set_title("Kolmogorov")
-    # plt.savefig("img/KolmogorovScreen.png".format(m+1), format='png')
+    if latex:
+        # plt.savefig("img/KolmogorovScreen.png".format(m+1), format='png')
+        plt.savefig("img/KolmogorovScreen.pgf")
 
     # plt.figure()
     # zMax = max(-np.amin(zScreen), np.amax(zScreen))
@@ -202,8 +208,9 @@ def main():
     # axs[1].set_xlabel("X Position")
     # axs[1].set_ylabel("Y Position")
     axs[1].set_title("20 Zernike modes")
-    # plt.savefig("img/ZernikeScreen.png".format(m+1), format='png')
-    # plt.savefig("img/ZernikeScreen.pgf")
+    if latex:
+        # plt.savefig("img/ZernikeScreen.png".format(m+1), format='png')
+        plt.savefig("img/ZernikeScreen.pgf")
 
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     divider = make_axes_locatable(axs[2])
@@ -217,10 +224,9 @@ def main():
     # axs[2].set_xlabel("X Position")
     # axs[2].set_ylabel("Y Position")
     axs[2].set_title("{} Zernike modes".format(nM))
-    plt.colorbar(im, cax=ax_cb)
-    ax_cb.yaxis.tick_right()
-    # plt.savefig("img/Zernike50Screen.png".format(m+1), format='png')
-    # plt.savefig("img/Zernike50Screen.pgf")
+    if latex:
+        # plt.savefig("img/Zernike50Screen.png".format(m+1), format='png')
+        plt.savefig("img/Zernike50Screen.pgf")
     # fig.savefig("img/PhaseScreen.pgf")
     
     plt.show()
