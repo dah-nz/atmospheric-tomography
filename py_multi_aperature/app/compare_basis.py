@@ -8,8 +8,15 @@ from phase_screen import kolmogorov,  createFromModes
 import pywt
 
 
-def fft_basis(screen, coeffs):
-    cw = int(np.sqrt(coeffs))
+def _square_coeffs(n_coeffs):
+    fc = np.sqrt(n_coeffs)
+    ic = int(np.sqrt(n_coeffs))
+    if ic < fc:
+        ic += 1
+    return ic
+
+def fft_basis(screen, n_coeffs):
+    cw = _square_coeffs(n_coeffs)
 
     fft = np.fft.fft2(screen)
     fft = np.fft.fftshift(fft)
@@ -25,8 +32,8 @@ def fft_basis(screen, coeffs):
 
     return fft, ifft
     
-def dct_basis(screen, coeffs):
-    cw = int(np.sqrt(coeffs))
+def dct_basis(screen, n_coeffs):
+    cw = _square_coeffs(n_coeffs)
 
     dct = dctn(screen, axes=[0,1])
     dct = dct[0:cw, 0:cw]
@@ -36,10 +43,9 @@ def dct_basis(screen, coeffs):
 
     return dct, idct
 
-def dwt_basis(screen, coeffs, wavelet='db1'):
-    cw = int(np.sqrt(coeffs))
+def dwt_basis(screen, n_coeffs, wavelet='db1'):
+    cw = _square_coeffs(n_coeffs)
     lvl = int(np.log2((np.shape(screen)[0] / cw))) + 1
-    print(lvl)
 
     dwt_raw = pywt.wavedec2(screen, 'db1', level=lvl)
 
@@ -60,7 +66,7 @@ def dwt_basis(screen, coeffs, wavelet='db1'):
     return dwt_data, idwt
 
 def dwt_basis2(screen, coeffs, wavelet='db1'):
-    cw = int(np.sqrt(coeffs))
+    cw = _square_coeffs(coeffs)
     lvl = int(np.log2((np.shape(screen)[0] / cw)))
 
     dwt_raw = pywt.wavedec2(screen, 'db1', level=lvl)
@@ -114,8 +120,8 @@ def zer_basis(screen, coeffs):
     return modes, reconstruction
 
 def main():
-    coeffs = [64, 4096]
-    sizes = [64, 128, 256, 512, 1024]
+    coeffs = [64, 256]
+    sizes = [64, 128, 256, 512]
 
     print("Size, Seed, Coeffs, FFT RMSE, FFT MSSIM, DCT RMSE, DCT MSSIM, DWT RMSE, DWT MSSIM")
 

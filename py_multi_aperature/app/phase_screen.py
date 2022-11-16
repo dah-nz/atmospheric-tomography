@@ -4,6 +4,8 @@ from scipy.signal import convolve2d
 
 from zernike import zernike
 
+_kolmogorov_cache = {}
+
 def kolmogorov(grid_size, D_r0, seed=None):
 #   Simulation of a phase screen with Kolmogorv Statistics.
 #   Starts from an exact 15 x 15 phase screen.
@@ -14,6 +16,13 @@ def kolmogorov(grid_size, D_r0, seed=None):
 #
 #  Outputs	screen      - a phase screen with Kolmogorov Statistics
 #                         of size [grid_size, grid_size]
+
+    if seed is not None:
+        try:
+            screen = _kolmogorov_cache[(grid_size, D_r0, seed)]
+            return screen
+        except KeyError:
+            pass
 
     calculated_size = 15
     n_increases = 0
@@ -32,7 +41,11 @@ def kolmogorov(grid_size, D_r0, seed=None):
 
     # Scale screen to specified D_r0
     # return sio.loadmat("phase.mat", struct_as_record=False)['phase']
-    return scaled_screen * (D_r0 ** (5/6))
+    screen = scaled_screen * (D_r0 ** (5/6))
+    if seed is not None:
+        _kolmogorov_cache[(grid_size, D_r0, seed)] = screen
+
+    return screen
 
 def _generate_phase_screen(n_increases, seed=None):
 #  Generates a phase screen with Kolmogorov statistics.
