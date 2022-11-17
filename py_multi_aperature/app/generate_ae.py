@@ -4,28 +4,19 @@ import torch
 
 from torch import nn
 
-from phase_screen import kolmogorov
+from phase_screen import get_kolmogorov_screen
 
-batch_size = 64
+batch_size = 32
 n_coeffs = 64
 
-n_train = 50
+n_train = 100
 n_test = n_train / 5
-
-class ComplexAct(nn.Module):
-    def __init__(self, act):
-        # act can be either a function from nn.functional or a nn.Module if the
-        # activation has learnable parameters
-        super().__init__()
-        self.act = act
-
-    def forward(self, z):
-        return self.act(torch.abs(z)) * torch.exp(1.j * torch.angle(z)) 
 
 class KolmogorovDataset(torch.utils.data.Dataset):
     def __init__(self, dim, D_r0, train=True, i0=0):
         self.dim = dim
         self.D_r0 = D_r0
+        self.train = train
         if train:
             self.len = batch_size * n_train
         else:
@@ -34,7 +25,10 @@ class KolmogorovDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.len
     def __getitem__(self, idx):
-        x = kolmogorov(self.dim, self.D_r0) #, seed=(idx+self.i0)
+        if self.train:
+            x = get_kolmogorov_screen(self.dim, self.D_r0, seed=idx)
+        else:
+            x = get_kolmogorov_screen(self.dim, self.D_r0, seed=(batch_size*n_test)+idx)
         return self.to_torch(x)
     def to_torch(self, x):
         r = np.real(x)
@@ -52,6 +46,7 @@ k2 = 16
 k3 = 32
 k4 = 64
 last_layer_dim = 31
+LRELU_grad = 0.01
 
 class Encoder(nn.Module):
     def __init__(self, n_coeffs):
@@ -59,17 +54,17 @@ class Encoder(nn.Module):
 
         self.encoder_cnn = nn.Sequential(
             nn.Conv2d(channels_in, k2, kernel_size, stride=2, padding=1, bias=False),
-            nn.Tanh(),
+            nn.LeakyReLU(LRELU_grad, True),
             nn.Conv2d(k2, k3, kernel_size, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(k3),
-            nn.Tanh(),
+            nn.LeakyReLU(LRELU_grad, True),
             nn.Conv2d(k3, k4, kernel_size, stride=2, padding=0, bias=False),
-            nn.Tanh(),
+            nn.LeakyReLU(LRELU_grad, True),
         )
         self.flatten = nn.Flatten(start_dim=1)
         self.encoder_lin = nn.Sequential(
             nn.Linear(last_layer_dim * last_layer_dim * k4, n_coeffs * 2, bias=False),
-            nn.Tanh(),
+            nn.LeakyReLU(LRELU_grad, True),
             nn.Linear(n_coeffs * 2, n_coeffs, bias=False),
         )
     def forward(self, x):
@@ -84,18 +79,18 @@ class Decoder(nn.Module):
 
         self.decoder_lin = nn.Sequential(
             nn.Linear(n_coeffs, n_coeffs * 2, bias=False),
-            nn.Tanh(),
+            nn.LeakyReLU(LRELU_grad, True),
             nn.Linear(n_coeffs * 2, last_layer_dim * last_layer_dim * k4, bias=False),
-            nn.Tanh(),
+            nn.LeakyReLU(LRELU_grad, True),
         )
         self.unflatten = nn.Unflatten(dim=1, unflattened_size=(k4, last_layer_dim, last_layer_dim))
         self.decoder_cnn = nn.Sequential(
             nn.ConvTranspose2d(k4, k3, kernel_size, stride = 2, output_padding=0, bias=False),
             nn.BatchNorm2d(k3),
-            nn.Tanh(),
+            nn.LeakyReLU(LRELU_grad, True),
             nn.ConvTranspose2d(k3, k2, kernel_size, stride=2, padding=0, output_padding=0, bias=False),
             nn.BatchNorm2d(k2),
-            nn.Tanh(),
+            nn.LeakyReLU(LRELU_grad, True),
             nn.ConvTranspose2d(k2, channels_in, kernel_size, stride=2, padding=0, output_padding=1, bias=False)
         )
     def forward(self, x):

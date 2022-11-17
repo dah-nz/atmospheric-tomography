@@ -3,8 +3,55 @@ import scipy.io as sio
 from scipy.signal import convolve2d
 
 from zernike import zernike
+import pickle, os
 
+_open_cache_file = None
+_cache_file_ptr = None
 _kolmogorov_cache = {}
+_cache_len = 0
+_data_cache = None
+seed_range = 256
+
+def get_kolmogorov_screen(grid_size, D_r0, seed=None):
+    global _open_cache_file
+    global _cache_file_ptr
+    global _kolmogorov_cache
+    global _cache_len
+
+    if seed is not None:
+        try:
+            min_seed = seed - (seed % seed_range)
+            max_seed = min_seed + seed_range - 1
+            d = os.getcwd()
+            cache_file_name = "{}_{}_{}_{}.data".format(grid_size, D_r0, min_seed, max_seed)
+            cache_file = os.path.join(d, 'dataset', 'kolmogorov', cache_file_name)
+            if cache_file != _open_cache_file:
+                if _cache_file_ptr is not None:
+                    _cache_file_ptr.close()
+                    if _cache_len != len(_kolmogorov_cache.items()):
+                        _cache_file_ptr = open(_open_cache_file, 'wb')
+                        pickle.dump(_kolmogorov_cache, _cache_file_ptr)
+                        _cache_file_ptr.close()
+                _cache_file_ptr = open(cache_file, "rb")
+                _open_cache_file = cache_file
+                _kolmogorov_cache = pickle.load(_cache_file_ptr)
+                _cache_len = len(_kolmogorov_cache.items())
+            return _kolmogorov_cache[seed]
+        except KeyError:
+            pass
+        except EOFError:
+            pass
+        except FileNotFoundError:
+            _cache_file_ptr = open(cache_file, "wb")
+            _open_cache_file = cache_file
+            _kolmogorov_cache = {}
+
+    screen = kolmogorov(grid_size, D_r0, seed)
+
+    if seed is not None:
+        _kolmogorov_cache[seed] = screen
+
+    return screen
 
 def kolmogorov(grid_size, D_r0, seed=None):
 #   Simulation of a phase screen with Kolmogorv Statistics.
@@ -16,13 +63,6 @@ def kolmogorov(grid_size, D_r0, seed=None):
 #
 #  Outputs	screen      - a phase screen with Kolmogorov Statistics
 #                         of size [grid_size, grid_size]
-
-    if seed is not None:
-        try:
-            screen = _kolmogorov_cache[(grid_size, D_r0, seed)]
-            return screen
-        except KeyError:
-            pass
 
     calculated_size = 15
     n_increases = 0
@@ -42,9 +82,7 @@ def kolmogorov(grid_size, D_r0, seed=None):
     # Scale screen to specified D_r0
     # return sio.loadmat("phase.mat", struct_as_record=False)['phase']
     screen = scaled_screen * (D_r0 ** (5/6))
-    if seed is not None:
-        _kolmogorov_cache[(grid_size, D_r0, seed)] = screen
-
+    
     return screen
 
 def _generate_phase_screen(n_increases, seed=None):
@@ -55,8 +93,15 @@ def _generate_phase_screen(n_increases, seed=None):
 #
 #  Outputs	phase		    - the interpolated phase screen with the 
 #				              edges removed
+    global _data_cache
+
     rng = np.random.default_rng(seed)
-    data = sio.loadmat("phase_data.mat")
+    if _data_cache is None:
+        data = sio.loadmat("phase_data.mat")
+        _data_cache = data
+    else:
+        data = _data_cache
+
     d = np.array(data['d'])
     u = np.array(data['u'])
 
