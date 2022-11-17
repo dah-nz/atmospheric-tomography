@@ -40,12 +40,12 @@ class KolmogorovDataset(torch.utils.data.Dataset):
 
         
 
-kernel_size = 3
+kernel_size = 5
 channels_in = 2
 k2 = 16
 k3 = 32
 k4 = 64
-last_layer_dim = 31
+last_layer_dim = 30
 LRELU_grad = 0.01
 
 class Encoder(nn.Module):
@@ -63,9 +63,9 @@ class Encoder(nn.Module):
         )
         self.flatten = nn.Flatten(start_dim=1)
         self.encoder_lin = nn.Sequential(
-            nn.Linear(last_layer_dim * last_layer_dim * k4, n_coeffs * 2, bias=False),
+            nn.Linear(last_layer_dim * last_layer_dim * k4, n_coeffs * 3, bias=False),
             nn.LeakyReLU(LRELU_grad, True),
-            nn.Linear(n_coeffs * 2, n_coeffs, bias=False),
+            nn.Linear(n_coeffs * 3, n_coeffs, bias=False),
         )
     def forward(self, x):
         x = self.encoder_cnn(x)
@@ -78,9 +78,9 @@ class Decoder(nn.Module):
         super().__init__()
 
         self.decoder_lin = nn.Sequential(
-            nn.Linear(n_coeffs, n_coeffs * 2, bias=False),
+            nn.Linear(n_coeffs, n_coeffs * 3, bias=False),
             nn.LeakyReLU(LRELU_grad, True),
-            nn.Linear(n_coeffs * 2, last_layer_dim * last_layer_dim * k4, bias=False),
+            nn.Linear(n_coeffs * 3, last_layer_dim * last_layer_dim * k4, bias=False),
             nn.LeakyReLU(LRELU_grad, True),
         )
         self.unflatten = nn.Unflatten(dim=1, unflattened_size=(k4, last_layer_dim, last_layer_dim))
@@ -88,10 +88,10 @@ class Decoder(nn.Module):
             nn.ConvTranspose2d(k4, k3, kernel_size, stride = 2, output_padding=0, bias=False),
             nn.BatchNorm2d(k3),
             nn.LeakyReLU(LRELU_grad, True),
-            nn.ConvTranspose2d(k3, k2, kernel_size, stride=2, padding=0, output_padding=0, bias=False),
+            nn.ConvTranspose2d(k3, k2, kernel_size, stride=2, padding=1, output_padding=0, bias=False),
             nn.BatchNorm2d(k2),
             nn.LeakyReLU(LRELU_grad, True),
-            nn.ConvTranspose2d(k2, channels_in, kernel_size, stride=2, padding=0, output_padding=1, bias=False)
+            nn.ConvTranspose2d(k2, channels_in, kernel_size, stride=2, padding=1, output_padding=1, bias=False)
         )
     def forward(self, x):
         x = self.decoder_lin(x)
