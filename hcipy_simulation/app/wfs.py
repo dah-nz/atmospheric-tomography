@@ -2,6 +2,8 @@ from hcipy import *
 import scipy.ndimage as ndimage
 import numpy as np
 
+OpticalDifferentiationWavefrontSensorOptics
+
 class SH_WFS():
     prefix = "sh_wfs_"
     name = "Shack-Hartmann"
@@ -16,8 +18,7 @@ class SH_WFS():
         flux_limit = fluxes.max() * 0.5
         estimation_subapertures = self.wfs.mla_grid.zeros(dtype='bool')
         estimation_subapertures[self.estimator.estimation_subapertures[fluxes>flux_limit]] = True
-        self.estimator = ShackHartmannWavefrontSensorEstimator(self.wfs.mla_grid, self.wfs.micro_lens_array.mla_index, estimation_subapertures)
-        # Calculate reference slopes for WFS
+        self.estimator = ShackHartmannWavefrontSensorEstimator(self.wfs.mla_grid, self.wfs.micro_lens_array.mla_index, estimation_subapertures)        # Calculate reference slopes for WFS
         self.slopes_ref = self.estimator.estimate([image_ref])
     def estimate_slopes(self, wfs_image):
         slopes = self.estimator.estimate([wfs_image + 1e-10])
@@ -34,17 +35,27 @@ class SH_WFS():
 class PYRAMID_WFS():
     prefix = "pyramid_wfs_"
     name = "Pyramid"
-    def __init__(self, wavelength, pupil_grid):
-        self.wfs = PyramidWavefrontSensorOptics(pupil_grid, wavelength_0=wavelength)
+    def __init__(self, wavelength, pupil_grid, output_grid, aperture):
+        self.wfs = PyramidWavefrontSensorOptics(pupil_grid, output_grid, wavelength_0=wavelength)
+        self.estimator = PyramidWavefrontSensorEstimator(aperture)
     def calculate_ref_slopes(self, image_ref):
-        self.image_ref = image_ref # / image_ref.sum()
+        self.slopes_ref = self.estimator.estimate(image_ref)
+        # self.image_ref = image_ref / image_ref.sum()
     def estimate_slopes(self, wfs_image):
-        wfs_image /= np.sum(wfs_image)
-        return wfs_image - self.image_ref
+        slopes = self.estimator.estimate(wfs_image)
+        slopes -= self.slopes_ref
+        return slopes.ravel()
     def interaction_slopes(self, image, amp, var):
-        image /= np.sum(image)
-        return (image - self.image_ref) / (2 * amp)
+        slopes = self.estimator.estimate(image)
+        return amp * slopes / var
     def propagate_through_wfs(self, wavefront):
         return self.wfs.forward(wavefront)
     def propagate_past_dm(self, dm ,wavefront):
         return dm.forward(wavefront)
+    
+class GEOMETRIC_WFS():
+    prefix = "geo_wfs_"
+    name = "Geometric"
+    def __init__(self, wavelength, pupil_grid, output_grid):
+        self.wfs = OpticalDifferentiationWavefrontSensorOptics(pupil_grid, output_grid, wavelength_0=wavelength)
+        self.estimator = OpticalDifferentiationWavefrontSensorEstimator()

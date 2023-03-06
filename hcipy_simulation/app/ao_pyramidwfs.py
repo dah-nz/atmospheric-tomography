@@ -21,6 +21,7 @@ oversizing_factor = 16/15
 num_pupil_pixels = 240 * oversizing_factor
 pupil_grid_diameter = telescope_diameter * oversizing_factor
 pupil_grid = make_pupil_grid(num_pupil_pixels, pupil_grid_diameter)
+output_grid = make_pupil_grid(num_pupil_pixels, pupil_grid_diameter)
 
 # Create aperture for telescope
 VLT_aperture_generator = make_obstructed_circular_aperture(telescope_diameter, central_obscuration_ratio, num_spiders=num_spiders, spider_width=spider_width)
@@ -53,14 +54,15 @@ imshow_field(np.log10(unaberrated_PSF / unaberrated_PSF.max()), cmap='inferno', 
 plt.colorbar()
 
 # Generate Pyramid WFS
-pwfs = PyramidWavefrontSensorOptics(pupil_grid, wavelength_0=wavelength_wfs)
-camera = NoiselessDetector(focal_grid)
+pwfs = PyramidWavefrontSensorOptics(pupil_grid, output_grid, wavelength_0=wavelength_wfs)
+camera = NoiselessDetector(output_grid)
 # camera = NoiselessDetector(pwfs.output_grid)
 
 wf = Wavefront(VLT_aperture, wavelength_wfs)
 camera.integrate(pwfs.forward(wf), 1)
 
 image_ref = camera.read_out()
+image_ref /= image_ref.sum()
 
 plt.figure()
 imshow_field(image_ref, cmap='inferno')
@@ -99,9 +101,8 @@ for i in progressbar(range(num_modes)):
 
         camera.integrate(wfs_wf, 1)
         image = camera.read_out()
-        # image /= np.sum(image)
+        image /= np.sum(image)
 
-        # slopes = shwfse.estimate([image])
         slope += s * (image - image_ref) / (2 * probe_amp)
 
     response_matrix.append(slope)

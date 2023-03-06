@@ -22,6 +22,7 @@ class Parameters():
         num_pupil_pixels = 240 * oversizing_factor
         pupil_grid_diameter = self.telescope_diameter * oversizing_factor
         self.pupil_grid = make_pupil_grid(num_pupil_pixels, pupil_grid_diameter)
+        self.output_grid = make_pupil_grid(num_pupil_pixels, pupil_grid_diameter)
 
         # Create aperture for telescope
         VLT_aperture_generator = make_obstructed_circular_aperture(self.telescope_diameter, central_obscuration_ratio, num_spiders=num_spiders, spider_width=spider_width)
@@ -386,8 +387,10 @@ if __name__ == "__main__":
 
     simulate(p, sh_wfs)
 
+    """
     # Run Pyramid Sensor simulation
-    pyr_wfs = PYRAMID_WFS(p.wavelength_wfs, p.pupil_grid)
+    pyr_wfs = PYRAMID_WFS(p.wavelength_wfs, p.pupil_grid, p.output_grid, p.aperture)
     simulate(p, pyr_wfs)
+    """
 
     plt.show()
