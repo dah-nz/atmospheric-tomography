@@ -3,47 +3,36 @@ import matplotlib.pyplot as plt
 from ast import literal_eval
 import util
 import strehl
-from progressbar import progressbar
+import phase_screen
+import parameters
 
-file_name = "TEST.DATA"
+file_name = "CLEAN_TEST_20230316_125020.data"
 
-old = False
-if old:
-    target_section = "Index,Target Position Azimuth [rad],Target Position Theta [rad]"
-    asterism_section = "Index,Asterism [rad]"
-    mode_section = "Index,Target Modes"
-    output_section = "Target Position Index,Asterism Index,Target Mode Index,Tomography Output"
-else:
-    target_section = "TEST_TARGET_POSITIONS"
-    asterism_section = "TEST_ASTERISMS"
-    mode_section = "TEST_TARGET_MODES"
-    output_section = "TEST_OUTPUTS"
+target_section = "TEST_TARGET_POSITIONS"
+asterism_section = "TEST_ASTERISMS"
+screen_section = "TEST_TARGET_SCREEN_SEED"
+output_section = "TEST_OUTPUTS"
+
+default_p = parameters.parameters()
 
 targets = {}
 asterisms = {}
-modes = {}
+screens = {}
 output = {}
 output_rmse = {}
 output_strehl = {}
 
 def read_target(line):
     data = literal_eval(line)
-    if old:
-        targets[data[0]] = (data[1], data[2])
-    else:
-        targets[data[0]] = data[1]
+    targets[data[0]] = data[1]
 
 def read_asterism(line):
     data = literal_eval(line)
     asterisms[data[0]] = (data[1], data[2])
 
-def read_mode(line):
-    try:
-        data = literal_eval(line)
-        if data[0] != 400:
-            modes[data[0]] = data[1]
-    except ValueError:
-        print(line)
+def read_screens(line):
+    data = literal_eval(line)
+    screens[data[0]] = [phase_screen.get_kolmogorov_screen(default_p.asize, default_p.D / default_p.r0, seed=seed) for seed in data[1]]
 
 def read_output(line):
     data = literal_eval(line)
@@ -60,14 +49,14 @@ def rmse(expected, actual):
 def main():
     section = ""
     with open(file_name, 'r') as f:
-        for line in progressbar(f.readlines()):
+        for line in f.readlines():
             line = line.strip()
             if line == target_section:
                 section = "targets"
             elif line == asterism_section:
                 section = "asterisms"
-            elif line == mode_section:
-                section = 'modes'
+            elif line == screen_section:
+                section = 'screens'
             elif line == output_section:
                 section = 'output'
             else:
@@ -75,20 +64,16 @@ def main():
                     read_target(line)
                 if section == "asterisms":
                     read_asterism(line)
-                if section == "modes":
-                    read_mode(line)
+                if section == "screens":
+                    read_screens(line)
                 if section == "output":
                     read_output(line)
 
     # calculate RMSE for each output
-    for (t, a, m), data in progressbar(output.items()):
-        expected = np.sum(modes[m], axis=0)
+    for (t, a, m), data in output.items():
+        expected = np.sum([phase_screen.getModes(p, default_p.nModes+1) for p in screens[m]], axis=0)
         output_rmse[(t,a,m)] = rmse(expected, [0.0] + data)
         output_strehl[(t,a,m)] = ((strehl.strehl_from_modes([0.0] + data) / strehl.strehl_from_modes(expected)) - 1) * 100
-
-    # error = [i for _, i in output_rmse.items()]
-    # plt.plot(error)
-    # plt.show()
 
     # plot average error for different target angles
     def get_target_angle_results(data):
@@ -159,7 +144,7 @@ def main():
     plt.ylabel("Average Change in Strehl Ratio (%)")
     plt.plot(pos_data.keys(), pos_data.values())
 
-    asterism_types = ['equal', 'random_single', 'full_random'] 
+    asterism_types = ['equal', 'random'] 
     # plot average error for different asterisms
     def get_asterism_results(data):
         def setup(d):
@@ -241,7 +226,7 @@ def main():
         mode_data = {}
         mode_count = {}
         for k, err in data.items():
-            pos = modes[k[2]]
+            pos = screens[k[2]]
             try:
                 mode_data[k[2]] += err
                 mode_count[k[2]] += 1

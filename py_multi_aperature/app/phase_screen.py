@@ -183,10 +183,20 @@ def _generate_phase_screen(n_increases, seed=None):
 # Create a distortion/aberration phase screen from a set of Zernike modes
 def createFromModes(modes, sz, ignoreModes=1):
     sz = int(sz)
-    phase = np.zeros((sz, sz))
+    phase = np.zeros((sz, sz), dtype=np.float64)
     for m, z0 in enumerate(modes):
-        phase += z0 * zernike(sz, sz, m + ignoreModes + 1)
+        phase += np.float64(z0 * zernike(sz, sz, m + ignoreModes + 1))
     return phase
+
+
+def getModes(phase_screen, num_modes):
+    size = np.shape(phase_screen)[0]
+    z = [0] * (num_modes + 1)
+    for n in range(num_modes + 1):
+        z[n] = np.float64(zernike(size, size, n))
+
+    return [np.sum(phase_screen * z[n])/np.sum(z[n] * z[n]) for n in range(1, num_modes + 1)]
+
 
 latex = False
 
@@ -230,8 +240,8 @@ def main():
         z[n] = np.float64(zernike(size, size, n))
 
 
-    z20 = [np.sum(kScreen*z[n])/np.sum(z[n]*z[n]) for n in range(1, 21)]
-    z50 = [np.sum(kScreen*z[n])/np.sum(z[n]*z[n]) for n in range(1, nM+1)]
+    z20 = getModes(kScreen, 20)
+    z50 = getModes(kScreen, nM)
 
     # z20 = [np.dot(kScreen, zernike(size, size, m)) for m in range(21)]
     # z50 = [np.dot(kScreen, zernike(size, size, m)) for m in range(51)]

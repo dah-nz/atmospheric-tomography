@@ -4,7 +4,7 @@ import util
 
 class Sim():
     p = None
-    def __init__(self, parameters, guidestars=None):
+    def __init__(self, parameters, guidestars=None, phaseScreens=None):
         self.p = parameters
         self.target = star.Star(util.arcsec2rad(self.p.targetPos[0]), self.p.targetPos[1])
         if guidestars == None:
@@ -12,6 +12,10 @@ class Sim():
         else:
             self.guidestars = guidestars
             self.p.nGS = len(guidestars)
-        self.layers = layer.generate_all(self.p, self.guidestars, self.target)
+
+        if phaseScreens is None:
+            self.layers = layer.generate_all(self.p, self.guidestars, self.target)
+        else:
+            self.layers = layer.generate_all(self.p, self.guidestars, self.target, pScreens=phaseScreens)
         return
         

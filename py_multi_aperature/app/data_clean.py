@@ -1,11 +1,11 @@
 clean = False
 
 data = []
-file_name = "20220829_121237_DATA copy.csv"
+file_name = "TEST_20230316_125020.data"
 with open(file_name, 'r') as f:
     for line in f.readlines():
         line = line.replace('\n','')
-        if line == "Target Position Index,Asterism Index,Target Mode Index,Tomography Output":
+        if line == "Target Position Index,Asterism Index,Screen Index,Tomography Output":
             clean = True
         elif clean == True:
             line = line.replace(' ',',').replace(',,', ',').replace('[,', '[')
