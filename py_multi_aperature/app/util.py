@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib as mpl
+import scipy
 
 def azimuth2cart(altitude, theta, phi):
     rho = altitude * np.tan(theta)
@@ -67,3 +69,30 @@ def rmse(expected, actual):
     se = e * e
     mse = np.mean(se)
     return np.sqrt(mse)
+
+
+#   bounded(path, point)
+#   Determines if a point is bounded within the convex hull of a path
+#
+#   path:   vertices that define a path
+#   point:  vertex of a point or iterable of multiple vertices
+
+def bounded(path, point):
+    hull = scipy.spatial.ConvexHull(path)
+    return pip(hull.points[hull.vertices], point)
+
+
+#   pip(path, point)
+#   Determines if a point is with a polygon
+#
+#   point:      vertex of a point or iterable of multiple vertices
+#   polygon:    polygon vertices
+#
+def pip(polygon, point):
+    path = mpl.path.Path(polygon)
+    try:
+        return path.contains_points(point)
+    except TypeError:
+        return path.contains_point(point)
+    except SystemError:
+        return path.contains_point(point)
