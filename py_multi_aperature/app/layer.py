@@ -33,6 +33,20 @@ class Layer:
             self.modes = phase_screen.getModes(phaseScreen, p.nModes)
             self.phaseScreen = phaseScreen
 
+    #   cut-out function
+    #
+    #   Returns the footprint of the layer phase screen for a star location
+    #
+    def cut_out(self, p, star):
+        # Cartesian location of star on layer (in metres)
+        x, y = star.position(self.altitude)
+        # Convert location to pixel position
+        pix_x = int((x * p.asize / p.D) * (p.asize / self.dim) + (p.asize / 2))
+        pix_y = int((y * p.asize / p.D) * (p.asize / self.dim) + (p.asize / 2))
+        # Radius of star footprint on layer in pixels
+        radius = int(((p.asize ** 2) / self.dim) / 2)
+        return self.phaseScreen[(pix_x-radius):(pix_x+radius), (pix_y-radius):(pix_y+radius)]
+
 def generate_all(p, gs, tgt, pScreens=None):
     layers = []
     if pScreens is not None:
@@ -58,11 +72,12 @@ def main():
         def __init__(self):
             self.D = 1
             self.asize = 256
+            self.nModes = 50
     p = p_c()
-    l1 = Layer(p, stars, target, 1000)
-    l2 = Layer(p, stars, target, 8000)
     l1_ps = np.float64(phase_screen.kolmogorov(p.asize, 15))
     l2_ps = np.float64(phase_screen.kolmogorov(p.asize, 15))
+    l1 = Layer(p, stars, target, 1000, phaseScreen=l1_ps)
+    l2 = Layer(p, stars, target, 8000, phaseScreen=l2_ps)
 
     fig, axs = plt.subplots(1, 2)
     fig.set_size_inches(5.5, 4)
@@ -70,8 +85,15 @@ def main():
         ax.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
     axs[0].set_title("Layer at 1000m")
     axs[1].set_title("Layer at 8000m")
-    # axs[0].imshow(l1_ps, cmap='GnBu')
-    # axs[1].imshow(l2_ps, cmap='GnBu')
+
+    c1 = l1.cut_out(p, target)
+    c2 = l2.cut_out(p, target)
+
+    # axs[0].imshow(l1.phaseScreen - phase_screen.createFromModes(l1.modes, p.asize, ignoreModes=0), cmap='GnBu')
+    # axs[1].imshow(l2.phaseScreen - phase_screen.createFromModes(l2.modes, p.asize, ignoreModes=0), cmap='GnBu')
+
+    axs[0].imshow(c1, cmap='GnBu')
+    axs[1].imshow(c2, cmap='GnBu')
 
     # Plot Target Location
     for ax, layer in zip(axs, [l1, l2]):

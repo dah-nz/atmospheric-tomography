@@ -195,7 +195,7 @@ def getModes(phase_screen, num_modes):
     for n in range(num_modes + 1):
         z[n] = np.float64(zernike(size, size, n))
 
-    return [np.sum(phase_screen * z[n])/np.sum(z[n] * z[n]) for n in range(1, num_modes + 1)]
+    return [np.sum(phase_screen * z[n], dtype=np.float64)/np.sum(z[n] * z[n]) for n in range(1, num_modes + 1)]
 
 
 latex = False

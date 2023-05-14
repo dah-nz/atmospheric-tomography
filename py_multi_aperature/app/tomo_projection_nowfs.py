@@ -34,11 +34,12 @@ def projection_nowfs(sim):
         layer_modes = np.insert(layer_modes, 0, 0)
 
         for n, gs in enumerate(layer.guideStars):
-            x, y = gs.position(layer.altitude) 
-            x /= radius
-            y /= radius
+            P = proj(gs, layer)
+            # x, y = gs.position(layer.altitude) 
+            # x /= radius
+            # y /= radius
 
-            P = projectionMatrix((x, y), asize / layer.dim, totalModes)
+            # P = projectionMatrix((x, y), asize / layer.dim, totalModes)
             avec_real = np.matmul(P.T, layer_modes)
 
             L[(n*totalModes):(n+1)*totalModes] += avec_real

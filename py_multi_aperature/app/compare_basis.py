@@ -58,10 +58,10 @@ def dwt_basis(screen, n_coeffs, wavelet='db1'):
     cA = dwt[0]
     (cH, cV, cD) = dwt[1]
     x, y = np.shape(cA)
-    dwt_data[0:x, 0:y] = cA      # cA
-    dwt_data[x:2*x, 0:y] = cH    # cH
-    dwt_data[0:x, y:2*y] = cV    # cV
-    dwt_data[x:2*x, y:2*y] = cD  # cD
+    dwt_data[0:x, 0:y] = np.real(cA)      # cA
+    dwt_data[x:2*x, 0:y] = np.real(cH)    # cH
+    dwt_data[0:x, y:2*y] = np.real(cV)    # cV
+    dwt_data[x:2*x, y:2*y] = np.real(cD)  # cD
 
     return dwt_data, idwt
 

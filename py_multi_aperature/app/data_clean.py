@@ -1,7 +1,7 @@
 clean = False
 
 data = []
-file_name = "TEST_20230316_125020.data"
+file_name = "TEST_20230327_120334.data"
 with open(file_name, 'r') as f:
     for line in f.readlines():
         line = line.replace('\n','')

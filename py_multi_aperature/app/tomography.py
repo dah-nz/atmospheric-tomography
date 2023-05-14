@@ -8,6 +8,7 @@ from projection import projectionMatrix
 from star import Star
 import util
 import phase_screen
+import layer
 
 import concurrent.futures
 import threading
@@ -18,12 +19,12 @@ import numpy as np
 data = []
 lock = threading.Lock()
 
-file_name = "TEST_{}.data".format(datetime.now().strftime("%Y%m%d_%H%M%S"))
+file_name = "data/TEST_{}.data".format(datetime.now().strftime("%Y%m%d_%H%M%S"))
 
-NUM_TARGETS_AZIMUTH = 3
-NUM_TARGETS_THETA = 4
-NUM_PHASE_SCREENS = 3
-NUM_ASTERISMS = 2
+NUM_TARGETS_AZIMUTH = 10
+NUM_TARGETS_THETA = 12
+NUM_PHASE_SCREENS = 30
+NUM_ASTERISMS = 10
 
 def generate_test_targets():
     target_positions = []
@@ -62,7 +63,7 @@ def generate_test_asterisms():
     radii = np.linspace(util.arcsec2rad(min_rad), util.arcsec2rad(max_rad), num_rad)
 
     # Number of stars
-    min_stars = 2
+    min_stars = 3
     max_stars = 9
 
     equal_spaced_stars = [np.linspace(0, 2*np.pi, x, endpoint=False) for x in range(min_stars, max_stars + 1)]
@@ -105,7 +106,7 @@ def main():
         for ast_type, ast in test_asterisms.items():
             for _, asterism in enumerate(ast):
                 test_guidestars.append([Star(t, p) for t, p in asterism])
-                f.write("{},{},{}\n".format(index,ast_type,asterism))
+                f.write("{},\"{}\",{}\n".format(index,ast_type,asterism))
                 index += 1
 
         f.write("TEST_TARGET_SCREEN_SEED\n")
@@ -115,9 +116,10 @@ def main():
     test_data = {"pm": test_projMatrices, "pos": target_positions, "gs": test_guidestars, "ps": test_screens}
 
     def check_valid_asterism(target_idx, asterism_idx):
-        t_a = test_data['pos'][target_idx][0]
-        a_a = [x.theta for x in test_data['gs'][asterism_idx]]
-        return any(t_a < a_a)
+        target = test_data['pos'][target_idx]
+        target = Star(target[0], target[1])
+        asterism = [x.position(1000) for x in test_data['gs'][asterism_idx]]
+        return util.bounded(asterism, target.position(1000))
         
     print("Setting up test arguments")
     test_args = []
@@ -131,15 +133,18 @@ def main():
         f.write("TEST_OUTPUTS\n")
 
     print("Running tests")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-        executor.map(sim_thread, test_args)
+    for args in test_args:
+        sim_thread(args)
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+    #     executor.map(sim_thread, test_args)
                 
     print("FINISHED")
 
 
 def sim_thread(args):
     target_idx, asterism_idx, screen_idx, test_data = args
-    print("Test {}:{}:{} Running".format(target_idx, asterism_idx, screen_idx))
+    test_str = "Test {}:{}:{}".format(target_idx, asterism_idx, screen_idx)
+    print(test_str + " Running")
     global data
     global lock
 
@@ -155,13 +160,29 @@ def sim_thread(args):
     sim = Sim(p, guidestars=gs, phaseScreens=ps)
     p.nGS = len(gs)
 
+    target_star = Star(target[0], target[1])
+    layers = [layer.Layer(p, gs, target_star, l, phaseScreen=screen) for l, screen in zip(p.layer_alt, ps)]
+
+    target_cut_outs = [l.cut_out(p, target_star) for l in layers]
+    # print(test_str + " Cut Outs Defined")
+
+    target_modes = [phase_screen.getModes(cut_out, p.nModes) for cut_out in target_cut_outs]
+    target_modes = np.sum(target_modes, 0)
+    # print(test_str + " Target Modes Calculated")
+    layer_modes = [phase_screen.getModes(l.phaseScreen, p.nModes) for l in sim.layers]
+    sim.p.layer_modes = layer_modes
+
+    # print("Size: {}".format(np.shape(target_modes)))
+
     t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
+
     lock.acquire()
     with open(file_name, 'a') as f:
-        f.write("{},{},{},{}\n".format(target_idx, asterism_idx, screen_idx, list(t_nowfs)))
+        f.write("{},{},{},{},{}\n".format(target_idx, asterism_idx, screen_idx, list(t_nowfs), target_modes))
     data.append((target_idx, asterism_idx, screen_idx, t_nowfs, p.layer_modes))
     lock.release()
-    print("Test {}:{}:{} Complete".format(target_idx, asterism_idx, screen_idx))
+
+    print(test_str + " Complete")
 
 if __name__ == "__main__":
     main()

@@ -7,9 +7,9 @@ from torch import nn
 from phase_screen import get_kolmogorov_screen
 
 batch_size = 32
-n_coeffs = 64
+n_coeffs = 32
 
-n_train = 100
+n_train = 500
 n_test = n_train / 5
 
 class KolmogorovDataset(torch.utils.data.Dataset):

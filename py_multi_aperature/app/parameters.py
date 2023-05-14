@@ -8,7 +8,7 @@ class parameters():
     D = 30                                              # metres; telescope diameter
     asize = 256                                         # pixels; Aperture size
     
-    nModes = 20                                         # number of Zernike modes
+    nModes = 50                                         # number of Zernike modes
     modeIgnore = 1                                      # number of Zernike modes to ignore
 
     layer_alt = [1000, 8000]
