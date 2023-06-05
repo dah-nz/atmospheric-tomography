@@ -133,10 +133,10 @@ def main():
         f.write("TEST_OUTPUTS\n")
 
     print("Running tests")
-    for args in test_args:
-        sim_thread(args)
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-    #     executor.map(sim_thread, test_args)
+    # for args in test_args:
+    #     sim_thread(args)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+        executor.map(sim_thread, test_args)
                 
     print("FINISHED")
 
@@ -166,23 +166,26 @@ def sim_thread(args):
     target_cut_outs = [l.cut_out(p, target_star) for l in layers]
     # print(test_str + " Cut Outs Defined")
 
-    target_modes = [phase_screen.getModes(cut_out, p.nModes) for cut_out in target_cut_outs]
-    target_modes = np.sum(target_modes, 0)
-    # print(test_str + " Target Modes Calculated")
-    layer_modes = [phase_screen.getModes(l.phaseScreen, p.nModes) for l in sim.layers]
-    sim.p.layer_modes = layer_modes
+    if all([np.shape(s)[0] > 0 for s in target_cut_outs]):
+        target_modes = [phase_screen.getModes(cut_out, p.nModes) for cut_out in target_cut_outs]
+        target_modes = np.sum(target_modes, 0)
+        # print(test_str + " Target Modes Calculated")
+        layer_modes = [phase_screen.getModes(l.phaseScreen, p.nModes) for l in sim.layers]
+        sim.p.layer_modes = layer_modes
 
-    # print("Size: {}".format(np.shape(target_modes)))
+        # print("Size: {}".format(np.shape(target_modes)))
 
-    t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
+        t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
 
-    lock.acquire()
-    with open(file_name, 'a') as f:
-        f.write("{},{},{},{},{}\n".format(target_idx, asterism_idx, screen_idx, list(t_nowfs), target_modes))
-    data.append((target_idx, asterism_idx, screen_idx, t_nowfs, p.layer_modes))
-    lock.release()
+        lock.acquire()
+        with open(file_name, 'a') as f:
+            f.write("{},{},{},{},{}\n".format(target_idx, asterism_idx, screen_idx, list(t_nowfs), list(target_modes)))
+        data.append((target_idx, asterism_idx, screen_idx, t_nowfs, p.layer_modes))
+        lock.release()
 
-    print(test_str + " Complete")
+        print(test_str + " Complete")
+    else:
+        print(test_str + " Incomplete - Invalid cut out size")
 
 if __name__ == "__main__":
     main()

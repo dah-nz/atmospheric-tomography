@@ -6,7 +6,7 @@ import strehl
 import phase_screen
 import parameters
 
-file_name = "CLEAN_TEST_20230327_120334.data"
+file_name = "data/CLEAN_TEST_20230522_091138.data"
 
 target_section = "TEST_TARGET_POSITIONS"
 asterism_section = "TEST_ASTERISMS"
