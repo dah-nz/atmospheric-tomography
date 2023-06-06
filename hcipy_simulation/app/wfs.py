@@ -2,8 +2,6 @@ from hcipy import *
 import scipy.ndimage as ndimage
 import numpy as np
 
-OpticalDifferentiationWavefrontSensorOptics
-
 class SH_WFS():
     prefix = "sh_wfs_"
     name = "Shack-Hartmann"
@@ -31,6 +29,8 @@ class SH_WFS():
         return self.wfs(self.magnifier(wavefront))
     def propagate_past_dm(self, dm, wavefront):
         return dm(wavefront)
+    def camera_integrator(self, wavefront):
+        return self.wfs(self.magnifier(wavefront))
 
 class PYRAMID_WFS():
     prefix = "pyramid_wfs_"
