@@ -1,5 +1,5 @@
 import numpy as np
-from tomography import util
+from util import util
 
 class Beacon():
     """ 

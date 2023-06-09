@@ -21,6 +21,8 @@ class Cache():
         self._current_cache = {}
         self._cache_len = 0
         self._max_length = max_len
+        self._counter = 0
+        self._save_frequency = 10
 
     def __hashed_key(self, key, hash_key=None):
         if hash_key is not None:
@@ -55,17 +57,13 @@ class Cache():
                 if not os.path.exists(cache_file_path):
                     os.mkdir(cache_file_path)
                 cache_file = os.path.join(cache_file_path, cache_file_name)
-                if cache_file != self._open_cache_file:
-                    if self._open_cache_fileptr is not None:
-                        self._open_cache_fileptr.close()
-                        if self._cache_len != len(self._current_cache.items()):
-                            self._open_cache_fileptr = open(self._open_cache_file, 'wb')
-                            pickle.dump(self._current_cache, self._open_cache_fileptr)
-                            self._open_cache_fileptr.close()
-                    self._open_cache_fileptr = open(cache_file, "rb")
-                    self._open_cache_file = cache_file
-                    self._current_cache = pickle.load(self._open_cache_fileptr)
-                    self._cache_len = len(self._current_cache.items())
+                if cache_file != self._open_cache_file or self._counter >= self._save_frequency:
+                    self.__save()
+                    self.__load(cache_file)
+                    self._counter += 1
+                    print(self._counter)
+                    if self._counter >= self._save_frequency:
+                        self._counter = 0
                 return self._current_cache[key]
             except KeyError:
                 pass
@@ -113,4 +111,16 @@ class Cache():
         key = self.__hashed_key(key, hash_key=hash_key)
         self._current_cache[key] = data
 
+    def __save(self):
+        if self._open_cache_fileptr is not None:
+            self._open_cache_fileptr.close()
+            if self._cache_len != len(self._current_cache.items()):
+                self._open_cache_fileptr = open(self._open_cache_file, 'wb')
+                pickle.dump(self._current_cache, self._open_cache_fileptr)
+                self._open_cache_fileptr.close()
 
+    def __load(self, cache_file):
+        self._open_cache_fileptr = open(cache_file, "rb")
+        self._open_cache_file = cache_file
+        self._current_cache = pickle.load(self._open_cache_fileptr)
+        self._cache_len = len(self._current_cache.items())

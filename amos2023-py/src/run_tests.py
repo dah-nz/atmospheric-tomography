@@ -6,4 +6,6 @@
 
 # import tests.test_zernike
 
-import tests.test_idealwfs
+# import tests.test_idealwfs
+
+import tests.test_tomography

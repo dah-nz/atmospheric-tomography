@@ -15,8 +15,33 @@ class Zernike(Basis):
         super().__init__("zernike")
         self.__cache = Cache("basis_{}".format("zernike"), max_len=1000)
     def out(self, grid, order):
-        # Add one to order = order 0 == piston, etc..
-        return self.__zernike(np.shape(grid), order + 1) 
+        """
+        Get the Zernike polynomial for order + 1
+
+        Parameters
+        ----------
+        grid:
+            grid that defnies the dimension for the result
+        order:
+            polynomial order (note that order 0 is piston (normally the 1st order Zernike))
+        """
+        # Add one to order for order 0 == piston, etc..
+        return self.__zernike(np.shape(grid), order + 1)
+    def point(self, x, y, order):
+        """
+        Get the Zernike polynomial value at a single point
+
+        Parameters
+        ----------
+        x:
+            X position of point
+        y: 
+            Y position of point
+        order:
+            polynomial order (note that order 0 is piston (normally the 1st order Zernike))
+        """
+        return self.__zerni(x, y, order + 1)
+
     def __zernike(self, dim, order):
         """
         Function to calculate Zernike coefficients in a unit circle
@@ -56,7 +81,7 @@ class Zernike(Basis):
             zernicoef *= sq_distance <= sq_radius
             zernicoef = zernicoef[0:(dim[0]), 0:(dim[1])]
 
-            self.__cache.add(order, zernicoef, dim)
+            self.__cache.force_add(order, zernicoef, dim)
             return zernicoef
         else:   
             return data
