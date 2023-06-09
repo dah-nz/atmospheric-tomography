@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 
-import phase_screen
+from tomography import phase_screen
 
 grid = np.zeros((256, 256))
 

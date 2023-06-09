@@ -2,7 +2,9 @@ import numpy as np
 import scipy.io as sio
 from scipy.signal import convolve2d
 
-import pickle, os
+from util.cache import Cache
+
+import os
 
 class Kolmogorov():
     """ 
@@ -23,74 +25,15 @@ class Kolmogorov():
         D_r0:  float
             D/r0 value, determines severity of turbulence in output phase screens#
         """
-        # Set up phase screen
-        self._open_cache_file = None
-        self._cache_file_ptr = None
-        self._kolmogorov_cache = {}
-        self._cache_len = 0
-        self._phase_data_cache = None
-        self._seed_range = 256
-
         self._grid = np.zeros_like(grid)
         self._D_r0 = D_r0
         self.type = type
 
-    def __check_cache(self, seed):
-        """
-        Check if cache has Kolmgorov screen for the seed parameter
+        grid_rows = np.shape(grid)[0]
+        grid_cols = np.shape(grid)[1]
+        self.__cache = Cache("kolmogorov_{}".format(hash((grid_rows, grid_cols, D_r0))))
 
-        Parameters
-        ----------
-        seed: int
-            Checks cache for seed
-
-        Output
-        ------
-        phase screen with Kolomgorov turbulence characteristics, or None if it is not in cache
-        """
-        if seed is not None:
-            try:
-                seed_range_min = seed - (seed % self._seed_range)
-                seed_range_max = seed_range_min + self._seed_range - 1
-                d = os.getcwd()
-                grid_rows = np.shape(self._grid)[0]
-                grid_cols = np.shape(self._grid)[1]
-                cache_file_name = "{}x{}_{}_{}_{}.data".format(grid_rows, grid_cols, self._D_r0, seed_range_min, seed_range_max)
-                cache_file = os.path.join(d, 'data', 'kolmogorov', cache_file_name)
-                if cache_file != self._open_cache_file:
-                    if self._cache_file_ptr is not None:
-                        self._cache_file_ptr.close()
-                        if self._cache_len != len(self._kolmogorov_cache.items()):
-                            self._cache_file_ptr = open(self._open_cache_file, 'wb')
-                            pickle.dump(self._kolmogorov_cache, self._cache_file_ptr)
-                            self.cache_file_ptr.close()
-                    self._cache_file_ptr = open(cache_file, "rb")
-                    self._open_cache_file = cache_file
-                    self._kolmogorov_cache = pickle.load(self._cache_file_ptr)
-                    self._cache_len = len(self._kolmogorov_cache.items())
-                return self._kolmogorov_cache[seed]
-            except KeyError:
-                pass
-            except EOFError:
-                pass
-            except FileNotFoundError:
-                self._cache_file_ptr = open(cache_file, "wb")
-                self._open_cache_file = cache_file
-                self._kolmogorov_cache = {}
-        return None
-    
-    def __add_to_cache(self, screen, seed):
-        """
-        Add Kolmogorov screen to the cache
-
-        Parameters
-        ----------
-        screen: phase screen
-            Screen to add to cache
-        seed: int
-            Seed to associate with screen
-        """
-        self._kolmogorov_cache[seed] = screen
+        self._phase_data_cache = None
 
     def get(self, seed=None):
         """
@@ -104,16 +47,16 @@ class Kolmogorov():
         Output
         ------
         phase screen with Kolomgorov turbulence characteristics
-        
-
         """
-        screen = self.__check_cache(seed)
+        screen = None
+        if seed is not None:
+            screen = self.__cache.check(seed)
 
         if screen is None:
             screen = self.__kolmogorov(seed)
 
         if seed is not None:
-            self.__add_to_cache(screen, seed)
+            self.__cache.add(seed, screen)
 
         return screen
 
@@ -258,43 +201,51 @@ class Kolmogorov():
         
         return phase
 
-""" Create a distortion/aberration phase screen from a set of coefficients and basis functions
+def fromCoefficients(basis, input_screen, coefficients):
+    """ Create a distortion/aberration phase screen from a set of coefficients and basis functions
 
-    Inputs
-    ------
-    basis           Function that generates a set of basis functions
-    coefficients    Coefficients for each basis function in the desired phase screen
-    input_screen    Phase screen that determines the size of the resulting phase screen
+        Inputs
+        ------
+        basis:
+            Class that interfaces to a set of basis functions
+        input_screen:
+            Phase screen that determines the size of the resulting phase screen
+        coefficients:
+            Coefficients for each basis function in the desired phase screen
 
-    Outputs
-    ------
-    phase           Phase screen created from set of basis functions and coefficients       
+        Outputs
+        ------
+        phase:
+            Phase screen created from set of basis functions and coefficients       
 
-"""
-def fromCoefficients(basis, coefficients, input_screen):
+    """
     phase = np.zeros_like(input_screen, dtype=np.float64)
     for m, z0 in enumerate(coefficients):
-        phase += np.float64(z0 * basis(input_screen, m))
+        phase += np.float64(z0 * basis.out(input_screen, m))
     return phase
 
-""" Calculate the coefficients for a distortion/aberration phase screen using a set of basis functions
+def getCoefficients(basis, input_screen, num_coeff):
+    """ Calculate the coefficients for a distortion/aberration phase screen using a set of basis functions
 
-    Inputs
-    ------
-    input_screen     Input phase for calculating coefficients
-    basis           Function that generates a set of basis functions
-    num_coeff       Number of coefficietns to calculate
+        Inputs
+        ------
+        basis:
+            Class that interfaces to a set of basis functions
+        input_screen:
+            Input phase for calculating coefficients
+        num_coeff:
+            Number of coefficietns to calculate
 
-    Outputs
-    ------
-    coefficients    Coefficients for each basis function in the input phase screen
+        Outputs
+        ------
+        coefficients:
+            Coefficients for each basis function in the input phase screen
 
-"""
-def getCoefficients(input_screen, basis, num_coeff):
+    """
     # Generate basis functions for each mode
     z = [0] * num_coeff
     for n in range(num_coeff):
-        z[n] = np.float64(basis(input_screen, n))
+        z[n] = np.float64(basis.out(input_screen, n))
 
     # Do 2D dot product of each basis function mode with the input phase screen
     return [np.sum(input_screen * z[n], dtype=np.float64)/np.sum(z[n] * z[n]) for n in range(0, num_coeff)]
