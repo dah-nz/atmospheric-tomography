@@ -39,4 +39,8 @@ plt.imshow(output)
 plt.figure()
 plt.imshow(t_actual)
 
+plt.figure()
+plt.plot(coeffs_calc, 'r-')
+plt.plot(phase_screen.getCoefficients(Z, t_actual, n_coeffs), 'k-')
+
 plt.show()

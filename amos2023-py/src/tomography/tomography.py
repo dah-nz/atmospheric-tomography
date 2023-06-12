@@ -51,12 +51,12 @@ class Tomography():
 
         metapupil_radius = {}
         for a in self.altitudes:
-            metapupil_radius[a] = self.__metapupil_radius(a, beacons, self.diameter)
+            metapupil_radius[a] = self._metapupil_radius(a, beacons, self.diameter)
 
         def proj(beacon, altitude):
             x, y = beacon.position(altitude)
             r = metapupil_radius[altitude]
-            P = self.__projectionMatrix((x/r, y/r), self.diameter/r)
+            P = self._projectionMatrix((x/r, y/r), self.diameter/r)
             return P.T
 
         A = np.concatenate([np.concatenate([proj(beacon, altitude) for beacon in beacons], 0) for altitude in self.altitudes], 1)
@@ -69,7 +69,7 @@ class Tomography():
         target_coeffs = np.matmul(T, W)
 
         return target_coeffs
-    def __metapupil_radius(self, altitude, beacons, diameter):
+    def _metapupil_radius(self, altitude, beacons, diameter):
         """
         Calculate radius of metapupil
 
@@ -89,7 +89,7 @@ class Tomography():
                 r_outer = rA                        
         r_outer += (diameter / 2)              # Calculate extent of footprint projected onto layer (diameter is of telescope aperture)
         return r_outer
-    def __projectionMatrix(self, location, diameter):
+    def _projectionMatrix(self, location, diameter):
         """
         Generate projection matrix given a circular portion of a unit circle
 
@@ -109,7 +109,7 @@ class Tomography():
 
         gridSize = int(5 * self.nModes)
 
-        unitGrid = self.__getGrid(gridSize)
+        unitGrid = self._getGrid(gridSize)
 
         # Generate G matrix (unitgrid)
         G = np.zeros((self.nModes, gridSize))
@@ -119,8 +119,8 @@ class Tomography():
         Ginv = np.linalg.pinv(G)
 
         # Transform unitgrid to subsection
-        subGrid = self.__scaleGrid(unitGrid, diameter)
-        subGrid = self.__translateGrid(subGrid, location)
+        subGrid = self._scaleGrid(unitGrid, diameter)
+        subGrid = self._translateGrid(subGrid, location)
 
         # Generate Y matrix (for shifted subsection)
         Y = np.zeros((self.nModes, gridSize))
@@ -137,16 +137,27 @@ class Tomography():
 
         return P
 
-    def __getGrid(self, N):
+    def _getGrid(self, N):
+        """
+        Get a grid over a unit circle for generating projection matrices 
+
+        Parameters
+        ----------
+        N:
+            Number of points in the grid
+            
+        Return
+        ------
+        New unit grid
+        """
         radius = [((n+1)/N)**0.3 for n in range(N)]
         angle = [np.pi*np.pi*N*r for r in radius]
         grid = [pol2cart(r, t) for r, t in zip(radius, angle)]
         return grid
 
-    # Translate points on a grid
-    def __translateGrid(self, grid, shift):
+    def _translateGrid(self, grid, shift):
         """
-        Translate grid by shift amount
+        Translate points on a grid by shift amount
 
         Parameters
         ----------
@@ -161,10 +172,9 @@ class Tomography():
         """
         return [(x + shift[0], y - shift[1]) for x, y in grid]
 
-    # Scale points on a grid
-    def __scaleGrid(self, grid, scale):
+    def _scaleGrid(self, grid, scale):
         """
-        Scale grid by some scaling factor
+        Scale points on a grid by some scaling factor
 
         Parameters
         ----------
