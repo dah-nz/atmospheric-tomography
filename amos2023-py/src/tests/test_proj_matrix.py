@@ -46,7 +46,7 @@ modes = test_modes[0]
 errors = []
 for loc in locs:
     P = T._projectionMatrix(tuple(loc), scale)
-    P = np.transpose(P)
+    # P = np.transpose(P)
     mode_screen = np.zeros((size, size))
     mode_screen = phase_screen.fromCoefficients(Z, mode_screen, modes)
     sub_modes = np.matmul(P, modes)
@@ -68,7 +68,7 @@ plt.tight_layout()
 location = locs[2]
 modes = test_modes[0]
 P = T._projectionMatrix(tuple(location), scale)
-P = np.transpose(P)
+# P = np.transpose(P)
 # Calculate subpupils
 mode_screen = np.zeros((size, size))
 mode_screen = phase_screen.fromCoefficients(Z, mode_screen, modes)

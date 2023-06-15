@@ -49,15 +49,16 @@ class Tomography():
         """
         # generate A and T matrices from pMatrices and tMatrix outputs for each layer
 
-        metapupil_radius = {}
+        metapupil_d = {}
         for a in self.altitudes:
-            metapupil_radius[a] = self._metapupil_radius(a, beacons, self.diameter)
+            metapupil_d[a] = self._metapupil_diameter(a, beacons, self.diameter)
 
         def proj(beacon, altitude):
             x, y = beacon.position(altitude)
-            r = metapupil_radius[altitude]
-            P = self._projectionMatrix((x/r, y/r), self.diameter/r)
-            return P.T
+            d = metapupil_d[altitude]
+            r = d/2
+            P = self._projectionMatrix((x/r, y/r), d)
+            return P
 
         A = np.concatenate([np.concatenate([proj(beacon, altitude) for beacon in beacons], 0) for altitude in self.altitudes], 1)
         T = np.concatenate([proj(target, altitude) for altitude in self.altitudes], 1)
@@ -69,7 +70,7 @@ class Tomography():
         target_coeffs = np.matmul(T, W)
 
         return target_coeffs
-    def _metapupil_radius(self, altitude, beacons, diameter):
+    def _metapupil_diameter(self, altitude, beacons, diameter):
         """
         Calculate radius of metapupil
 
@@ -88,7 +89,7 @@ class Tomography():
             if rA > r_outer:
                 r_outer = rA                        
         r_outer += (diameter / 2)              # Calculate extent of footprint projected onto layer (diameter is of telescope aperture)
-        return r_outer
+        return r_outer * 2
     def _projectionMatrix(self, location, diameter):
         """
         Generate projection matrix given a circular portion of a unit circle
@@ -134,8 +135,7 @@ class Tomography():
         # Remove small values
         eps = 1e-12
         P = (np.abs(P) > eps) * P
-
-        return P
+        return P.T
 
     def _getGrid(self, N):
         """

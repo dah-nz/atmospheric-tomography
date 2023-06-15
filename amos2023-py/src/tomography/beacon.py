@@ -79,12 +79,20 @@ class Beacon():
         x, y = self.position(altitude)
         # Convert location to pixel position
         screen_dim = max(np.shape(screen))
+        # print("screen dim: {}".format(screen_dim))
         cut_out_dim = int(screen_dim * (diameter / screen_size) + 0.5)
-        pix_x = int((x * screen_dim / screen_size) + ( screen_dim / 2))
-        pix_y = int((y * screen_dim / screen_size) + ( screen_dim / 2))
+        # print("cut out dim: {}".format(cut_out_dim))
+        pix_x = int((x * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
+        # print("x pixel: {}".format(pix_x))
+        pix_y = int((y * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
+        # print("y pixel: {}".format(pix_y))
         r = int(cut_out_dim / 2 + 0.5)
+        # print("r: {}".format(r))
+        # print("initial_screen_size: {}".format(np.shape(screen)))
         phase = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
+        # print("cut out size: {}".format(np.shape(phase)))
         mask = util.circle(r, 2 * r)
+        # print("mask size: {}".format(np.shape(mask)))
         return phase * mask
     def step(self, dt):
         """
