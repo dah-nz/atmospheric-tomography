@@ -5,13 +5,14 @@ from util.util import *
 class Tomography():
     """
     Class that implements tomography algorithm
+    This class should not have direct knowledge of phase screen information at all
 
     Methods
     -------
     run:
         runs tomographic algorithm using beacon coefficients, and positions of guide beacons and target
     """
-    def __init__(self, layers, basis, modes, diameter):
+    def __init__(self, layers, basis, diameter, r0, n_modes, aperture_size=256):
         """
         Parameters
         ----------
@@ -23,12 +24,46 @@ class Tomography():
             number of modes to do tomography over
         diameter:
             telescope diameter
+        r0:
+            fried parameter for atmosphere
+        aperture_size:
+            size of telescope aperture in pixels 
         """
         self.altitudes = layers
         self.basis = basis
-        self.nModes = modes
-        self.projCache = Cache("ProjectionMatrices_{}_{}".format(basis.name, modes))
-        self.diameter = diameter
+        self.n_modes = n_modes
+        self.proj_cache = Cache("ProjectionMatrices_{}_{}".format(basis.name, n_modes))
+        self.D = diameter
+        self.aperture_size = aperture_size
+        self.r0 = r0
+
+    def step(self, dt):
+        """
+        Steps all beacons (target and guidestars) for the next simulation
+
+        Parameters
+        ----------
+        dt:
+            Timestep
+        """
+        raise NotImplementedError()
+    
+    def set_asterism(self, asterism):
+        """
+        Sets the guidestar asterism for running tomography
+        Also calculates the layer grid sizes for generating phase screens
+        
+        Parameters
+        ----------
+        asterism:
+            List of beacons that define an asterism of guidestars
+        """
+        self.asterism = asterism
+        mD = self._metapupil_diameter(self.asterism)
+        self.metapupil_diameters = [mD[a] for a in self.altitudes]
+        layer_pixels = [int(d * self.aperture_size + 0.5) for d in self.metapupil_diameters]
+        self.layer_grids = [np.zeros((px, px)) for px in layer_pixels]
+
     def run(self, beacons, target, beacon_coeffs):
         """
         Runs tomographic algorithm
@@ -49,9 +84,7 @@ class Tomography():
         """
         # generate A and T matrices from pMatrices and tMatrix outputs for each layer
 
-        metapupil_d = {}
-        for a in self.altitudes:
-            metapupil_d[a] = self._metapupil_diameter(a, beacons, self.diameter)
+        metapupil_d = self._metapupil_diameter(beacons)
 
         def proj(beacon, altitude):
             x, y = beacon.position(altitude)
@@ -64,32 +97,35 @@ class Tomography():
         T = np.concatenate([proj(target, altitude) for altitude in self.altitudes], 1)
     
         L = np.array(beacon_coeffs)
-        print(np.shape(L))
 
         W = np.matmul(np.linalg.pinv(A), L)
         target_coeffs = np.matmul(T, W)
 
         return target_coeffs
-    def _metapupil_diameter(self, altitude, beacons, diameter):
+    def _metapupil_diameter(self, beacons):
         """
-        Calculate radius of metapupil
+        Calculate diameters of metapupil at each predefined layer altitude 
 
         Parameters
         ----------
-        altitude:
-            Altitude of layer (metres)
         beacons:
             Position information of beacons
-        diameter:
-            Telescope Diameter (metres)
+
+        Return
+        ------
+        diameters:
+            Dictionary of metapupil diameters, keys are the altitudes 
         """
-        r_outer = 0                            # outer radius of metapupil
-        for b in beacons:
-            rA = altitude * np.tan(b.gamma)         # distance of guide star centre from azimuth
-            if rA > r_outer:
-                r_outer = rA                        
-        r_outer += (diameter / 2)              # Calculate extent of footprint projected onto layer (diameter is of telescope aperture)
-        return r_outer * 2
+        d = {}
+        for a in self.altitudes:
+            r_outer = 0                            # outer radius of metapupil
+            for b in beacons:
+                rA = a * np.tan(b.gamma)         # distance of guide star centre from azimuth
+                if rA > r_outer:
+                    r_outer = rA                        
+            r_outer += (self.D / 2)              # Calculate extent of footprint projected onto layer (diameter is of telescope aperture)
+            d[a] = r_outer * 2
+        return d
     def _projectionMatrix(self, location, diameter):
         """
         Generate projection matrix given a circular portion of a unit circle
@@ -108,13 +144,13 @@ class Tomography():
         """
         # pM = self.projCache.check()
 
-        gridSize = int(5 * self.nModes)
+        gridSize = int(5 * self.n_modes)
 
         unitGrid = self._getGrid(gridSize)
 
         # Generate G matrix (unitgrid)
-        G = np.zeros((self.nModes, gridSize))
-        for j in range(self.nModes):
+        G = np.zeros((self.n_modes, gridSize))
+        for j in range(self.n_modes):
             for i, (x, y) in enumerate(unitGrid):
                 G[j, i] = self.basis.point(x, y, j)
         Ginv = np.linalg.pinv(G)
@@ -124,8 +160,8 @@ class Tomography():
         subGrid = self._translateGrid(subGrid, location)
 
         # Generate Y matrix (for shifted subsection)
-        Y = np.zeros((self.nModes, gridSize))
-        for j in range(self.nModes):
+        Y = np.zeros((self.n_modes, gridSize))
+        for j in range(self.n_modes):
             for i, (x, y) in enumerate(subGrid):
                 Y[j, i] = self.basis.point(x, y, j)
         

@@ -114,6 +114,9 @@ class Kolmogorov():
         -------
         phase_screen    the interpolated phase screen with the edges removed
         """
+        
+        
+        # Create instance of a random variable, so as to not change global random state
         rng = np.random.default_rng(seed)
         if self._phase_data_cache is None:
             d = os.getcwd()
