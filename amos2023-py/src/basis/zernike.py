@@ -42,6 +42,8 @@ class Zernike(Basis):
         order:
             polynomial order (note that order 0 is piston (normally the 1st order Zernike))
         """
+        x = x / (np.shape(grid)[0] / 2) - 1
+        y = y / (np.shape(grid)[1] / 2) - 1
         return self.__zerni(x, y, order + 1)
         
 

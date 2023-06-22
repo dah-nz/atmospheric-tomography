@@ -2,12 +2,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from tomography import phase_screen, beacon, tomography
-from basis import zernike
+from basis import zernike, DCT
 from util import util
 
 beacon_angle = 30           # arcseconds
 aperture_size = 256         # pixels
 telescope_diameter = 1.0    # m
+r_0 = 0.05                  # m
 
 # generate asterism
 beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
@@ -18,12 +19,13 @@ aperture = np.zeros((aperture_size, aperture_size))
 # Calculate metapupil radius
 layers = [2500, 5000]
 n_coeffs = 20
-Z = zernike.Zernike()
+# Z = zernike.Zernike(n_coeffs)
+Z = DCT.DCT(n_coeffs)
 
-T = tomography.Tomography(layers, Z, n_coeffs, telescope_diameter)
+T = tomography.Tomography(layers, Z, telescope_diameter, r_0, n_coeffs, aperture_size)
 
 # find maximum extent of 
-metapupil_d = T._metapupil_diameter(beacons, telescope_diameter)
+metapupil_d = T._metapupil_diameter(beacons)
 r0 = metapupil_d[layers[0]]
 r1 = metapupil_d[layers[1]]
 
@@ -39,19 +41,24 @@ proj_m = T._projectionMatrix((0,0), r0)
 # proj_m = proj_m.T
 proj_m = np.linalg.pinv(proj_m)
 screen_modes_0 = np.matmul(proj_m, target_modes_0)
-screen0 = phase_screen.fromCoefficients(Z, grid0, screen_modes_0)
+screen0 = Z.compose(grid0, screen_modes_0)
 
-p = phase_screen.getCoefficients(Z, target.cut_out(telescope_diameter, layers[0], screen0, r0), n_coeffs)
+p = Z.decompose(target.cut_out(telescope_diameter, layers[0], screen0, r0))
+plt.figure()
+plt.title("Target Coefficients")
 plt.plot(p)
 
 plt.figure()
+plt.title("Layer 1 Phase Screen")
 plt.imshow(screen0)
 
 plt.figure()
-plt.imshow(phase_screen.fromCoefficients(Z, aperture, p))
+plt.title("Target Phase Screen at Layer 1")
+plt.imshow(Z.compose(aperture, p))
 
 plt.figure()
-p_recon = phase_screen.fromCoefficients(Z, screen0, np.matmul(proj_m, p))
+plt.title("Difference between Reconstructed and actual at layer 1")
+p_recon = Z.compose(screen0, np.matmul(proj_m, p))
 plt.imshow(screen0 - p_recon)
 
 target_modes_1 = 20 * [0]
@@ -60,23 +67,25 @@ proj_m1 = T._projectionMatrix((0,0), r1)
 # proj_m1 = proj_m1.T
 proj_m1 = np.linalg.pinv(proj_m1)
 screen_modes_1 = np.matmul(proj_m1, target_modes_1)
-screen1 = phase_screen.fromCoefficients(Z, grid1, screen_modes_1)
+screen1 = Z.compose(grid1, screen_modes_1)
 plt.figure()
+plt.title("Layer 2 Phase Screen")
 plt.imshow(screen1)
 
 for a, s, m in zip(layers, [screen0, screen1], [r0, r1]):
     print("{}, {}, {}".format(a, np.shape(s), m))
     for b in beacons:
         plt.figure()
+        plt.title("Guidestar Wavefront")
         plt.imshow(b.cut_out(telescope_diameter, a, s, m))
 
-beacon_coeffs = [np.sum([phase_screen.getCoefficients(Z, b.cut_out(telescope_diameter, a, s, m), n_coeffs) for a, s, m in zip(layers, [screen0, screen1], [r0, r1])], 0) for b in beacons]
+beacon_coeffs = [np.sum([Z.decompose(b.cut_out(telescope_diameter, a, s, m)) for a, s, m in zip(layers, [screen0, screen1], [r0, r1])], 0) for b in beacons]
 beacon_coeffs = np.reshape(beacon_coeffs, (len(beacons) * n_coeffs, -1))
 print(beacon_coeffs)
 
 coeffs_calc = T.run(beacons, target, beacon_coeffs)
 
-output = phase_screen.fromCoefficients(Z, aperture, coeffs_calc)
+output = Z.compose(aperture, coeffs_calc)
 
 t_actual0 = target.cut_out(1.0, layers[0], screen0, r0)
 t_actual1 = target.cut_out(1.0, layers[1], screen1, r1)
@@ -92,6 +101,10 @@ plt.imshow(t_actual - output)
 
 plt.figure()
 plt.plot(coeffs_calc, 'r-')
-plt.plot(phase_screen.getCoefficients(Z, t_actual, n_coeffs), 'k-')
+plt.plot(Z.decompose(t_actual), 'k-')
+
+plt.figure()
+grid = T._getGrid(1024)
+plt.scatter([x for x, _  in grid], [y for _, y in grid])
 
 plt.show()

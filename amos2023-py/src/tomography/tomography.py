@@ -157,10 +157,16 @@ class Tomography():
         for j in range(self.n_modes):
             for i, (x, y) in enumerate(unitGrid):
                 G[j, i] = self.basis.at_point(x, y, screen, j)
-        Ginv = np.linalg.pinv(G)
 
         # Transform unitgrid to subsection
-        subGrid = self._scaleGrid(unitGrid, diameter)
+        if diameter > 1:
+            D = 1 / diameter
+            G_metapupil = False
+        else:
+            D = diameter
+            G_metapupil = True
+        
+        subGrid = self._scaleGrid(unitGrid, D)
         subGrid = self._translateGrid(subGrid, location)
 
         # Generate Y matrix (for shifted subsection)
@@ -168,9 +174,16 @@ class Tomography():
         for j in range(self.n_modes):
             for i, (x, y) in enumerate(subGrid):
                 Y[j, i] = self.basis.at_point(x, y, screen, j)
+
+        if G_metapupil:
+            Ginv = np.linalg.pinv(G)
+            Ymat = Y
+        else:
+            Ginv = np.linalg.pinv(Y)
+            Ymat = G
         
         # Calculate P matrix
-        P = np.matmul(Y, Ginv)
+        P = np.matmul(Ymat, Ginv)
 
         # Remove small values
         eps = 1e-12
@@ -190,9 +203,20 @@ class Tomography():
         ------
         New unit grid
         """
-        radius = [((n+1)/N)**0.3 for n in range(N)]
-        angle = [np.pi*np.pi*N*r for r in radius]
-        grid = [pol2cart(r, t) for r, t in zip(radius, angle)]
+        rng = np.random.default_rng(0)
+        radius = self.aperture_size / 2
+        limit = radius * radius
+
+        grid = []
+        while len(grid) < N:
+            x = rng.integers(0, self.aperture_size)
+            y = rng.integers(0, self.aperture_size)
+            if (x-radius)**2 + (y-radius)**2 <= limit:
+                grid.append((x, y))
+
+        # radius = [((n+1)/N)**0.3 for n in range(N)]
+        # angle = [np.pi*np.pi*N*r for r in radius]
+        # grid = [pol2cart(r, t) for r, t in zip(radius, angle)]
         return grid
 
     def _translateGrid(self, grid, shift):

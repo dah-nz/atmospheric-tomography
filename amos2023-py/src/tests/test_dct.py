@@ -11,16 +11,28 @@ Z = DCT(n)
 
 for z in np.arange(0, n):
     screen0 = Z.out(grid, z)
-    [X, Y] = np.meshgrid(np.linspace(-1,1,32, endpoint=False), np.linspace(-1,1,32, endpoint=False))
+    [X, Y] = np.meshgrid(np.linspace(0,n,32, endpoint=False), np.linspace(0,n,32, endpoint=False))
     value = Z.at_point(X, Y, screen0, z)
 
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-    fig.suptitle('Start Test')
+    fig.suptitle('Mode Test {}'.format(z))
 
     ax1.imshow(value)
     ax2.imshow(screen0)
     ax3.imshow(screen0 - value)
 
-print(Z.at_point(-1.2, 0.6, screen0, 4))
+
+z = np.random.normal(size=(n, 1))
+screen = Z.compose(grid, z)
+o = Z.decompose(screen)
+screenr = Z.compose(grid, o)
+
+fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+fig.suptitle('Compose/Decompose Test')
+
+ax1.imshow(screen)
+ax2.plot(z,'k-')
+ax2.plot(o,'r-')
+ax3.imshow(screenr)
     
 plt.show()
