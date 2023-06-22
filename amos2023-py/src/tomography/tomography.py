@@ -146,6 +146,8 @@ class Tomography():
         """
         # pM = self.projCache.check()
 
+        screen = np.zeros((self.aperture_size, self.aperture_size))
+
         gridSize = int(GRID_MULTIPLIER * self.n_modes)
 
         unitGrid = self._getGrid(gridSize)
@@ -154,7 +156,7 @@ class Tomography():
         G = np.zeros((self.n_modes, gridSize))
         for j in range(self.n_modes):
             for i, (x, y) in enumerate(unitGrid):
-                G[j, i] = self.basis.at_point(x, y, j)
+                G[j, i] = self.basis.at_point(x, y, screen, j)
         Ginv = np.linalg.pinv(G)
 
         # Transform unitgrid to subsection
@@ -165,7 +167,7 @@ class Tomography():
         Y = np.zeros((self.n_modes, gridSize))
         for j in range(self.n_modes):
             for i, (x, y) in enumerate(subGrid):
-                Y[j, i] = self.basis.at_point(x, y, j)
+                Y[j, i] = self.basis.at_point(x, y, screen, j)
         
         # Calculate P matrix
         P = np.matmul(Y, Ginv)

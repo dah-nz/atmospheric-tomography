@@ -1,13 +1,12 @@
 import numpy as np
 
 class Basis():
-    def __init__(self, max_coeffs, dim, name=""):
+    def __init__(self, max_coeffs, name=""):
         self.name = name
         self.N = max_coeffs
-        self.dim = dim
     def out(self, grid, order):
         raise NotImplementedError()
-    def at_point(self, x, y, order):
+    def at_point(self, x, y, grid, order):
         raise NotImplementedError()
     def compose(self, screen, coefficients):
         """ Compose a distortion/aberration phase screen from a set of coefficients and basis functions
