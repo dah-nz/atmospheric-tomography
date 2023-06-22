@@ -2,6 +2,8 @@ import numpy as np
 from util.cache import Cache
 from util.util import *
 
+GRID_MULTIPLIER = 8
+
 class Tomography():
     """
     Class that implements tomography algorithm
@@ -61,7 +63,7 @@ class Tomography():
         self.asterism = asterism
         mD = self._metapupil_diameter(self.asterism)
         self.metapupil_diameters = [mD[a] for a in self.altitudes]
-        layer_pixels = [int(d * self.aperture_size + 0.5) for d in self.metapupil_diameters]
+        layer_pixels = [int(d/self.D * self.aperture_size + 0.5) for d in self.metapupil_diameters]
         self.layer_grids = [np.zeros((px, px)) for px in layer_pixels]
 
     def run(self, beacons, target, beacon_coeffs):
@@ -144,7 +146,7 @@ class Tomography():
         """
         # pM = self.projCache.check()
 
-        gridSize = int(5 * self.n_modes)
+        gridSize = int(GRID_MULTIPLIER * self.n_modes)
 
         unitGrid = self._getGrid(gridSize)
 
@@ -152,7 +154,7 @@ class Tomography():
         G = np.zeros((self.n_modes, gridSize))
         for j in range(self.n_modes):
             for i, (x, y) in enumerate(unitGrid):
-                G[j, i] = self.basis.point(x, y, j)
+                G[j, i] = self.basis.at_point(x, y, j)
         Ginv = np.linalg.pinv(G)
 
         # Transform unitgrid to subsection
@@ -163,7 +165,7 @@ class Tomography():
         Y = np.zeros((self.n_modes, gridSize))
         for j in range(self.n_modes):
             for i, (x, y) in enumerate(subGrid):
-                Y[j, i] = self.basis.point(x, y, j)
+                Y[j, i] = self.basis.at_point(x, y, j)
         
         # Calculate P matrix
         P = np.matmul(Y, Ginv)

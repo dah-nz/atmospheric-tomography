@@ -49,17 +49,16 @@ class TomographyController():
 
         set_up = zip(self.T.altitudes, screens, self.T.metapupil_diameters)
         set_up = list(set_up)
-        beacon_coeffs = [np.sum([phase_screen.getCoefficients(self.T.basis, b.cut_out(self.T.D, a, s, m), self.N) for a, s, m in set_up], 0) for b in asterism]
+        beacon_coeffs = [np.sum([self.T.basis.decompose(b.cut_out(self.T.D, a, s, m)) for a, s, m in set_up], 0) for b in asterism]
         beacon_coeffs = np.reshape(beacon_coeffs, (len(asterism) * self.N, -1))
 
         calculated_coeffs = self.T.run(asterism, target, beacon_coeffs)
-
-        reconstructed_screen = phase_screen.fromCoefficients(self.T.basis, self.aperture_grid, calculated_coeffs)
+        reconstructed_screen = self.T.basis.compose(self.aperture_grid, calculated_coeffs)
 
         ### END TIMING HERE
 
         actual_screen = np.sum([target.cut_out(self.T.D, a, s, md) for a, s, md in set_up], 0)
-        actual_coeffs = phase_screen.getCoefficients(self.T.basis, actual_screen, self.N)
+        actual_coeffs = self.T.basis.decompose(actual_screen)
 
         return actual_screen, reconstructed_screen, actual_coeffs, calculated_coeffs
 

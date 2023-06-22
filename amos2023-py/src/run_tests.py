@@ -10,4 +10,6 @@
 
 # import tests.test_proj_matrix
 
-import tests.test_tomography
+# import tests.test_tomography
+
+import tests.test_dct

@@ -13,8 +13,8 @@ plt.imshow(screen)
 
 from basis import zernike
 
-Z = zernike.Zernike()
 n = 20
+Z = zernike.Zernike(n)
 
 for m in range(n):
 
@@ -23,8 +23,8 @@ for m in range(n):
 
     c = n * [0.0]
     c[m] = 1.0
-    screen = phase_screen.fromCoefficients(Z, grid, c)
-    c_out = phase_screen.getCoefficients(Z, screen, n)
+    screen = Z.compose(grid, c)
+    c_out = Z.decompose(Z, screen)
 
     ax1.plot(c, 'k-')
     ax1.plot(c_out, 'r-')

@@ -11,8 +11,8 @@ class Zernike(Basis):
     -------
     out(grid, order)    Return nth-order Zernike polynomial on a grid
     """
-    def __init__(self):
-        super().__init__("zernike")
+    def __init__(self, max_coeffs):
+        super().__init__(max_coeffs, "zernike")
         self.__cache = Cache("basis_{}".format("zernike"), max_len=1000)
     def out(self, grid, order):
         """
@@ -27,7 +27,7 @@ class Zernike(Basis):
         """
         # Add one to order for order 0 == piston, etc..
         return self.__zernike(np.shape(grid), order + 1)
-    def point(self, x, y, order):
+    def at_point(self, x, y, order):
         """
         Get the Zernike polynomial value at a single point
 

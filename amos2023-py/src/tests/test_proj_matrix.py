@@ -5,7 +5,7 @@ from tomography import tomography, phase_screen
 from util import util
 from basis import zernike
 
-Z = zernike.Zernike()
+Z = zernike.Zernike(50)
 T = tomography.Tomography([0], Z, 50, 1.0)
 
 n_points = 250
