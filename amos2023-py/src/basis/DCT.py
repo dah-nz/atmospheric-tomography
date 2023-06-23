@@ -30,10 +30,9 @@ class DCT(Basis):
         order:
             discrete cosine coefficient order
         """
-        c = [0] * (self.N * self.N)
+        c = np.array([0] * (self.N * self.N))
         c[order] = 1
-        c = np.reshape(c, (self.N, self.N))
-        return idctn(c, s=np.shape(grid))
+        return self.compose(grid, c)
     def at_point(self, x, y, grid, order):
         """
         Get the Discrete Cosine Transform value at a single point within a unit circle
