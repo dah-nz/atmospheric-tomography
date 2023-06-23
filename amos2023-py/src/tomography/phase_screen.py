@@ -3,6 +3,7 @@ import scipy.io as sio
 from scipy.signal import convolve2d
 
 from util.cache import Cache
+from util import util
 
 import os
 
@@ -97,6 +98,8 @@ class Kolmogorov():
         screen = scaled_screen * (self._D_r0 ** (5/6))
 
         screen = np.array(screen, dtype=self.type)
+        # REMOVE DC OFFSET
+        screen -= np.average(screen, weights=util.circle(size_chopped/2, size_chopped))
         
         return screen
 

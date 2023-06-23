@@ -28,7 +28,7 @@ class Zernike(Basis):
         # Add one to order as zernike function is 1 indexed
         # Add one more to skip piston (DC) mode
 
-        return self.__zernike(np.shape(grid), order + 2)
+        return self.__zernike(np.shape(grid), order + 1)
     def at_point(self, x, y, grid, order):
         """
         Get the Zernike polynomial value at a single point within a unit circle

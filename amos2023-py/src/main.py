@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from itertools import combinations
 
 from skimage.metrics import structural_similarity, mean_squared_error
 
@@ -7,45 +8,82 @@ from basis import DCT, zernike
 from tomography import tomography, beacon, controller
 from util import util
 
-aperture_size = 256     # number of pixels at telescope aperture
-D = 0.6                 # telescope diameter (m)
-r0 = 0.05               # Fried parameter (poor seeing = 5cm, Excellent = 20cm) (m)
+# BASIC PARAMETERS
+aperture_size = 256             # number of pixels at telescope aperture
+D =             0.6             # telescope diameter (m)
+r0 =            0.05            # Fried parameter (poor seeing = 5cm, Excellent = 20cm) (m)
+layers =        [1000, 8000]    # layer altitudes (m)
+retests =       10              # number of time to retest each
 
-layers = [2500, 5000]   # layer altitudes (m)
-n_coeffs = 25
+# TEST SETTINGS
+n_coeff_set =       [10]    # [10, 25, 36]
+guidestar_amount =  [3]     # [3,6,12]
+beacon_radii =      [100]   # [100, 200, 300]
 
-beacon_angle = 30       # beacon angle for determining guide star positions (arcseconds)
+# Set up tests
+guidestar_sets = {}
+for n in guidestar_amount:
+    for g in beacon_radii:   # angle of radius
+        guidestars = [beacon.Beacon(t, g, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, n, endpoint=False)]
+        guidestar_sets[(n, g)] = guidestars
 
-guidestars = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
-target = beacon.Beacon(0, 0)
+targets = {}
+targets[(0, 0)] = beacon.Beacon(0, 0, gamma_arcseconds=True)
+for t in np.linspace(0, 2*np.pi, 8, endpoint=False):    # theta angle (acw from horizon)
+    for g in [10, 30, 100]: # gamma angle (from telescope axis)
+        target = beacon.Beacon(t, g, gamma_arcseconds=True)
+        targets[(t, g)] = target
 
-Z = zernike.Zernike(n_coeffs)
-# Z = DCT.DCT(n_coeffs)
+phase_screens =     combinations(list(range(4)), 2)
 
-tomo = tomography.Tomography(layers, Z, D, r0, n_coeffs, aperture_size)
+# Run tests
+tests = []
 
-T = controller.TomographyController(tomo, n_coeffs)
+for ps in phase_screens:
+    for asterism in guidestar_sets.items():
+        for target in targets.items():
+            tests.append((ps, asterism, target))
 
-output = T.run(target, guidestars, [None, None])
-
-T.actual_coeffs
-T.actual_screen
-T.calculated_coeffs
-T.reconstructed_screen
-
-fig, ((ax11, ax12), (ax21, ax22)) = plt.subplots(2, 2)
-fig.suptitle('Start Test')
-
-ax11.plot(T.actual_coeffs, 'k-')
-ax11.plot(T.calculated_coeffs, 'r-')
-ax12.imshow(T.actual_screen)
-ax21.imshow(T.reconstructed_screen)
-masked_actual = util.circle(aperture_size/2, aperture_size) * T.actual_screen
-masked_recon = util.circle(aperture_size/2, aperture_size) * T.reconstructed_screen
-ax22.imshow(masked_actual - masked_recon)
-
-
-print(structural_similarity(masked_actual, masked_recon))
-print(mean_squared_error(masked_actual, masked_recon))
+with open("results/results.data", "w") as f:
+    f.write("N Coeffs,Basis Function,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,MSSIM Mean,MSSIM Stdev,MSE Mean,MSE Stdev,Time Mean,Time Stdev\n")
+    for n_coeffs in n_coeff_set:
+        basis_functions = [zernike.Zernike(n_coeffs)]
+        for B in basis_functions:
+            tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
+            T = controller.TomographyController(tomo, n_coeffs)
+            print("{}, {}".format(B.name, n_coeffs))
+            for test in tests:
+                asterism = test[1]
+                T.set_asterism(asterism[1])
+                target = test[2]
+                T.set_target(target[1])
+                ps = test[0]
+                T.set_phase_screens(seeds=ps)
+                mssim = []
+                mse = []
+                time = []
+                for i in range(retests):
+                    T.run()
+                    masked_actual = util.circle(aperture_size/2, aperture_size) * T.actual_screen
+                    masked_recon = util.circle(aperture_size/2, aperture_size) * T.reconstructed_screen
+                    mssim.append(structural_similarity(masked_actual, masked_recon))
+                    mse.append(mean_squared_error(masked_actual, masked_recon))
+                    time.append(T.run_time)
+                f.write("{},{},{},{},{},{},{:4f},{},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f}\n".format(
+                    n_coeffs,
+                    B.name,
+                    ps[0],
+                    ps[1],
+                    asterism[0][0],
+                    asterism[0][1],
+                    target[0][0],
+                    target[0][1],
+                    np.mean(mssim),
+                    np.std(mssim),
+                    np.mean(mse),
+                    np.std(mse),
+                    np.mean(time),
+                    np.std(time)
+                ))
 
 plt.show()
