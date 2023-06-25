@@ -61,7 +61,6 @@ class Cache():
                     self.__save()
                     self.__load(cache_file)
                     self._counter += 1
-                    # print(self._counter)
                     if self._counter >= self._save_frequency:
                         self._counter = 0
                 return self._current_cache[key]
