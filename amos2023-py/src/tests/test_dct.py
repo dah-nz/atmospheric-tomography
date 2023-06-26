@@ -11,9 +11,9 @@ n = 32
 Z = DCT(n)
 
 for z in np.arange(0, n):
-    screen0 = Z.out(grid, z)
+    screen0 = Z.out(np.shape(grid), z)
     [X, Y] = np.meshgrid(np.linspace(0,n,32, endpoint=False), np.linspace(0,n,32, endpoint=False))
-    value = Z.at_point(X, Y, screen0, z)
+    value = Z.at_point(X, Y, np.shape(screen0), z)
 
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
     fig.suptitle('Mode Test {}'.format(z))
@@ -24,9 +24,9 @@ for z in np.arange(0, n):
 
 
 z = np.random.normal(size=(n, 1))
-screen = Z.compose(grid, z)
+screen = Z.compose(np.shape(grid), z)
 o = Z.decompose(screen)
-screenr = Z.compose(grid, o)
+screenr = Z.compose(np.shape(grid), o)
 
 fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
 fig.suptitle('Compose/Decompose Test')
@@ -44,7 +44,7 @@ grid = np.zeros((256, 256))
 K = Kolmogorov(grid, 1.0, type=np.float64)
 screen = K.get(0)
 o = Z.decompose(screen)
-screenr = Z.compose(grid, o)
+screenr = Z.compose(np.shape(grid), o)
 ax1.imshow(screen)
 ax2.imshow(screenr)
 ax3.imshow(screen - screenr)
@@ -58,8 +58,8 @@ screen = K.get(0)
 o0 = Z.decompose(screen)
 screen_masked = screen * circle(128, 256)
 o1 = Z.decompose(screen_masked)
-screenr0 = Z.compose(grid, o0)
-screenr1 = Z.compose(grid, o1)
+screenr0 = Z.compose(np.shape(grid), o0)
+screenr1 = Z.compose(np.shape(grid), o1)
 axes[0,0].imshow(screen)
 axes[0,1].imshow(screen_masked)
 axes[1,0].imshow(screenr0)

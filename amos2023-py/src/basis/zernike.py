@@ -14,22 +14,22 @@ class Zernike(Basis):
     def __init__(self, max_coeffs):
         super().__init__(max_coeffs, "zernike")
         self.__cache = Cache("basis_{}".format("zernike"), max_len=1000)
-    def out(self, grid, order):
+    def out(self, size, order):
         """
         Get the Zernike polynomial for order + 1
 
         Parameters
         ----------
-        grid:
-            grid that defnies the dimension for the result
+        size:
+            Shape of result screen
         order:
             polynomial order (note that order 0 is piston (normally the 1st order Zernike))
         """
         # Add one to order as zernike function is 1 indexed
         # Add one more to skip piston (DC) mode
 
-        return self.__zernike(np.shape(grid), order + 1)
-    def at_point(self, x, y, grid, order):
+        return self.__zernike(size, order + 1)
+    def at_point(self, x, y, size, order):
         """
         Get the Zernike polynomial value at a single point within a unit circle
 
@@ -39,13 +39,13 @@ class Zernike(Basis):
             X position of point
         y: 
             Y position of point
-        grid:
-            Not used for Zernike polynomials
+        size:
+            Shape of grid
         order:
             polynomial order (note that order 0 is piston (normally the 1st order Zernike))
         """
-        x = x / (np.shape(grid)[0] / 2) - 1
-        y = y / (np.shape(grid)[1] / 2) - 1
+        x = x / (size[0] / 2) - 1
+        y = y / (size[1] / 2) - 1
         return self.__zerni(x, y, order + 1)
         
 

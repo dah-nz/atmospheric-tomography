@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 import numpy as np
 from scipy.fft import dctn, idctn
 
@@ -19,21 +21,22 @@ class DCT(Basis):
         super().__init__(c, "DCT")
         self.__cache = Cache("basis_{}".format("dct"), max_len=1000)
         self.max_coeffs = max_coeffs
-    def out(self, grid, order):
+    @lru_cache
+    def out(self, size, order):
         """
         Get the Discrete Cosine Transform for order
 
         Parameters
         ----------
-        grid:
-            grid that defines the dimension for the result
+        size:
+            Tuple that defines the result grid dimensions
         order:
             discrete cosine coefficient order
         """
         c = np.array([0] * (self.N * self.N))
         c[order] = 1
-        return self.compose(grid, c)
-    def at_point(self, x, y, grid, order):
+        return self.compose(size, c)
+    def at_point(self, x, y, size, order):
         """
         Get the Discrete Cosine Transform value at a single point within a unit circle
 
@@ -47,8 +50,8 @@ class DCT(Basis):
             X position of point in grid
         y: 
             Y position of point in grid
-        grid:
-            grid that defines shape of cosine function to retrieve
+        size:
+            Tuple of dimensons for grid that defines shape of cosine function to retrieve
         order:
             cosine order
         """
@@ -71,7 +74,7 @@ class DCT(Basis):
         #     offset_y = (d0[1] - dim[1]) / 2
         # x = np.array((1 + x) * (dim[0]) / 2 + offset_x, dtype=np.int64)
         # y = np.array((1 + y) * (dim[1]) / 2 + offset_y, dtype=np.int64)
-        screen = self.out(grid, order)
+        screen = self.out(size, order)
         def lerp(v0, v1, x):
             return (v1 - v0) * (x % 1) + v0
         y0 = np.array(y, dtype=np.int32)
@@ -91,13 +94,13 @@ class DCT(Basis):
         v11 = nscreen[y1, x1]
         return lerp(lerp(v00, v10, x), lerp(v01, v11, x), y)
 
-    def compose(self, screen, coefficients):
+    def compose(self, size, coefficients):
         """ Compose a distortion/aberration phase screen from a set of coefficients and basis functions
 
         Inputs
         ------
-        screen:
-            Input screen that determines the size of the resulting phase screen
+        size:
+            Tuple with values that determine the size of the resulting phase screen
         coefficients:
             Coefficients for the desired phase screen
 
@@ -110,7 +113,7 @@ class DCT(Basis):
         c0 = coefficients.flatten()
         c[:self.max_coeffs] = c0[:self.max_coeffs]
         c.resize((self.N, self.N))
-        c1 = np.zeros_like(screen)
+        c1 = np.zeros(size)
         c1[:self.N, :self.N] = c
         return idctn(c1)
 

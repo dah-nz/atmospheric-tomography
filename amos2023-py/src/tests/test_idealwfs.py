@@ -13,7 +13,7 @@ screen0 = K.get(0)
 
 C = Z.decompose(screen0)
 
-screen1 = Z.compose(screen0, C)
+screen1 = Z.compose(np.shape(screen0), C)
 
 plt.imshow(screen0)
 plt.figure()

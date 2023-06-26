@@ -93,12 +93,14 @@ class TomographyController():
         self.beacon_coeffs = np.reshape(self.beacon_coeffs_sum, (len(self.asterism) * self.N, -1))
 
         self.calculated_coeffs = self.T.run(self.asterism, self.target, self.beacon_coeffs)
-        self.reconstructed_screen = self.T.basis.compose(self.aperture_grid, self.calculated_coeffs)
+        self.reconstructed_screen = self.T.basis.compose(np.shape(self.aperture_grid), self.calculated_coeffs)
 
         self.end_time = time.perf_counter()
         self.run_time = self.end_time - self.start_time
 
         self.actual_screen = np.sum([self.target.cut_out(self.T.D, a, s, md) for a, s, md in set_up], 0)
+        # from util.util import circle
+        # self.actual_screen *= circle(self.T.aperture_size/2, self.T.aperture_size)
         self.actual_coeffs = self.T.basis.decompose(self.actual_screen)
 
         return self.calculated_coeffs

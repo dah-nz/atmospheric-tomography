@@ -64,7 +64,7 @@ class Tomography():
         mD = self._metapupil_diameter(self.asterism)
         self.metapupil_diameters = [mD[a] for a in self.altitudes]
         layer_pixels = [int(d/self.D * self.aperture_size + 0.5) for d in self.metapupil_diameters]
-        self.layer_grids = [np.zeros((px, px)) for px in layer_pixels]
+        self.layer_grids = [(px, px) for px in layer_pixels]
 
     def run(self, beacons, target, beacon_coeffs):
         """
@@ -156,7 +156,7 @@ class Tomography():
         G = np.zeros((self.n_modes, gridSize))
         for j in range(self.n_modes):
             for i, (x, y) in enumerate(unitGrid):
-                G[j, i] = self.basis.at_point(x, y, screen, j)
+                G[j, i] = self.basis.at_point(x, y, np.shape(screen), j)
 
         # Transform unitgrid to subsection
         if diameter > 1:
@@ -173,7 +173,7 @@ class Tomography():
         Y = np.zeros((self.n_modes, gridSize))
         for j in range(self.n_modes):
             for i, (x, y) in enumerate(subGrid):
-                Y[j, i] = self.basis.at_point(x, y, screen, j)
+                Y[j, i] = self.basis.at_point(x, y, np.shape(screen), j)
 
         if G_metapupil:
             Ginv = np.linalg.pinv(G)

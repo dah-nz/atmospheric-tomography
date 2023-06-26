@@ -8,7 +8,7 @@ grid = np.zeros((256, 256))
 Z = Zernike()
 
 for z in np.arange(0, 12):
-    screen = Z.out(grid, z)
+    screen = Z.out(np.shape(grid), z)
 
     plt.figure()
     plt.imshow(screen)

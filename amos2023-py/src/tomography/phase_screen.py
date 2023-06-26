@@ -17,21 +17,21 @@ class Kolmogorov():
     get(seed=None)
         Retrieve a phase screen for a certain seed - None returns a random Kolmogorov phase screen
     """
-    def __init__(self, grid, D_r0, type=np.complex128):
+    def __init__(self, size, D_r0, type=np.complex128):
         """
         Parameters
         ----------
-        grid : 2d numpy array-like
-            Grid that determines the size of resultant phase screens
+        size : Tuple
+            Determines the size of resultant phase screens
         D_r0:  float
             D/r0 value, determines severity of turbulence in output phase screens#
         """
-        self._grid = np.zeros_like(grid)
+        self._grid = np.zeros(size)
         self._D_r0 = D_r0
         self.type = type
 
-        grid_rows = np.shape(grid)[0]
-        grid_cols = np.shape(grid)[1]
+        grid_rows = size[0]
+        grid_cols = size[1]
         self.__cache = Cache("kolmogorov_{}".format(hash((grid_rows, grid_cols, D_r0))))
 
         self._phase_data_cache = None

@@ -23,7 +23,7 @@ for m in range(n):
 
     c = n * [0.0]
     c[m] = 1.0
-    screen = Z.compose(grid, c)
+    screen = Z.compose(np.shape(grid), c)
     c_out = Z.decompose(Z, screen)
 
     ax1.plot(c, 'k-')

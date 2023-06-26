@@ -4,17 +4,17 @@ class Basis():
     def __init__(self, max_coeffs, name=""):
         self.name = name
         self.N = max_coeffs
-    def out(self, grid, order):
+    def out(self, size, order):
         raise NotImplementedError()
-    def at_point(self, x, y, grid, order):
+    def at_point(self, x, y, size, order):
         raise NotImplementedError()
-    def compose(self, screen, coefficients):
+    def compose(self, size, coefficients):
         """ Compose a distortion/aberration phase screen from a set of coefficients and basis functions
 
         Inputs
         ------
-        screen:
-            Input screen that determines the size of the resulting phase screen
+        size:
+            Input screen shape that determines the size of the resulting phase screen
         coefficients:
             Coefficients for the desired phase screen
 
@@ -23,9 +23,9 @@ class Basis():
         phase:
             Phase screen created from set of basis functions and coefficients       
         """
-        phase = np.zeros_like(screen, dtype=np.float64)
-        for m, z0 in enumerate(coefficients):
-            phase += np.float64(z0 * self.out(screen, m))
+        phase = np.zeros(size, dtype=np.float64)
+        for m, c in enumerate(coefficients):
+            phase += np.float64(c * self.out(size, m))
         return phase
 
     def decompose(self, screen):

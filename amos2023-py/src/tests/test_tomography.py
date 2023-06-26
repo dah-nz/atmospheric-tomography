@@ -17,17 +17,24 @@ target = beacon.Beacon(0, 0)
 aperture = np.zeros((aperture_size, aperture_size))
 
 # Calculate metapupil radius
-layers = [2500, 5000]
+layers = [1000, 2000]
 n_coeffs = 30
-B = zernike.Zernike(n_coeffs)
-# B = DCT.DCT(n_coeffs)
+# B = zernike.Zernike(n_coeffs)
+B = DCT.DCT(n_coeffs)
 
 tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
 
 T = controller.TomographyController(tomo, n_coeffs)
 T.set_asterism(beacons)
 T.set_target(target)
-T.set_phase_screens(seeds=[0, 1])
+# L1_modes = np.random.normal(size=n_coeffs,)
+# L1 = B.compose(T.T.layer_grids[0], L1_modes)
+# L2_modes = np.random.normal(size=n_coeffs,)
+# L2 = B.compose(T.T.layer_grids[1], L2_modes)
+L1 = B.out(T.T.layer_grids[0], 3)
+L2 = B.out(T.T.layer_grids[1], 8)
+
+T.set_phase_screens(screens=[L1, L2])
 
 calculated_coeffs = T.run()
 
