@@ -7,7 +7,7 @@ from util import util
 
 beacon_angle = 30           # arcseconds
 aperture_size = 256         # pixels
-telescope_diameter = 1.0    # m
+telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
 
 # generate asterism
@@ -17,7 +17,7 @@ target = beacon.Beacon(0, 0)
 aperture = np.zeros((aperture_size, aperture_size))
 
 # Calculate metapupil radius
-layers = [1000, 2000]
+layers = [500, 1000]
 n_coeffs = 30
 # B = zernike.Zernike(n_coeffs)
 B = DCT.DCT(n_coeffs)
@@ -27,12 +27,12 @@ tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, apert
 T = controller.TomographyController(tomo, n_coeffs)
 T.set_asterism(beacons)
 T.set_target(target)
-# L1_modes = np.random.normal(size=n_coeffs,)
-# L1 = B.compose(T.T.layer_grids[0], L1_modes)
-# L2_modes = np.random.normal(size=n_coeffs,)
-# L2 = B.compose(T.T.layer_grids[1], L2_modes)
-L1 = B.out(T.T.layer_grids[0], 3)
-L2 = B.out(T.T.layer_grids[1], 8)
+L1_modes = np.random.normal(size=n_coeffs,)
+L1 = B.compose(T.T.layer_grids[0], L1_modes)
+L2_modes = np.random.normal(size=n_coeffs,)
+L2 = B.compose(T.T.layer_grids[1], L2_modes)
+# L1 = B.out(T.T.layer_grids[0], 3)
+# L2 = B.out(T.T.layer_grids[1], 8)
 
 T.set_phase_screens(screens=[L1, L2])
 
@@ -73,9 +73,14 @@ plt.plot(T.calculated_coeffs, 'r-')
 
 fig, axes = plt.subplots(1, 3)
 fig.suptitle("Target Phase Screens")
-axes[0].imshow(T.actual_screen)
+
+# from util.util import circle
+# actual_screen = T.actual_screen * circle(T.T.aperture_size/2, T.T.aperture_size)
+actual_screen = T.actual_screen
+
+axes[0].imshow(actual_screen)
 axes[1].imshow(T.reconstructed_screen)
-axes[2].imshow(T.actual_screen - T.reconstructed_screen)
+axes[2].imshow(actual_screen - T.reconstructed_screen)
 
 plt.figure()
 plt.title("Random Grid with 1024 points")

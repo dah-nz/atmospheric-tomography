@@ -2,7 +2,7 @@ import numpy as np
 from util.cache import Cache
 from util.util import *
 
-GRID_MULTIPLIER = 8
+GRID_MULTIPLIER = 4
 
 class Tomography():
     """

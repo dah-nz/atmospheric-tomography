@@ -47,7 +47,7 @@ class Basis():
         # Generate basis functions for each mode
         z = [0] * self.N
         for n in range(self.N):
-            z[n] = np.float64(self.out(screen, n))
+            z[n] = np.float64(self.out(np.shape(screen), n))
 
         # Do 2D dot product of each basis function mode with the input phase screen
         return [np.sum(screen * z[n], dtype=np.float64)/np.sum(z[n] * z[n]) for n in range(0, self.N)]

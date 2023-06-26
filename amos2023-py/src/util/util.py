@@ -49,12 +49,21 @@ def circle(radius, dimension, location=(0,0)):
     except KeyError:
         mask = np.zeros((dimension, dimension))
         sqr_radius = radius ** 2
-        center = dimension / 2 - 0.5
-        center_x = center + location[0]
-        center_y = center + location[1]
-        for i in range(dimension):
-            for j in range(dimension):
-                mask[i, j] = (i - center_x) ** 2 + (j - center_y) ** 2 <= sqr_radius
+        N = (dimension + 1) / 2
+        # center_x = center + location[0]
+        # center_y = center + location[1]
+        x = np.arange(-N - location[0], N - location[0])
+        y = np.arange(-N - location[1], N - location[1])
+        [l, k] = np.meshgrid(x, y)
+        sq_distance = k ** 2 + l ** 2
+        # x = l/radius
+        # y = k/radius
+        mask = sq_distance <= sqr_radius
+        mask = mask[0:dimension, 0:dimension]
+
+        # for i in range(dimension):
+        #     for j in range(dimension):
+        #         mask[i, j] = (i - center_x) ** 2 + (j - center_y) ** 2 <= sqr_radius
         _circle_cache[(radius, dimension, location)] = mask
         return mask
 
