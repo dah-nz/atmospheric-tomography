@@ -115,7 +115,7 @@ class DCT(Basis):
         c.resize((self.N, self.N))
         c1 = np.zeros(size)
         c1[:self.N, :self.N] = c
-        return idctn(c1)
+        return idctn(c1, norm='ortho')
 
     def decompose(self, screen):
         """ Decompose a distortion/aberration phase screen into the specific coefficients
@@ -133,7 +133,7 @@ class DCT(Basis):
             Coefficients for each basis function in the input phase screen
 
         """
-        d = dctn(screen)
+        d = dctn(screen, norm='ortho')
         a = d[:self.N, :self.N]
         a = a.flatten()
         return a[:self.max_coeffs]

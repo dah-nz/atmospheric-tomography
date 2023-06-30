@@ -4,7 +4,7 @@ from itertools import combinations
 
 from skimage.metrics import structural_similarity, mean_squared_error
 
-from basis import DCT, zernike
+from basis import DCT, DST, zernike
 from tomography import tomography, beacon, controller
 from util import util
 
@@ -12,11 +12,11 @@ from util import util
 aperture_size = 256             # number of pixels at telescope aperture
 D =             0.6             # telescope diameter (m)
 r0 =            0.05            # Fried parameter (poor seeing = 5cm, Excellent = 20cm) (m)
-layers =        [1000, 8000]    # layer altitudes (m)
+layers =        [500, 1000]     # layer altitudes (m)
 retests =       10              # number of time to retest each
 
 # TEST SETTINGS
-n_coeff_set =       [10]    # [10, 25, 36]
+n_coeff_set =       [30]    # [10, 30, 64]
 guidestar_amount =  [3]     # [3,6,12]
 beacon_radii =      [100]   # [100, 200, 300]
 
@@ -47,7 +47,7 @@ for ps in phase_screens:
 with open("results/results.data", "w") as f:
     f.write("N Coeffs,Basis Function,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,MSSIM Mean,MSSIM Stdev,MSE Mean,MSE Stdev,Time Mean,Time Stdev\n")
     for n_coeffs in n_coeff_set:
-        basis_functions = [zernike.Zernike(n_coeffs)]
+        basis_functions = [zernike.Zernike(n_coeffs), DCT.DCT(n_coeffs), DST.DST(n_coeffs)]
         for B in basis_functions:
             tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
             T = controller.TomographyController(tomo, n_coeffs)
@@ -64,8 +64,9 @@ with open("results/results.data", "w") as f:
                 time = []
                 for i in range(retests):
                     T.run()
-                    masked_actual = util.circle(aperture_size/2, aperture_size) * T.actual_screen
-                    masked_recon = util.circle(aperture_size/2, aperture_size) * T.reconstructed_screen
+                    mask = util.circle(aperture_size/2, aperture_size)
+                    masked_actual = mask * T.actual_screen
+                    masked_recon = mask * T.reconstructed_screen
                     mssim.append(structural_similarity(masked_actual, masked_recon))
                     mse.append(mean_squared_error(masked_actual, masked_recon))
                     time.append(T.run_time)

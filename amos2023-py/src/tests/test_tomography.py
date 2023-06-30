@@ -2,8 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from tomography import beacon, tomography, controller, phase_screen
-from basis import zernike, DCT
+from basis import zernike, DCT, DST
 from util import util
+
+from skimage.metrics import structural_similarity, mean_squared_error
 
 beacon_angle = 30           # arcseconds
 aperture_size = 256         # pixels
@@ -20,21 +22,23 @@ aperture = np.zeros((aperture_size, aperture_size))
 layers = [500, 1000]
 n_coeffs = 30
 # B = zernike.Zernike(n_coeffs)
-B = DCT.DCT(n_coeffs)
+# B = DCT.DCT(n_coeffs)
+B = DST.DST(n_coeffs)
 
 tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
 
 T = controller.TomographyController(tomo, n_coeffs)
 T.set_asterism(beacons)
 T.set_target(target)
-L1_modes = np.random.normal(size=n_coeffs,)
-L1 = B.compose(T.T.layer_grids[0], L1_modes)
-L2_modes = np.random.normal(size=n_coeffs,)
-L2 = B.compose(T.T.layer_grids[1], L2_modes)
-# L1 = B.out(T.T.layer_grids[0], 3)
-# L2 = B.out(T.T.layer_grids[1], 8)
+# L1_modes = np.random.normal(size=n_coeffs,)
+# L1 = B.compose(T.T.layer_grids[0], L1_modes)
+# L2_modes = np.random.normal(size=n_coeffs,)
+# L2 = B.compose(T.T.layer_grids[1], L2_modes)
+# # L1 = B.out(T.T.layer_grids[0], 3)
+# # L2 = B.out(T.T.layer_grids[1], 8)
 
-T.set_phase_screens(screens=[L1, L2])
+# T.set_phase_screens(screens=[L1, L2])
+T.set_phase_screens(seeds=[10, 20])
 
 calculated_coeffs = T.run()
 
@@ -82,9 +86,12 @@ axes[0].imshow(actual_screen)
 axes[1].imshow(T.reconstructed_screen)
 axes[2].imshow(actual_screen - T.reconstructed_screen)
 
-plt.figure()
-plt.title("Random Grid with 1024 points")
-grid = tomo._getGrid(1024)
-plt.scatter([x for x, _  in grid], [y for _, y in grid])
+# plt.figure()
+# plt.title("Random Grid with 1024 points")
+# grid = tomo._getGrid(1024)
+# plt.scatter([x for x, _  in grid], [y for _, y in grid])
+
+print(structural_similarity(actual_screen, T.reconstructed_screen))
+print(mean_squared_error(actual_screen, T.reconstructed_screen))
 
 plt.show()
