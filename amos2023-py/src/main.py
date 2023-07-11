@@ -4,7 +4,7 @@ from itertools import combinations
 
 from skimage.metrics import structural_similarity, mean_squared_error
 
-from basis import DCT, DST, zernike
+from basis import DCT, DST, zernike, wavelet
 from tomography import tomography, beacon, controller
 from util import util
 
@@ -47,7 +47,14 @@ for ps in phase_screens:
 with open("results/results.data", "w") as f:
     f.write("N Coeffs,Basis Function,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,MSSIM Mean,MSSIM Stdev,MSE Mean,MSE Stdev,Time Mean,Time Stdev\n")
     for n_coeffs in n_coeff_set:
-        basis_functions = [zernike.Zernike(n_coeffs), DCT.DCT(n_coeffs), DST.DST(n_coeffs)]
+        basis_functions = [
+            zernike.Zernike(n_coeffs),
+            DCT.DCT(n_coeffs),
+            DST.DST(n_coeffs),
+            wavelet.wavelet(n_coeffs, wavelets='haar'),
+            wavelet.wavelet(n_coeffs, wavelets='db2'),
+            wavelet.wavelet(n_coeffs, wavelets='sym2'),
+            wavelet.wavelet(n_coeffs, wavelets='mexh')]
         for B in basis_functions:
             tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
             T = controller.TomographyController(tomo, n_coeffs)
