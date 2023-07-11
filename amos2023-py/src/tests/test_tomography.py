@@ -24,7 +24,7 @@ n_coeffs = 36
 # B = zernike.Zernike(n_coeffs)
 # B = DCT.DCT(n_coeffs)
 # B = DST.DST(n_coeffs)
-B = wavelet.wavelet(n_coeffs, wavelets='db1')
+B = wavelet.wavelet(n_coeffs, wavelets='db2')
 
 tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
 

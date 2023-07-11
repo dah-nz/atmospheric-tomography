@@ -12,7 +12,10 @@ class wavelet(Basis):
         self.N_side = int(np.sqrt(max_coeffs))
         self.N_side = self.N_side + 1 if self.N_side < np.sqrt(max_coeffs) else self.N_side
         self.wavelets = wavelets
+        self.max_lvl = pywt.dwtn_max_level((self.N, self.N), wavelet=self.wavelets)
         self.lvl = 1
+        self.c_shape = None
+        self.c = None
     @lru_cache
     def out(self, size, order):
         c = [0] * self.N
@@ -72,25 +75,19 @@ class wavelet(Basis):
         """
         coeffs = np.copy(coefficients)
         coeffs.resize((self.N_side, self.N_side))
-
-        sx = size[0] if size[0] == 2 ** int(np.log2(size[0])) else 2 ** int(np.log2(size[0]) + 1)
-        sy = size[1] if size[1] == 2 ** int(np.log2(size[1])) else 2 ** int(np.log2(size[1]) + 1)
-        data = np.zeros((sx, sy))
-        data[:self.N_side, :self.N_side] = coeffs
-        dwtc = []
-        s = min(size) / (2 ** self.lvl)
-        s = int(s) if int(s) == s else int(s+1)
-        dwtc.append(data[0:s, 0:s])
-        x = (data[s:2*s, 0:s], data[0:s, s:2*s], data[s:2*s, s:2*s])
-        dwtc.append(x)
-        for _ in range(1, self.lvl):
-            s *= 2
-            x = (data[s:2*s, 0:s], data[0:s, s:2*s], data[s:2*s, s:2*s])
-            dwtc.append(x)
-
+        cs = np.zeros(self.c_shape)
+        cs[:self.N_side, :self.N_side] = coeffs
+        self.__get_c(np.zeros(size))
+        dwtc = pywt.array_to_coeffs(cs, self.c, output_format='wavedec2')
         screen = pywt.waverec2(dwtc, self.wavelets)
         return screen[:size[0], :size[1]]
 
+    def __get_c(self, screen):
+        self.__update_level(screen)
+        dwt = pywt.wavedec2(screen, self.wavelets, level=self.lvl)
+        o, c = pywt.coeffs_to_array(dwt)
+        self.c = c
+        self.c_shape = np.shape(o)
     def decompose(self, screen):
         """ Decompose a distortion/aberration phase screen into the specific coefficients
 
@@ -110,34 +107,13 @@ class wavelet(Basis):
         self.__update_level(screen)
 
         dwt = pywt.wavedec2(screen, self.wavelets, level=self.lvl)
+        o, c = pywt.coeffs_to_array(dwt)
+        self.c_shape = np.shape(o)
+        self.c = c
+        return o[:self.N_side, :self.N_side].flatten()[:self.N]
 
-        x = np.log2(np.shape(screen)[0])
-        x = int(x) if int(x) == x else int(x + 1)
-        y = np.log2(np.shape(screen)[1])
-        y = int(y) if int(y) == y else int(y + 1)
-        size = (2 ** x, 2 ** y)
-                        
-        dwt_data = np.zeros(size)
-        s = min(size) / (2 ** self.lvl)
-        s = int(s) if int(s) == s else int(s + 1)
-        dwt_data[0:s, 0:s] = np.real(dwt[0])
-        dwt_data[s:2*s, 0:s] = np.real(dwt[1][0])
-        dwt_data[0:s, s:2*s] = np.real(dwt[1][1])
-        dwt_data[s:2*s, s:2*s] = np.real(dwt[1][2])
-        for l in range(1, self.lvl):
-            s *= 2
-            dH = np.real(dwt[l+1][0])
-            dV = np.real(dwt[l+1][1])
-            dC = np.real(dwt[l+1][2])
-            if np.shape(dH)[0] < s:
-                dH = np.pad(dH, ((0, int(s - np.shape(dH)[0]), )))
-                dV = np.pad(dV, ((0, int(s - np.shape(dV)[0]), )))
-                dC = np.pad(dC, ((0, int(s - np.shape(dC)[0]), )))
-            dwt_data[s:2*s, 0:s] = dH
-            dwt_data[0:s, s:2*s] = dV
-            dwt_data[s:2*s, s:2*s] = dC
-        
-        o = dwt_data[:self.N_side, :self.N_side].flatten()
-        return o[:self.N]
     def __update_level(self, screen):
         self.lvl = int(np.log2((np.shape(screen)[0] / self.N_side))) + 1
+        self.max_lvl = pywt.dwtn_max_level(np.shape(screen), self.wavelets)
+        if self.lvl > self.max_lvl:
+            self.lvl = self.max_lvl
