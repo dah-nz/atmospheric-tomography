@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from tomography import beacon, tomography, controller, phase_screen
-from basis import zernike, DCT, DST
+from basis import zernike, DCT, DST, wavelet
 from util import util
 
 from skimage.metrics import structural_similarity, mean_squared_error
@@ -14,16 +14,17 @@ r_0 = 0.05                  # m
 
 # generate asterism
 beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
-target = beacon.Beacon(0, 0)
+target = beacon.Beacon(0, 30, gamma_arcseconds=True)
 
 aperture = np.zeros((aperture_size, aperture_size))
 
 # Calculate metapupil radius
-layers = [500, 1000]
-n_coeffs = 30
+layers = [1000, 2000]
+n_coeffs = 36
 # B = zernike.Zernike(n_coeffs)
 # B = DCT.DCT(n_coeffs)
-B = DST.DST(n_coeffs)
+# B = DST.DST(n_coeffs)
+B = wavelet.wavelet(n_coeffs, wavelets='db1')
 
 tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
 
@@ -38,7 +39,7 @@ T.set_target(target)
 # # L2 = B.out(T.T.layer_grids[1], 8)
 
 # T.set_phase_screens(screens=[L1, L2])
-T.set_phase_screens(seeds=[10, 20])
+T.set_phase_screens(seeds=[12, 22])
 
 calculated_coeffs = T.run()
 
@@ -78,20 +79,58 @@ plt.plot(T.calculated_coeffs, 'r-')
 fig, axes = plt.subplots(1, 3)
 fig.suptitle("Target Phase Screens")
 
-# from util.util import circle
-# actual_screen = T.actual_screen * circle(T.T.aperture_size/2, T.T.aperture_size)
-actual_screen = T.actual_screen
+mask = util.circle(T.T.aperture_size/2, T.T.aperture_size)
+actual_screen = T.actual_screen * mask
+# actual_screen = T.actual_screen
+recon_screen = T.reconstructed_screen * mask
 
 axes[0].imshow(actual_screen)
-axes[1].imshow(T.reconstructed_screen)
-axes[2].imshow(actual_screen - T.reconstructed_screen)
+axes[1].imshow(recon_screen)
+axes[2].imshow(actual_screen - recon_screen)
 
-# plt.figure()
-# plt.title("Random Grid with 1024 points")
-# grid = tomo._getGrid(1024)
-# plt.scatter([x for x, _  in grid], [y for _, y in grid])
+plt.figure()
+plt.title("Random Grid with 1024 points")
+grid = tomo._getGrid(1024)
+plt.scatter([x for x, _  in grid], [y for _, y in grid])
 
-print(structural_similarity(actual_screen, T.reconstructed_screen))
-print(mean_squared_error(actual_screen, T.reconstructed_screen))
+print("MSSIM: {}".format(structural_similarity(actual_screen, recon_screen)))
+print("MSE: {}".format(mean_squared_error(actual_screen, recon_screen)))
+
+import hcipy
+
+effective_focal_length = telescope_diameter * 6.5 # (f/6.5 system)
+wavelength = 600e-9
+
+pupil_grid = hcipy.make_pupil_grid(256, diameter=telescope_diameter)
+
+telescope_pupil_generator = hcipy.make_circular_aperture(telescope_diameter)
+telescope_pupil = telescope_pupil_generator(pupil_grid)
+telescope_wavefront = telescope_pupil * actual_screen.flatten()
+wavefront = hcipy.Wavefront(telescope_wavefront, wavelength)
+unaberrated_wavefront = hcipy.Wavefront(telescope_pupil, wavelength)
+
+
+focal_grid = hcipy.make_focal_grid(q = 4, num_airy=16, pupil_diameter=telescope_diameter, focal_length=effective_focal_length, reference_wavelength=wavelength)
+prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
+focal_image = prop.forward(wavefront)
+
+focal_grid = hcipy.make_focal_grid(q = 4, num_airy=16, pupil_diameter=telescope_diameter, focal_length=effective_focal_length, reference_wavelength=wavelength)
+prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
+focal_unaberrated = prop.forward(unaberrated_wavefront)
+
+print("Self Strehl: {}".format(focal_image.intensity.max() / focal_unaberrated.intensity.max()))
+print("Strehl: {}".format(hcipy.metrics.get_strehl_from_focal(focal_image.intensity, focal_unaberrated.intensity)))
+
+plt.figure()
+hcipy.imshow_field(np.log10(focal_image.intensity / focal_image.intensity.max()), vmin=-5, grid_units=1e-6)
+plt.xlabel('Focal plane distance [um]')
+plt.ylabel('Focal plane distance [um]')
+plt.colorbar()
+
+plt.figure()
+hcipy.imshow_field(np.log10(focal_unaberrated.intensity / focal_unaberrated.intensity.max()), vmin=-5, grid_units=1e-6)
+plt.xlabel('Focal plane distance [um]')
+plt.ylabel('Focal plane distance [um]')
+plt.colorbar()
 
 plt.show()

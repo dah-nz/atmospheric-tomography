@@ -13,3 +13,5 @@
 import tests.test_tomography
 
 # import tests.test_dct
+
+# import tests.test_wavelet

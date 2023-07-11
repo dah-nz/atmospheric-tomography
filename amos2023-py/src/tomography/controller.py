@@ -102,7 +102,7 @@ class TomographyController():
         self.actual_screen = np.sum([self.target.cut_out(self.T.D, a, s, md) for a, s, md in set_up], 0)
         self.actual_coeffs = self.T.basis.decompose(self.actual_screen)
         self.actual_coeffs[0] = 0.0
-        self.actual_screen = self.T.basis.compose(np.shape(self.actual_screen), self.actual_coeffs)
+        self.actual_screen_from_coeffs = self.T.basis.compose(np.shape(self.actual_screen), self.actual_coeffs)
 
         return self.calculated_coeffs
 
