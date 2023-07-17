@@ -7,7 +7,7 @@ from basis.basis import Basis
 
 class wavelet(Basis):
     def __init__(self, max_coeffs, name="wavelets", wavelets='db1'):
-        self.name = name
+        self.name = name + " " + wavelets
         self.N = max_coeffs
         self.N_side = int(np.sqrt(max_coeffs))
         self.N_side = self.N_side + 1 if self.N_side < np.sqrt(max_coeffs) else self.N_side

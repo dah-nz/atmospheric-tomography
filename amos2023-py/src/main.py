@@ -7,6 +7,7 @@ from skimage.metrics import structural_similarity, mean_squared_error
 from basis import DCT, DST, zernike, wavelet
 from tomography import tomography, beacon, controller
 from util import util
+import constellations
 
 # BASIC PARAMETERS
 aperture_size = 256             # number of pixels at telescope aperture
@@ -16,10 +17,9 @@ layers =        [500, 1000]     # layer altitudes (m)
 retests =       10              # number of time to retest each
 
 # TEST SETTINGS
-n_coeff_set =       [30]    # [10, 30, 64]
-guidestar_amount =  [3]     # [3,6,12]
-beacon_radii =      [100]   # [100, 200, 300]
-
+n_coeff_set =       [25, 36, 64]
+guidestar_amount =  [3, 6, 12]  
+beacon_radii =      [30, 60, 100]
 # Set up tests
 guidestar_sets = {}
 for n in guidestar_amount:
@@ -27,14 +27,20 @@ for n in guidestar_amount:
         guidestars = [beacon.Beacon(t, g, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, n, endpoint=False)]
         guidestar_sets[(n, g)] = guidestars
 
+cons = constellations.get_natural()
+
+for i, con in enumerate(cons):
+    guidestar_sets[(len(cons), -1-i)] = [beacon.Beacon(t, g) for t, g in con]
+
 targets = {}
 targets[(0, 0)] = beacon.Beacon(0, 0, gamma_arcseconds=True)
 for t in np.linspace(0, 2*np.pi, 8, endpoint=False):    # theta angle (acw from horizon)
-    for g in [10, 30, 100]: # gamma angle (from telescope axis)
+    for g in [10, 30]: # gamma angle (from telescope axis)
         target = beacon.Beacon(t, g, gamma_arcseconds=True)
         targets[(t, g)] = target
 
-phase_screens =     combinations(list(range(4)), 2)
+n_phase_screens = 5
+phase_screens = list(zip(range(n_phase_screens), range(n_phase_screens,2*n_phase_screens)))
 
 # Run tests
 tests = []
@@ -48,13 +54,13 @@ with open("results/results.data", "w") as f:
     f.write("N Coeffs,Basis Function,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,MSSIM Mean,MSSIM Stdev,MSE Mean,MSE Stdev,Time Mean,Time Stdev\n")
     for n_coeffs in n_coeff_set:
         basis_functions = [
-            zernike.Zernike(n_coeffs),
-            DCT.DCT(n_coeffs),
-            DST.DST(n_coeffs),
-            wavelet.wavelet(n_coeffs, wavelets='haar'),
-            wavelet.wavelet(n_coeffs, wavelets='db2'),
-            wavelet.wavelet(n_coeffs, wavelets='sym2'),
-            wavelet.wavelet(n_coeffs, wavelets='mexh')]
+            zernike.Zernike(n_coeffs)#,
+            # DCT.DCT(n_coeffs),
+            # DST.DST(n_coeffs),
+            # wavelet.wavelet(n_coeffs, wavelets='haar'),
+            # wavelet.wavelet(n_coeffs, wavelets='db2'),
+            # wavelet.wavelet(n_coeffs, wavelets='sym2')
+            ]
         for B in basis_functions:
             tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
             T = controller.TomographyController(tomo, n_coeffs)
