@@ -7,7 +7,7 @@ from util import util
 
 from skimage.metrics import structural_similarity, mean_squared_error
 
-beacon_angle = 30           # arcseconds
+beacon_angle = 100           # arcseconds
 aperture_size = 256         # pixels
 telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
@@ -19,12 +19,12 @@ target = beacon.Beacon(0, 30, gamma_arcseconds=True)
 aperture = np.zeros((aperture_size, aperture_size))
 
 # Calculate metapupil radius
-layers = [1000, 2000]
-n_coeffs = 36
+layers = [1000, 8000]
+n_coeffs = 256
 # B = zernike.Zernike(n_coeffs)
 # B = DCT.DCT(n_coeffs)
 # B = DST.DST(n_coeffs)
-B = wavelet.wavelet(n_coeffs, wavelets='db2')
+B = wavelet.wavelet(n_coeffs, wavelets='sym2')
 
 tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
 
@@ -39,7 +39,7 @@ T.set_target(target)
 # # L2 = B.out(T.T.layer_grids[1], 8)
 
 # T.set_phase_screens(screens=[L1, L2])
-T.set_phase_screens(seeds=[12, 22])
+T.set_phase_screens(seeds=[0, 4])
 
 calculated_coeffs = T.run()
 

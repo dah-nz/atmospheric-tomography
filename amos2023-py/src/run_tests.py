@@ -10,8 +10,12 @@
 
 # import tests.test_proj_matrix
 
-import tests.test_tomography
+# import tests.test_tomography
 
 # import tests.test_dct
 
 # import tests.test_wavelet
+
+# import tests.test_noise
+
+import tests.test_asterisms
