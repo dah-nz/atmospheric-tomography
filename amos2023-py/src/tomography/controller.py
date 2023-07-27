@@ -15,6 +15,8 @@ class TomographyController():
         self.T = tomography
         self.N = n_coeffs
         self.aperture_grid = np.zeros((self.T.aperture_size, self.T.aperture_size))
+        self.noise = False
+        self.noisy_screens = None
 
     def set_target(self, target):
         """
@@ -62,6 +64,41 @@ class TomographyController():
             else:
                 self.screens = [s.get() for s in self.screen_gens]
 
+    def __poisson(self, mu):
+        rng = np.random.default_rng()
+        # mu_sign = np.sign(mu)
+        value = np.exp(-mu)
+        noise = np.zeros(np.shape(mu))
+
+        current = rng.random(size=np.shape(mu))
+        hits = current > value
+
+        while hits.any():
+            noise += hits
+            current *= rng.random(size=np.shape(mu))
+            hits = current > value
+
+        # Limit magnitude when lots of photons hit the same position
+        bigmean = np.argwhere(mu > 100)
+        mb = mu[bigmean[:, 0], bigmean[:, 1]]
+        noise[bigmean[:, 0], bigmean[:, 1]] = np.around(mb + np.sqrt(mb) * rng.normal(size=np.shape(mb)))
+
+        return noise # * mu_sign
+
+    def set_noise(self, photons):
+        if photons > 0:
+            ss = []
+            for s in self.screens:
+                noisy = self.__poisson(s * photons)
+                # noisy /= np.linalg.norm(noisy)
+                noisy /= photons
+                ss.append(noisy)
+            self.noisy_screens = ss
+            self.noise = True
+        else:
+            self.noisy_screens = None
+            self.noise = False
+
     def step(self, dt):
         raise NotImplementedError()
 
@@ -82,7 +119,10 @@ class TomographyController():
         """
         self.start_time = time.perf_counter()
 
-        set_up = zip(self.T.altitudes, self.screens, self.T.metapupil_diameters)
+        if self.noise:
+            set_up = zip(self.T.altitudes, self.noisy_screens, self.T.metapupil_diameters)
+        else:
+            set_up = zip(self.T.altitudes, self.screens, self.T.metapupil_diameters)
         set_up = list(set_up)
         # beacon_coeffs = [np.sum([self.T.basis.decompose(b.cut_out(self.T.D, a, s, m)) for a, s, m in set_up], 0) for b in asterism]
         # beacon_coeffs = np.reshape(beacon_coeffs, (len(asterism) * self.N, -1))
@@ -99,6 +139,7 @@ class TomographyController():
         self.end_time = time.perf_counter()
         self.run_time = self.end_time - self.start_time
 
+        set_up = zip(self.T.altitudes, self.screens, self.T.metapupil_diameters)
         self.actual_screen = np.sum([self.target.cut_out(self.T.D, a, s, md) for a, s, md in set_up], 0)
         self.actual_coeffs = self.T.basis.decompose(self.actual_screen)
         self.actual_coeffs[0] = 0.0
