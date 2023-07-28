@@ -9,16 +9,18 @@ from tomography import tomography, beacon, controller
 from util import util
 import constellations
 
+
 # BASIC PARAMETERS
 aperture_size = 256             # number of pixels at telescope aperture
 D =             0.6             # telescope diameter (m)
 r0 =            0.05            # Fried parameter (poor seeing = 5cm, Excellent = 20cm) (m)
 layers =        [1000, 8000]     # layer altitudes (m)
-retests =       1               # number of time to retest each
 
 # TEST SETTINGS
-n_coeff_set =   [36] # [25, 36, 64]
-n_phase_screens = 5
+N_COEFFS = 25
+n_coeff_set =   [N_COEFFS] # [25, 36, 64]
+file_name = "results_{}.data".format(N_COEFFS)
+n_phase_screens = 20
 
 # TARGET POSITIONS
 line_theta = 30 * (np.pi/180)   # radians
@@ -66,15 +68,14 @@ for ps in phase_screens:
             tests.append((ps, asterism, target))
 
 with open("results/results_36.data", "w") as f:
-    f.write("N Coeffs,Basis Function,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,MSE Mean,MSE Stdev,Time Mean,Time Stdev\n")
+    f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,RMSE\n")
     for n_coeffs in n_coeff_set:
         basis_functions = [
             zernike.Zernike(n_coeffs),
             DCT.DCT(n_coeffs),
             DST.DST(n_coeffs),
             wavelet.wavelet(n_coeffs, wavelets='haar'),
-            wavelet.wavelet(n_coeffs, wavelets='db2'),
-            wavelet.wavelet(n_coeffs, wavelets='sym2')
+            wavelet.wavelet(n_coeffs, wavelets='db2')
             ]
         for B in basis_functions:
             tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
@@ -87,30 +88,23 @@ with open("results/results_36.data", "w") as f:
                 T.set_target(target[1])
                 ps = test[0]
                 T.set_phase_screens(seeds=ps)
-                # mssim = []
-                mse = []
-                time = []
-                for i in range(retests):
-                    T.run()
-                    mask = util.circle(aperture_size/2, aperture_size)
-                    masked_actual = mask * T.actual_screen
-                    masked_recon = mask * T.reconstructed_screen
-                    # mssim.append(structural_similarity(masked_actual, masked_recon))
-                    mse.append(mean_squared_error(masked_actual, masked_recon))
-                    time.append(T.run_time)
-                f.write("{},{},{},{},{},{},{:4f},{},{:.4f},{:.4f},{:.4f},{:.4f}\n".format(
-                    n_coeffs,
+
+                T.run()
+                mask = util.circle(aperture_size/2, aperture_size)
+                masked_actual = mask * T.actual_screen
+                masked_recon = mask * T.reconstructed_screen
+                mse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+
+                f.write("{},{},{},{},{},{},{:4f},{},{:.4f}\n".format(
                     B.name,
+                    n_coeffs,
                     ps[0],
                     ps[1],
                     asterism[0][0],
                     asterism[0][1],
                     target[0][0],
                     target[0][1],
-                    np.mean(mse),
-                    np.std(mse),
-                    np.mean(time),
-                    np.std(time)
+                    mse
                 ))
 
 plt.show()

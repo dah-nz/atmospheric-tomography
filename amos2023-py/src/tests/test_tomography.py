@@ -7,14 +7,14 @@ from util import util
 
 from skimage.metrics import structural_similarity, mean_squared_error
 
-beacon_angle = 100           # arcseconds
+beacon_angle = 30           # arcseconds
 aperture_size = 256         # pixels
 telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
 
 # generate asterism
 beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
-target = beacon.Beacon(0, 30, gamma_arcseconds=True)
+target = beacon.Beacon(0, 0, gamma_arcseconds=True)
 
 aperture = np.zeros((aperture_size, aperture_size))
 

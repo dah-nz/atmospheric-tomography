@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import time
 from tomography import phase_screen
 
@@ -64,40 +65,13 @@ class TomographyController():
             else:
                 self.screens = [s.get() for s in self.screen_gens]
 
-    def __poisson(self, mu):
+    def set_noise(self, sigma):
         rng = np.random.default_rng()
-        # mu_sign = np.sign(mu)
-        value = np.exp(-mu)
-        noise = np.zeros(np.shape(mu))
-
-        current = rng.random(size=np.shape(mu))
-        hits = current > value
-
-        while hits.any():
-            noise += hits
-            current *= rng.random(size=np.shape(mu))
-            hits = current > value
-
-        # Limit magnitude when lots of photons hit the same position
-        bigmean = np.argwhere(mu > 100)
-        mb = mu[bigmean[:, 0], bigmean[:, 1]]
-        noise[bigmean[:, 0], bigmean[:, 1]] = np.around(mb + np.sqrt(mb) * rng.normal(size=np.shape(mb)))
-
-        return noise # * mu_sign
-
-    def set_noise(self, photons):
-        if photons > 0:
-            ss = []
-            for s in self.screens:
-                noisy = self.__poisson(s * photons)
-                # noisy /= np.linalg.norm(noisy)
-                noisy /= photons
-                ss.append(noisy)
-            self.noisy_screens = ss
-            self.noise = True
-        else:
-            self.noisy_screens = None
-            self.noise = False
+        self.noisy_screens = []
+        for s in self.screens:
+            noisy = rng.normal(0.0, sigma, np.shape(s))
+            self.noisy_screens.append(noisy + s)
+        self.noise = True
 
     def step(self, dt):
         raise NotImplementedError()
@@ -128,6 +102,14 @@ class TomographyController():
         # beacon_coeffs = np.reshape(beacon_coeffs, (len(asterism) * self.N, -1))
         self.beacon_cut_outs = [b.cut_out(self.T.D, a, s, m) for a, s, m in set_up for b in self.asterism]
         self.beacon_coeffs_raw = [self.T.basis.decompose(b) for b in self.beacon_cut_outs]
+        
+        fig, axs = plt.subplots(2, len(self.beacon_coeffs_raw))
+        fig.suptitle("Cut Outs: {}".format(self.T.basis.name))
+        for i, c in enumerate(self.beacon_cut_outs):
+            axs[0, i].imshow(c)
+        for i, c in enumerate(self.beacon_coeffs_raw):
+            s = self.T.basis.compose((self.T.aperture_size, self.T.aperture_size), c)
+            axs[1, i].imshow(s)
         b_shifted = np.reshape(self.beacon_coeffs_raw, (len(set_up), len(self.asterism), -1))
         self.beacon_coeffs_sum = np.sum(b_shifted, 0)
         self.beacon_coeffs = np.reshape(self.beacon_coeffs_sum, (len(self.asterism) * self.N, -1))

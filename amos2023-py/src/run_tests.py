@@ -16,6 +16,8 @@
 
 # import tests.test_wavelet
 
-# import tests.test_noise
+#import tests.test_noise
 
-import tests.test_asterisms
+# import tests.test_asterisms
+
+import tests.test_basis_reconstruction

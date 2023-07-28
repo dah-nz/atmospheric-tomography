@@ -211,8 +211,12 @@ class Tomography():
         while len(grid) < N:
             x = rng.integers(0, self.aperture_size)
             y = rng.integers(0, self.aperture_size)
-            if (x-radius)**2 + (y-radius)**2 <= limit:
+            if self.basis.name == "zernike":
+                if (x-radius)**2 + (y-radius)**2 <= limit:
+                    grid.append((x, y))
+            else:
                 grid.append((x, y))
+                
 
         # radius = [((n+1)/N)**0.3 for n in range(N)]
         # angle = [np.pi*np.pi*N*r for r in radius]

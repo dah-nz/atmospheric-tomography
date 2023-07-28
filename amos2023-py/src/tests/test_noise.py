@@ -40,7 +40,7 @@ T.set_target(target)
 
 # T.set_phase_screens(screens=[L1, L2])
 T.set_phase_screens(seeds=[0, 4])
-T.set_noise(1000)
+T.set_noise(1)
 
 calculated_coeffs = T.run()
 
