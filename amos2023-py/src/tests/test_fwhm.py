@@ -14,7 +14,7 @@ r_0 = 0.05                  # m
 
 # generate asterism
 beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
-target = beacon.Beacon(0, 0, gamma_arcseconds=True)
+target = beacon.Beacon(0, 2, gamma_arcseconds=True)
 
 aperture = np.zeros((aperture_size, aperture_size))
 
@@ -114,9 +114,11 @@ print(np.amax(actual_screen))
 
 telescope_pupil_generator = hcipy.make_circular_aperture(telescope_diameter)
 telescope_pupil = telescope_pupil_generator(pupil_grid)
-telescope_wavefront = telescope_pupil * actual_screen.ravel()
-wavefront = hcipy.Wavefront(telescope_wavefront, wavelength)
+actual_wavefront = telescope_pupil * actual_screen.ravel()
+wavefront = hcipy.Wavefront(actual_wavefront, wavelength)
 unaberrated_wavefront = hcipy.Wavefront(telescope_pupil, wavelength)
+recon_wavefront = telescope_pupil * recon_screen.ravel()
+wavefront_recon = hcipy.Wavefront(recon_wavefront, wavelength)
 
 q = 8           # resolution element = lambda * f / D
 n_airy = 16     # resolution element = lambda * f / D
@@ -130,11 +132,15 @@ focal_grid = hcipy.make_focal_grid(q=q, num_airy=n_airy, pupil_diameter=telescop
 prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
 focal_unaberrated = prop.forward(unaberrated_wavefront)
 
+focal_grid = hcipy.make_focal_grid(q=q, num_airy=n_airy, pupil_diameter=telescope_diameter, focal_length=effective_focal_length, reference_wavelength=wavelength)
+prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
+focal_recon = prop.forward(wavefront_recon)
+
 print("Self Strehl: {}".format(focal_image.intensity.max() / focal_unaberrated.intensity.max()))
 print("Strehl: {}".format(hcipy.metrics.get_strehl_from_focal(focal_image.intensity, focal_unaberrated.intensity)))
 
 fwhm_arcsecs = hcipy.atmosphere.fried_parameter_to_seeing(r_0, wavelength)
-f = 2 * effective_focal_length * np.tan(fwhm_arcsecs / 2 * np.pi / (180 * 3600)) # convert arcseconds to radians
+f = 2 * effective_focal_length * np.tan(fwhm_arcsecs / (2 * np.pi / (180 * 3600))) # convert arcseconds to radians
 print("FWHM Unaberrated: {}".format(f))
 
 plt.figure()
@@ -163,7 +169,7 @@ plt.plot(prof)
 f = find_fwhm(prof)
 print("FWHM Unaberrated (calc): {}".format(f * resolution))
 
-fwhm_un = np.array(fwhm.getFWHM_GaussianFitScaledAmp(image)) * (resolution)
+fwhm_un = np.array(fwhm.fwhm(image)) * (resolution)
 print("FWHM Unaberrated: {}".format(fwhm_un))
 
 image = focal_image.intensity / focal_image.intensity.max()
@@ -172,8 +178,17 @@ prof = radial_profile(image, center=(int(image.shape[0]/2), int(image.shape[1]/2
 plt.plot(prof)
 f = find_fwhm(prof)
 print("FWHM Actual (calc): {}".format(f * resolution))
-fwhm_ac = np.array(fwhm.getFWHM_GaussianFitScaledAmp(image)) * (resolution)
+fwhm_ac = np.array(fwhm.fwhm(image)) * (resolution)
 print("FWHM Actual: {}".format(fwhm_ac))
+
+image = focal_recon.intensity / focal_recon.intensity.max()
+image = np.reshape(image, (int(np.sqrt(image.shape[0])), -1))
+prof = radial_profile(image, center=(int(image.shape[0]/2), int(image.shape[1]/2)))
+plt.plot(prof)
+f = find_fwhm(prof)
+print("FWHM Recon (calc): {}".format(f * resolution))
+fwhm_ac = np.array(fwhm.fwhm(image)) * (resolution)
+print("FWHM Recon: {}".format(fwhm_ac))
 
 # plt.figure()
 # bin_centers, profile, std_profile, num_per_bin = fwhm(focal_unaberrated.intensity)
@@ -195,6 +210,13 @@ plt.colorbar()
 
 plt.figure()
 hcipy.imshow_field(np.log10(focal_unaberrated.intensity / focal_unaberrated.intensity.max()), vmin=-5, grid_units=1e-6)
+# hcipy.imshow_field(focal_unaberrated.intensity / focal_unaberrated.intensity.max(), vmin=-5, grid_units=1e-6)
+plt.xlabel('Focal plane distance [um]')
+plt.ylabel('Focal plane distance [um]')
+plt.colorbar()
+
+plt.figure()
+hcipy.imshow_field(np.log10(focal_recon.intensity / focal_recon.intensity.max()), vmin=-5, grid_units=1e-6)
 # hcipy.imshow_field(focal_unaberrated.intensity / focal_unaberrated.intensity.max(), vmin=-5, grid_units=1e-6)
 plt.xlabel('Focal plane distance [um]')
 plt.ylabel('Focal plane distance [um]')
