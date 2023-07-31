@@ -8,7 +8,7 @@ from util import util
 from skimage.metrics import structural_similarity, mean_squared_error
 import hcipy
 
-beacon_angle = 30           # arcseconds
+beacon_angle = 7.5           # arcseconds
 aperture_size = 256         # pixels
 telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
@@ -41,14 +41,19 @@ for B in bfuncs:
 
     calculated_coeffs = T.run()
 
-    fig, axes = plt.subplots(2, 3)
+    fig, axes = plt.subplots(2, 4)
     fig.suptitle("Target Phase Screens: {}".format(B.name))
-    fig.set_size_inches(8, 6)
+    fig.set_size_inches(10, 6)
 
     mask = util.circle(T.T.aperture_size/2, T.T.aperture_size)
-    actual_screen = T.actual_screen # * mask
+
+    effective_focal_length = telescope_diameter * 6.5 # (f/6.5 system)
+    wavelength = 600e-9 # m
+    SCALING_FACTOR = wavelength # / (np.pi * 2) 
+
+    actual_screen = T.actual_screen # * mask # Convert from radians to meters
     # actual_screen = T.actual_screen
-    recon_screen = T.reconstructed_screen # * mask
+    recon_screen = T.reconstructed_screen # * mask # Convert from radians to meters
 
     mx = max(np.amax(actual_screen), np.amax(recon_screen))
     mn = min(np.amin(actual_screen), np.amin(recon_screen))
@@ -62,14 +67,17 @@ for B in bfuncs:
 
     print("RMSE: {}".format(np.sqrt(mean_squared_error(actual_screen, recon_screen))))
 
-    effective_focal_length = telescope_diameter * 6.5 # (f/6.5 system)
-    wavelength = 600e-9
+
 
     pupil_grid = hcipy.make_pupil_grid(aperture_size, diameter=telescope_diameter)
 
     telescope_pupil_generator = hcipy.make_circular_aperture(telescope_diameter)
     telescope_pupil = telescope_pupil_generator(pupil_grid)
     unaberrated_wavefront = hcipy.Wavefront(telescope_pupil, wavelength)
+
+    diff_screen = actual_screen - recon_screen
+    diff = telescope_pupil * diff_screen.flatten()
+    diff_wavefront = hcipy.Wavefront(diff, wavelength)
 
     actual = telescope_pupil * actual_screen.flatten()
     actual_wavefront = hcipy.Wavefront(actual, wavelength)
@@ -92,31 +100,43 @@ for B in bfuncs:
     prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
     focal_unaberrated = prop.forward(unaberrated_wavefront)
 
-    print("Actual Strehl: {}".format(hcipy.metrics.get_strehl_from_focal(focal_actual.intensity, focal_unaberrated.intensity)))
-    print("Reconstructed Strehl: {}".format(hcipy.metrics.get_strehl_from_focal(focal_recon.intensity, focal_unaberrated.intensity)))
+    focal_grid = hcipy.make_focal_grid(q = 4, num_airy=16, pupil_diameter=telescope_diameter, focal_length=effective_focal_length, reference_wavelength=wavelength)
+    prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
+    focal_diff = prop.forward(diff_wavefront)
+
+    print("Compare Strehl: {}".format(hcipy.metrics.get_strehl_from_focal(focal_recon.intensity, focal_actual.intensity)))
+    print("Difference Strehl: {}".format(hcipy.metrics.get_strehl_from_focal(focal_diff.intensity, focal_unaberrated.intensity)))
 
     print("PSF RMSE: {}".format(np.sqrt(mean_squared_error(focal_actual.intensity, focal_recon.intensity))))
     print("PSF MSSIM: {}".format(structural_similarity(focal_actual.intensity, focal_recon.intensity)))
 
     axes[1, 0].set_title("Actual PSF")
-
     hcipy.imshow_field(np.log10(focal_actual.intensity / focal_actual.intensity.max()), ax=axes[1, 0], vmin=-5, grid_units=1e-6)
     axes[1, 0].set_xlabel('Focal plane distance [um]')
     axes[1, 0].set_ylabel('Focal plane distance [um]')
     # axes[1, 0].colorbar()
 
     axes[1, 1].set_title("Reconstructed PSF")
-    hcipy.imshow_field(np.log10(focal_recon.intensity / focal_actual.intensity.max()), ax=axes[1, 1], vmin=-5, grid_units=1e-6)
+    hcipy.imshow_field(np.log10(focal_recon.intensity / focal_recon.intensity.max()), ax=axes[1, 1], vmin=-5, grid_units=1e-6)
     axes[1, 1].set_xlabel('Focal plane distance [um]')
     axes[1, 1].set_ylabel('Focal plane distance [um]')
     # axes[1, 1].colorbar()
 
-    diff = focal_actual.intensity - focal_recon.intensity
-    axes[1, 2].set_title("PSF Difference")
-    hcipy.imshow_field(diff / diff.max(), ax=axes[1, 2], vmin=-5, grid_units=1e-6)
+    axes[1, 2].set_title("Difference PSF")
+    hcipy.imshow_field(np.log10(focal_diff.intensity / focal_diff.intensity.max()), ax=axes[1, 2], vmin=-5, grid_units=1e-6)
     axes[1, 2].set_xlabel('Focal plane distance [um]')
     axes[1, 2].set_ylabel('Focal plane distance [um]')
+
+    axes[1, 3].set_title("Unaberrated PSF")
+    hcipy.imshow_field(np.log10(focal_unaberrated.intensity / focal_unaberrated.intensity.max()), ax=axes[1, 3], vmin=-5, grid_units=1e-6)
+    axes[1, 3].set_xlabel('Focal plane distance [um]')
+    axes[1, 3].set_ylabel('Focal plane distance [um]')
     # axes[1, 2].colorbar()
+
+    print("Actual Max Intensity: {}".format(focal_actual.intensity.max()))
+    print(" Recon Max Intensity: {}".format(focal_recon.intensity.max()))
+    print("  Diff Max Intensity: {}".format(focal_diff.intensity.max()))
+    print("Unaber Max Intensity: {}".format(focal_unaberrated.intensity.max()))
 
     print("")
 

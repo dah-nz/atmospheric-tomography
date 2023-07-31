@@ -20,11 +20,11 @@ aperture = np.zeros((aperture_size, aperture_size))
 
 # Calculate metapupil radius
 layers = [1000, 8000]
-n_coeffs = 256
+n_coeffs = 64
 # B = zernike.Zernike(n_coeffs)
 # B = DCT.DCT(n_coeffs)
 # B = DST.DST(n_coeffs)
-B = wavelet.wavelet(n_coeffs, wavelets='sym2')
+B = wavelet.wavelet(n_coeffs, wavelets='db2')
 
 tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
 
@@ -89,8 +89,8 @@ axes[1].imshow(recon_screen)
 axes[2].imshow(actual_screen - recon_screen)
 
 plt.figure()
-plt.title("Random Grid with 1024 points")
-grid = tomo._getGrid(1024)
+plt.title("Random Grid with {} points".format(n_coeffs*tomography.GRID_MULTIPLIER))
+grid = tomo._getGrid(n_coeffs*tomography.GRID_MULTIPLIER)
 plt.scatter([x for x, _  in grid], [y for _, y in grid])
 
 print("MSSIM: {}".format(structural_similarity(actual_screen, recon_screen)))
