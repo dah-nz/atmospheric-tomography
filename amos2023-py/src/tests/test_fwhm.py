@@ -39,7 +39,7 @@ T.set_target(target)
 # # L2 = B.out(T.T.layer_grids[1], 8)
 
 # T.set_phase_screens(screens=[L1, L2])
-T.set_phase_screens(seeds=[12, 6])
+T.set_phase_screens()
 
 calculated_coeffs = T.run()
 
@@ -114,13 +114,13 @@ print(np.amax(actual_screen))
 
 telescope_pupil_generator = hcipy.make_circular_aperture(telescope_diameter)
 telescope_pupil = telescope_pupil_generator(pupil_grid)
-telescope_wavefront = telescope_pupil * phase_screen
+telescope_wavefront = telescope_pupil * actual_screen.ravel()
 wavefront = hcipy.Wavefront(telescope_wavefront, wavelength)
 unaberrated_wavefront = hcipy.Wavefront(telescope_pupil, wavelength)
 
 q = 8           # resolution element = lambda * f / D
 n_airy = 16     # resolution element = lambda * f / D
-resolution = wavelength * f_number
+resolution = wavelength * f_number # / telescope_diameter
 
 focal_grid = hcipy.make_focal_grid(q=q, num_airy=n_airy, pupil_diameter=telescope_diameter, focal_length=effective_focal_length, reference_wavelength=wavelength)
 prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
@@ -148,10 +148,21 @@ def radial_profile(data, center=(0,0)):
     radialprofile = tbin / nr
     return radialprofile
 
+def find_fwhm(profile):
+    maxv = np.amax(profile)
+
+    indices = np.argwhere(profile >= (maxv/2))
+    ri = np.amax(indices)
+
+    return 2 * ((((maxv/2)-profile[ri-1])/(profile[ri]-profile[ri-1])) + ri)
+
 image = focal_unaberrated.intensity / focal_unaberrated.intensity.max()
 image = np.reshape(image, (int(np.sqrt(image.shape[0])), -1))
 prof = radial_profile(image, center=(int(image.shape[0]/2), int(image.shape[1]/2)))
 plt.plot(prof)
+f = find_fwhm(prof)
+print("FWHM Unaberrated (calc): {}".format(f * resolution))
+
 fwhm_un = np.array(fwhm.getFWHM_GaussianFitScaledAmp(image)) * (resolution)
 print("FWHM Unaberrated: {}".format(fwhm_un))
 
@@ -159,6 +170,8 @@ image = focal_image.intensity / focal_image.intensity.max()
 image = np.reshape(image, (int(np.sqrt(image.shape[0])), -1))
 prof = radial_profile(image, center=(int(image.shape[0]/2), int(image.shape[1]/2)))
 plt.plot(prof)
+f = find_fwhm(prof)
+print("FWHM Actual (calc): {}".format(f * resolution))
 fwhm_ac = np.array(fwhm.getFWHM_GaussianFitScaledAmp(image)) * (resolution)
 print("FWHM Actual: {}".format(fwhm_ac))
 

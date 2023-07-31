@@ -18,4 +18,6 @@
 
 # import tests.test_noise
 
-import tests.test_asterisms
+# import tests.test_asterisms
+
+import tests.test_fwhm
