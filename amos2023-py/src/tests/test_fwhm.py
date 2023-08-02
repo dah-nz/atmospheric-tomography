@@ -11,6 +11,8 @@ beacon_angle = 7.5          # arcseconds
 aperture_size = 256         # pixels
 telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
+f_number = 6.5
+wavelength = 600e-9         # m
 
 # generate asterism
 beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
@@ -28,7 +30,7 @@ B = DCT.DCT(n_coeffs)
 
 tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
 
-T = controller.TomographyController(tomo, n_coeffs)
+T = controller.TomographyController(tomo, n_coeffs, wavelength, f_number)
 T.set_asterism(beacons)
 T.set_target(target)
 # L1_modes = np.random.normal(size=n_coeffs,)
@@ -98,9 +100,8 @@ print("MSE: {}".format(mean_squared_error(actual_screen, recon_screen)))
 
 import hcipy
 
-f_number = 6.5
+
 effective_focal_length = telescope_diameter * f_number # (f/6.5 system)
-wavelength = 600e-9
 
 pupil_grid = hcipy.make_pupil_grid(256, diameter=telescope_diameter)
 

@@ -85,7 +85,6 @@ class Beacon():
         r = int(cut_out_dim / 2 + 0.5)
 
         phase = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
-
         # mask = util.circle(r, 2 * r)
         # return phase * mask
         return phase

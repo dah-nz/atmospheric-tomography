@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import constellations
 from tomography import beacon
 
-guidestar_amount = [3, 6, 12]
-beacon_radii = [30, 60, 100]
+guidestar_amount = [3, 6]
+beacon_radii = [7.5, 15]
 
 guidestar_sets = {}
 for n in guidestar_amount:
@@ -21,8 +21,8 @@ for i, con in enumerate(cons):
 
 targets = {}
 line_theta = 30 * (np.pi/180)   # radians
-line_spread = 10 # arcseconds
-line_offset = 5 # arcseconds
+line_spread = 3 # arcseconds
+line_offset = 3 # arcseconds
 targets = {}
 # line through origin
 targets[(0, 0)] = beacon.Beacon(0, 0, gamma_arcseconds=True)
@@ -36,7 +36,7 @@ targets[(line_theta+(np.pi/2.0), line_offset)] = beacon.Beacon(line_theta+(np.pi
 targets[(line_theta+(np.pi/2.0)-phi, h)] = beacon.Beacon(line_theta+(np.pi/2.0)-phi, h, gamma_arcseconds=True)
 targets[(line_theta+(np.pi/2.0)+phi, h)] = beacon.Beacon(line_theta+(np.pi/2.0)+phi, h, gamma_arcseconds=True)
 for t in np.linspace(0, 2*np.pi, 4, endpoint=False):    # theta angle (acw from horizon)
-    for g in [5, 10]: # gamma angle (from telescope axis)
+    for g in [line_spread, 2*line_spread]: # gamma angle (from telescope axis)
         target = beacon.Beacon(t, g, gamma_arcseconds=True)
         targets[(t, g)] = target
 
@@ -47,7 +47,7 @@ altitude = 1000
 colours = ['#2058b3', '#117348', '#a63a0f', '#830fa6']
 i = 0
 
-fig, axs = plt.subplots(1, 3)
+fig, axs = plt.subplots(1, 2)
 fig.suptitle("Guide Star Asterisms\nat 500m altitude")
 for k, v in guidestar_sets.items():
     pos = [s.position(altitude) for s in v]
@@ -55,16 +55,12 @@ for k, v in guidestar_sets.items():
         a = 0
     if k[0] == 6:
         a = 1
-    if k[0] == 12:
-        a = 2
-    if k[1] == 30:
+    if k[1] == 7.5:
         clr = colours[0]
-    elif k[1] == 60:
+    elif k[1] == 15:
         clr = colours[1]
-    elif k[1] == 100:
-        clr = colours[2]
     else:
-        clr = colours[3]
+        clr = colours[2]
     x = [p[0] for p in pos]
     y = [p[1] for p in pos]
     if -1 in k:
@@ -85,21 +81,12 @@ axs[1].legend()
 axs[1].set_xlabel("Guidestar Position (m)")
 axs[1].set_ylabel("Guidestar Position (m)")
 
-axs[2].set_title("12 Guidestars")
-axs[2].axis('equal')
-axs[2].legend()
-axs[2].set_xlabel("Guidestar Position (m)")
-axs[2].set_ylabel("Guidestar Position (m)")
 
-plt.figure()
-plt.title("Target Locations\nat 500m altitude")
-plt.xlabel("Target Position (m)")
-plt.ylabel("Target Position (m)")
-plt.axis('equal')
 for k, v in targets.items():
     pos = v.position(altitude)
     x = pos[0]
     y = pos[1]
-    plt.scatter(x, y, c=colours[3], marker='8')
+    axs[0].scatter(x, y, c=colours[3], marker='8')
+    axs[1].scatter(x, y, c=colours[3], marker='8')
 
 plt.show()
