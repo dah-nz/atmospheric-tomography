@@ -22,7 +22,7 @@ wavelength =    600e-9          # wavelength of light (m)
 N_COEFFS = 64
 n_coeff_set =   [N_COEFFS] # [25, 36, 64]
 file_name = "results_{}.data".format(N_COEFFS)
-ps_seed = 100
+ps_seed = 80
 n_phase_screens = 10
 
 # TARGET POSITIONS
@@ -114,6 +114,6 @@ with open("results/{}".format(file_name), "w") as f:
                     fwhm_recons
                 )
                 print(out)
-                f.write(out)
+                f.write(out+"\n")
 
 plt.show()

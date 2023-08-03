@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from tomography import beacon, tomography, controller, phase_screen
+from tomography import beacon, tomography, controller, phase_screen, psf
 from basis import zernike, DCT, DST, wavelet
 from util import util
 
@@ -23,7 +23,7 @@ aperture = np.zeros((aperture_size, aperture_size))
 
 # Calculate metapupil radius
 layers = [1000, 4000]
-n_coeffs = 64
+n_coeffs = 16
 
 bfuncs = [zernike.Zernike(n_coeffs),
           DCT.DCT(n_coeffs),
@@ -44,7 +44,8 @@ for B in bfuncs:
     T = controller.TomographyController(tomo, n_coeffs)
     T.set_asterism(beacons)
     T.set_target(target)
-    T.set_phase_screens(seeds=[23, 56])
+    # T.set_phase_screens(seeds=[50, 56])
+    T.set_phase_screens(seeds=[12, 34])
 
     calculated_coeffs = T.run()
 
@@ -56,29 +57,19 @@ for B in bfuncs:
 
     actual_screen = T.actual_screen # * mask # Convert from radians to meters
     recon_screen = T.reconstructed_screen # * mask # Convert from radians to meters
+    recon_screen += np.random.normal(scale=0.25, size=recon_screen.shape)
     phase_screens.append(recon_screen)
 
     mx.append(max(np.amax(actual_screen), np.amax(recon_screen)))
     mn.append(min(np.amin(actual_screen), np.amin(recon_screen)))
 
-    pupil_grid = hcipy.make_pupil_grid(aperture_size, diameter=telescope_diameter)
-    telescope_pupil_generator = hcipy.make_circular_aperture(telescope_diameter)
-    telescope_pupil = telescope_pupil_generator(pupil_grid)
+    focal_actual = psf.psf(actual_screen)
+    print(psf.fwhm(focal_actual))
 
-    actual = telescope_pupil * actual_screen.flatten()
-    actual_wavefront = hcipy.Wavefront(actual, wavelength)
-    reconstructed = telescope_pupil * recon_screen.flatten()
-    recon_wavefront = hcipy.Wavefront(reconstructed, wavelength)
+    focal_recon = psf.psf(recon_screen)
+    print(psf.fwhm(focal_recon))
 
-    focal_grid = hcipy.make_focal_grid(q = 4, num_airy=16, pupil_diameter=telescope_diameter, focal_length=effective_focal_length, reference_wavelength=wavelength)
-    prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
-    focal_actual = prop.forward(actual_wavefront)
-
-    focal_grid = hcipy.make_focal_grid(q = 4, num_airy=16, pupil_diameter=telescope_diameter, focal_length=effective_focal_length, reference_wavelength=wavelength)
-    prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
-    focal_recon = prop.forward(recon_wavefront)
-
-    psfs.append(np.log10(focal_recon.intensity / focal_recon.intensity.max()))
+    psfs.append(np.log10(focal_recon / np.amax(focal_recon)))
 
 fig1, axs1 = plt.subplots(2, 3)
 fig1.suptitle("Phase Screen Reconstructions")
@@ -93,12 +84,20 @@ mn.sort(reverse=True)
 
 amx = mx[1]
 amn = mn[1]
+grid_size = 1e-6
+min_x = -actual_screen.shape[0]/2 * grid_size
+min_y = -actual_screen.shape[1]/2 * grid_size
+max_x = actual_screen.shape[0]/2 * grid_size
+max_y = actual_screen.shape[1]/2 * grid_size
+extent=([min_x, max_x, min_y, max_y])
 
 axs1[0, 0].set_title("Ground Truth")
-axs1[0, 0].imshow(actual_screen, vmax=amx,vmin=amn)
+axs1[0, 0].imshow(actual_screen, vmax=amx,vmin=amn, extent=extent)
 
 axs2[0, 0].set_title("Ground Truth")
-hcipy.imshow_field(np.log10(focal_actual.intensity / focal_actual.intensity.max()), ax=axs2[0, 0], vmin=-5, grid_units=1e-6)
+# hcipy.imshow_field((focal_actual.intensity / focal_actual.intensity.max()), ax=axs2[0, 0], vmin=0, grid_units=1e-6)
+# hcipy.imshow_field(, ax=axs2[0, 0], vmin=-5, grid_units=1e-6)
+axs2[0,0].imshow(np.log10(focal_actual / np.amax(focal_actual)), vmin=-5, extent=extent)
 axs2[0, 0].set_xlabel('Focal plane distance [um]')
 axs2[0, 0].set_ylabel('Focal plane distance [um]')
 
@@ -117,21 +116,19 @@ for ps, psf, name in zip(phase_screens, psfs, [B.name for B in bfuncs]):
         title = "DST"
     if name == "wavelets db2":
         r = 1
-        c = 1
+        c = 2
         title = "Wavelets (Debauchies 2)"
     if name == "wavelets haar":
         r = 1
-        c = 2
+        c = 1
         title = "Wavelets (Haar)"
 
     axs1[r, c].set_title(title)
     axs1[r, c].imshow(ps, vmax=amx,vmin=amn)
 
     axs2[r, c].set_title(title)
-    hcipy.imshow_field(psf, ax=axs2[r, c], vmin=-5, grid_units=1e-6)
+    axs2[r, c].imshow(psf, vmin=-5, extent=extent)
     axs2[r, c].set_xlabel('Focal plane distance [um]')
     axs2[r, c].set_ylabel('Focal plane distance [um]')
-
-
 
 plt.show()

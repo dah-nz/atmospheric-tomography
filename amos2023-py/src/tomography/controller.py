@@ -164,7 +164,7 @@ class TomographyController():
     def _fwhm_from_psf(self, img):
         f = 0
         n = 0
-        for angle in np.linspace(0, 180, 6, endpoint=False):
+        for angle in np.linspace(0, 180, 12, endpoint=False):
             img_r = sci.rotate(img, angle)
             x, y  = self._getFWHM_GaussianFitScaledAmp(img_r)
             f += x + y

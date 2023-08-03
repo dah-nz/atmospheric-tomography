@@ -7,8 +7,27 @@
 import numpy as np
 import scipy.optimize as opt
 import scipy.ndimage as sci
+import hcipy
 
-def fwhm(img):
+def fwhm_from_phase_screen(img, telescope_diameter, wavelength, f_number, size=256, q=4, n_airy=16):
+    pupil_grid = hcipy.make_pupil_grid(size, diameter=telescope_diameter)
+    telescope_pupil_generator = hcipy.make_circular_aperture(telescope_diameter)
+    telescope_pupil = telescope_pupil_generator(pupil_grid)
+    img_wavefront = telescope_pupil * img.ravel()
+    wavefront = hcipy.Wavefront(img_wavefront, wavelength)
+
+    effective_focal_length = telescope_diameter * f_number
+    resolution = wavelength * f_number
+
+    focal_grid = hcipy.make_focal_grid(q=q, num_airy=n_airy, pupil_diameter=telescope_diameter, focal_length=effective_focal_length, reference_wavelength=wavelength)
+    prop = hcipy.FraunhoferPropagator(pupil_grid, focal_grid, focal_length=effective_focal_length)
+    focal_image = prop.forward(wavefront)
+
+    image = focal_image.intensity / focal_image.intensity.max()
+    image = np.reshape(image, (int(np.sqrt(image.shape[0])), -1))
+    return fwhm_from_psf(image) * resolution
+
+def fwhm_from_psf(img):
     f = 0
     n = 0
     for angle in np.linspace(0, 180, 12, endpoint=False):
@@ -50,6 +69,3 @@ def getFWHM_GaussianFitScaledAmp(img):
     FWHM_x = np.abs(4*sigmaX*np.sqrt(-0.5*np.log(0.5)))
     FWHM_y = np.abs(4*sigmaY*np.sqrt(-0.5*np.log(0.5)))
     return (FWHM_x, FWHM_y)
-
-#calling example: img is your image
-# (FWHM_x, FWHM_y) = getFWHM_GaussianFitScaledAmp(img) 

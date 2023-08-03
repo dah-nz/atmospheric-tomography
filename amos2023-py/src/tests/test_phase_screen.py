@@ -3,31 +3,38 @@ import matplotlib.pyplot as plt
 
 from tomography import phase_screen
 
-grid = np.zeros((256, 256))
+size = (256, 256)
 
-K = phase_screen.Kolmogorov(grid, 1, type=np.float64)
+K = phase_screen.Kolmogorov(size, 0.6/0.05, type=np.float64)
 
-screen = K.get(0)
 
-plt.imshow(screen)
+for seed in range(144):
+    if seed % 12 == 0:
+        fig, axs = plt.subplots(3, 4)
+    r = int((seed % 12) / 4)
+    c = seed % 4
+    axs[r,c].set_title("Seed {}".format(seed))
+    screen = K.get(seed=seed)
+    axs[r,c].imshow(screen)
 
-from basis import zernike
 
-n = 20
-Z = zernike.Zernike(n)
+# from basis import zernike
 
-for m in range(n):
+# n = 20
+# Z = zernike.Zernike(n)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2)
-    fig.suptitle('Zernike mode {}'.format(m + 1))
+# for m in range(n):
 
-    c = n * [0.0]
-    c[m] = 1.0
-    screen = Z.compose(np.shape(grid), c)
-    c_out = Z.decompose(Z, screen)
+#     fig, (ax1, ax2) = plt.subplots(1, 2)
+#     fig.suptitle('Zernike mode {}'.format(m + 1))
 
-    ax1.plot(c, 'k-')
-    ax1.plot(c_out, 'r-')
-    ax2.imshow(screen)
+#     c = n * [0.0]
+#     c[m] = 1.0
+#     screen = Z.compose(np.shape(grid), c)
+#     c_out = Z.decompose(Z, screen)
+
+#     ax1.plot(c, 'k-')
+#     ax1.plot(c_out, 'r-')
+#     ax2.imshow(screen)
 
 plt.show()

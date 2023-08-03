@@ -22,4 +22,6 @@
 
 # import tests.test_fwhm
 
-import tests.test_basis_reconstruction
+# import tests.test_basis_reconstruction
+
+import tests.test_psf
