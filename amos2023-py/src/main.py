@@ -5,7 +5,7 @@ from itertools import combinations
 from skimage.metrics import structural_similarity, mean_squared_error
 
 from basis import DCT, DST, zernike, wavelet
-from tomography import tomography, beacon, controller
+from tomography import tomography, beacon, controller, psf
 from util import util
 import constellations
 
@@ -97,8 +97,8 @@ with open("results/{}".format(file_name), "w") as f:
                 masked_recon = mask * T.reconstructed_screen
                 mse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
 
-                fwhm_actual = T.fwhm_from_phase_screen(T.actual_screen)
-                fwhm_recons = T.fwhm_from_phase_screen(T.reconstructed_screen)
+                fwhm_actual = psf.fwhm(psf.psf(T.actual_screen))
+                fwhm_recons = psf.fwhm(psf.psf(T.reconstructed_screen))
 
                 out = "{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4e},{:.4e}".format(
                     B.name,

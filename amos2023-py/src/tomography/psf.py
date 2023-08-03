@@ -4,19 +4,23 @@ import scipy.ndimage as sci
 
 from util import util
 
-NUM_AIRY = 16
-Q = None
+Q = 4
 
 def psf(ps):
-    global Q    
-    Q = int(max(ps.shape) / (2 * NUM_AIRY))
-
-    aperture = util.circle(NUM_AIRY, 2*Q*NUM_AIRY)
+    r = int(max(ps.shape) / 2 + 0.5)
+    aperture = util.circle(r, 2*r)
     j = complex(0, 1)
     wf = aperture * np.exp(j * ps)
+
+    # zero pad for correct number of airy disk peaks
+    wf = np.pad(wf, (Q-1)*r)
+
     psf = np.fft.fft2(wf)
     psf = np.fft.fftshift(psf)
 
+    m = int((Q * r))
+    psf = psf[m-r:m+r, m-r:m+r]
+    
     return (np.abs(psf) ** 2)
     
 def fwhm(psf, wavelength=600e-9, f_number=6.5):
