@@ -23,7 +23,7 @@ aperture = np.zeros((aperture_size, aperture_size))
 
 # Calculate metapupil radius
 layers = [1000, 4000]
-n_coeffs = 16
+n_coeffs = 64
 
 bfuncs = [zernike.Zernike(n_coeffs),
           DCT.DCT(n_coeffs),
@@ -38,6 +38,10 @@ psfs = []
 mn = []
 mx = []
 
+wavelength = 600e-9 # m
+effective_focal_length = telescope_diameter * 6.5 # (f/6.5 system)
+resolution = wavelength * effective_focal_length / psf.Q
+
 for B in bfuncs:
     print("{}".format(B.name))
     tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
@@ -45,54 +49,53 @@ for B in bfuncs:
     T.set_asterism(beacons)
     T.set_target(target)
     # T.set_phase_screens(seeds=[50, 56])
-    T.set_phase_screens(seeds=[12, 34])
+    T.set_phase_screens(seeds=[43, 21])
 
     calculated_coeffs = T.run()
 
     mask = util.circle(T.T.aperture_size/2, T.T.aperture_size)
 
-    effective_focal_length = telescope_diameter * 6.5 # (f/6.5 system)
-    wavelength = 600e-9 # m
-    SCALING_FACTOR = wavelength # / (np.pi * 2)
-
     actual_screen = T.actual_screen # * mask # Convert from radians to meters
     recon_screen = T.reconstructed_screen # * mask # Convert from radians to meters
-    recon_screen += np.random.normal(scale=0.25, size=recon_screen.shape)
+    # recon_screen += np.random.normal(scale=0.25, size=recon_screen.shape)
     phase_screens.append(recon_screen)
 
     mx.append(max(np.amax(actual_screen), np.amax(recon_screen)))
     mn.append(min(np.amin(actual_screen), np.amin(recon_screen)))
 
     focal_actual = psf.psf(actual_screen)
-    print(psf.fwhm(focal_actual))
+    print(psf.fwhm(focal_actual) * resolution)
 
     focal_recon = psf.psf(recon_screen)
-    print(psf.fwhm(focal_recon))
+    print(psf.fwhm(focal_recon) * resolution)
 
     psfs.append(np.log10(focal_recon / np.amax(focal_recon)))
 
 fig1, axs1 = plt.subplots(2, 3)
-fig1.suptitle("Phase Screen Reconstructions")
+# fig1.suptitle("Phase Screen Reconstructions")
 fig1.set_size_inches(10, 8)
+fig1.tight_layout()
 
 fig2, axs2 = plt.subplots(2, 3)
-fig2.suptitle("Point Spread Functions")
+# fig2.suptitle("Point Spread Functions")
 fig2.set_size_inches(10, 8)
+fig2.tight_layout()
 
 mx.sort(reverse=True)
 mn.sort(reverse=True)
 
 amx = mx[1]
 amn = mn[1]
-grid_size = 1e-6
-min_x = -actual_screen.shape[0]/2 * grid_size
-min_y = -actual_screen.shape[1]/2 * grid_size
-max_x = actual_screen.shape[0]/2 * grid_size
-max_y = actual_screen.shape[1]/2 * grid_size
+
+um = 1e6
+min_x = -actual_screen.shape[0]/2 * resolution * um
+min_y = -actual_screen.shape[1]/2 * resolution * um
+max_x = actual_screen.shape[0]/2 * resolution * um
+max_y = actual_screen.shape[1]/2 * resolution * um
 extent=([min_x, max_x, min_y, max_y])
 
 axs1[0, 0].set_title("Ground Truth")
-axs1[0, 0].imshow(actual_screen, vmax=amx,vmin=amn, extent=extent)
+axs1[0, 0].imshow(actual_screen, vmax=amx,vmin=amn)
 
 axs2[0, 0].set_title("Ground Truth")
 # hcipy.imshow_field((focal_actual.intensity / focal_actual.intensity.max()), ax=axs2[0, 0], vmin=0, grid_units=1e-6)

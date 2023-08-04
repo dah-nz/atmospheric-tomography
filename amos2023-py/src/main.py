@@ -19,9 +19,8 @@ f_number =      6.5             # focal number for telescope
 wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
-N_COEFFS = 64
-n_coeff_set =   [N_COEFFS] # [25, 36, 64]
-file_name = "results_{}.data".format(N_COEFFS)
+n_coeff_set =   [16, 64] # [25, 36, 64]
+
 ps_seed = 80
 n_phase_screens = 10
 
@@ -69,9 +68,10 @@ for ps in phase_screens:
         for target in targets.items():
             tests.append((ps, asterism, target))
 
-with open("results/{}".format(file_name), "w") as f:
-    f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,RMSE,FWHM Actual,FWHM Recons\n")
-    for n_coeffs in n_coeff_set:
+for n_coeffs in n_coeff_set:
+    file_name = "results_{}.data".format(n_coeffs)
+    with open("results/{}".format(file_name), "w") as f:
+        f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,RMSE,FWHM Actual,FWHM Recons\n")
         basis_functions = [
             zernike.Zernike(n_coeffs),
             DCT.DCT(n_coeffs),
@@ -96,11 +96,14 @@ with open("results/{}".format(file_name), "w") as f:
                 masked_actual = mask * T.actual_screen
                 masked_recon = mask * T.reconstructed_screen
                 mse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+                
+                pa = psf.psf(T.actual_screen)
+                pr = psf.psf(T.reconstructed_screen)
 
-                fwhm_actual = psf.fwhm(psf.psf(T.actual_screen))
-                fwhm_recons = psf.fwhm(psf.psf(T.reconstructed_screen))
+                fwhm_actual = psf.fwhm(pa)
+                fwhm_recons = psf.fwhm(pr)
 
-                out = "{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4e},{:.4e}".format(
+                out = "{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f}".format(
                     B.name,
                     n_coeffs,
                     ps[0],
