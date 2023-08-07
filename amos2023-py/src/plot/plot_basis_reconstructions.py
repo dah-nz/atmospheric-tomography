@@ -9,7 +9,7 @@ from skimage.metrics import structural_similarity, mean_squared_error
 import hcipy
 import constellations
 
-beacon_angle = 7.5          # arcseconds
+beacon_angle = 15          # arcseconds
 aperture_size = 256         # pixels
 telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
@@ -50,6 +50,7 @@ for B in bfuncs:
     T.set_target(target)
     # T.set_phase_screens(seeds=[50, 56])
     T.set_phase_screens(seeds=[43, 21])
+    T.set_noise(1.0)
 
     calculated_coeffs = T.run()
 

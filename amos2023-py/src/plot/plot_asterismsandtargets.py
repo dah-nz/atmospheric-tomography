@@ -19,7 +19,7 @@ for i, (n, g) in enumerate([(3, 7.5), (6, 15)]):
 cons = constellations.get_natural()
 
 for i, con in enumerate(cons):
-    guidestar_sets[(len(cons), -1-i)] = [(t, g * 3600 * 180 / np.pi) for t, g in con]
+    guidestar_sets[(len(con), -1-i)] = [(t, g * 3600 * 180 / np.pi) for t, g in con]
 
 targets = []
 # line through origin
@@ -41,7 +41,7 @@ ax = plt.subplot()
 ax.grid(which="both", color='#D8D8D8', linestyle='-', zorder=0)
 
 for k, v in guidestar_sets.items():
-    if k[0] > 1:
+    if k[1] > 1:
         lbl = 'Test Asterism: {} guidestars, {} arcsecond radius'.format(k[0], k[1])
     else:
         lbl = 'Natural Guidestar Constellation'
@@ -57,6 +57,14 @@ ax.scatter(x, y, label='Science Target Positions', zorder=3.5)
 
 util.plotcirc(ax, (0, 0), 7.5, '--', alpha=0.2)
 util.plotcirc(ax, (0, 0), 15, '--', alpha=0.2)
+
+gs = guidestar_sets[(5, -1)]
+gs.sort(key=lambda x: x[0])
+x = [g * np.sin(t) for t, g in gs]
+y = [g * np.cos(t) for t, g in gs]
+x.append(x[0])
+y.append(y[0])
+ax.plot(x, y, 'g--', alpha=0.2)
 
 target_line = [(line_theta, line_spread), (line_theta+np.pi, line_spread)]
 x = [g * np.sin(t) for t, g in target_line]

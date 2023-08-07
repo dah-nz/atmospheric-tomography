@@ -60,6 +60,8 @@ class TomographyController():
         seeds:
             A list of seeds for each layer
         """
+        self.noise = False
+        self.noisy_screens = []
         if screens is not None:
             self.screens = screens
         else:
@@ -73,7 +75,7 @@ class TomographyController():
         rng = np.random.default_rng()
         self.noisy_screens = []
         for s in self.screens:
-            noisy = rng.normal(0.0, sigma, np.shape(s))
+            noisy = rng.normal(0.0, sigma, s.shape)
             self.noisy_screens.append(noisy + s)
         self.noise = True
 
@@ -114,22 +116,21 @@ class TomographyController():
         # for i, c in enumerate(self.beacon_coeffs_raw):
         #     s = self.T.basis.compose((self.T.aperture_size, self.T.aperture_size), c)
         #     axs[1, i].imshow(s)
+
         b_shifted = np.reshape(self.beacon_coeffs_raw, (len(set_up), len(self.asterism), -1))
         self.beacon_coeffs_sum = np.sum(b_shifted, 0)
         self.beacon_coeffs = np.reshape(self.beacon_coeffs_sum, (len(self.asterism) * self.N, -1))
 
         self.calculated_coeffs = self.T.run(self.asterism, self.target, self.beacon_coeffs)
-        # self.calculated_coeffs[0] = 0.0
         self.reconstructed_screen = self.T.basis.compose(np.shape(self.aperture_grid), self.calculated_coeffs)
 
         self.end_time = time.perf_counter()
         self.run_time = self.end_time - self.start_time
 
-        set_up = zip(self.T.altitudes, self.screens, self.T.metapupil_diameters)
+        # set_up = zip(self.T.altitudes, self.screens, self.T.metapupil_diameters)
 
         self.actual_screen = np.sum([self.target.cut_out(self.T.D, a, s, md) for a, s, md in set_up], 0)
         self.actual_coeffs = self.T.basis.decompose(self.actual_screen)
-        # self.actual_coeffs[0] = 0.0
         self.actual_screen_from_coeffs = self.T.basis.compose(np.shape(self.actual_screen), self.actual_coeffs)
 
         return self.calculated_coeffs

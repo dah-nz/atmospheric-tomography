@@ -21,8 +21,8 @@ wavelength =    600e-9          # wavelength of light (m)
 # TEST SETTINGS
 n_coeff_set =   [16, 64] # [25, 36, 64]
 
-ps_seed = 80
-n_phase_screens = 10
+ps_seed = 2000
+n_phase_screens = 50
 
 # TARGET POSITIONS
 line_theta = 30 * (np.pi/180)   # radians
@@ -38,7 +38,7 @@ for i, (n, g) in enumerate([(3, 7.5), (6, 15)]):
 cons = constellations.get_natural()
 
 for i, con in enumerate(cons):
-    guidestar_sets[(len(cons), -1-i)] = [beacon.Beacon(t, g) for t, g in con]
+    guidestar_sets[(len(con), -1-i)] = [beacon.Beacon(t, g) for t, g in con]
 
 targets = {}
 # line through origin
@@ -59,6 +59,7 @@ for t in np.linspace(0, 2*np.pi, 4, endpoint=False):    # theta angle (acw from 
 
 
 phase_screens = list(zip(range(ps_seed,ps_seed+n_phase_screens), range(ps_seed+n_phase_screens,ps_seed+(2*n_phase_screens))))
+noise_sigma = [0, 0.1, 0.25, 1.0]
 
 # Run tests
 tests = []
@@ -68,55 +69,59 @@ for ps in phase_screens:
         for target in targets.items():
             tests.append((ps, asterism, target))
 
-for n_coeffs in n_coeff_set:
-    file_name = "results_{}.data".format(n_coeffs)
-    with open("results/{}".format(file_name), "w") as f:
-        f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,RMSE,FWHM Actual,FWHM Recons\n")
-        basis_functions = [
-            zernike.Zernike(n_coeffs),
-            DCT.DCT(n_coeffs),
-            DST.DST(n_coeffs),
-            wavelet.wavelet(n_coeffs, wavelets='haar'),
-            wavelet.wavelet(n_coeffs, wavelets='db2')
-            ]
-        for B in basis_functions:
-            tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
-            T = controller.TomographyController(tomo, n_coeffs, wavelength, f_number)
-            print("{}, {}".format(B.name, n_coeffs))
-            for test in tests:
-                asterism = test[1]
-                T.set_asterism(asterism[1])
-                target = test[2]
-                T.set_target(target[1])
-                ps = test[0]
-                T.set_phase_screens(seeds=ps)
+for sigma in noise_sigma:
+    for n_coeffs in n_coeff_set:
+        file_name = "results_psf_{}_sigma_{}.data".format(n_coeffs, sigma)
+        with open("results/{}".format(file_name), "w") as f:
+            f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed, Sigma, N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,RMSE,FWHM Actual,FWHM Recons\n")
+            basis_functions = [
+                zernike.Zernike(n_coeffs),
+                DCT.DCT(n_coeffs),
+                DST.DST(n_coeffs),
+                wavelet.wavelet(n_coeffs, wavelets='haar'),
+                wavelet.wavelet(n_coeffs, wavelets='db2')
+                ]
+            for B in basis_functions:
+                tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
+                T = controller.TomographyController(tomo, n_coeffs)
+                # print("{}, {}".format(B.name, n_coeffs))
+                for test in tests:
+                    asterism = test[1]
+                    T.set_asterism(asterism[1])
+                    target = test[2]
+                    T.set_target(target[1])
+                    ps = test[0]
+                    T.set_phase_screens(seeds=ps)
+                    if sigma != 0:
+                        T.set_noise(sigma)
 
-                T.run()
-                mask = util.circle(aperture_size/2, aperture_size)
-                masked_actual = mask * T.actual_screen
-                masked_recon = mask * T.reconstructed_screen
-                mse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
-                
-                pa = psf.psf(T.actual_screen)
-                pr = psf.psf(T.reconstructed_screen)
+                    T.run()
+                    mask = util.circle(aperture_size/2, aperture_size)
+                    masked_actual = mask * T.actual_screen
+                    masked_recon = mask * T.reconstructed_screen
+                    mse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+                    
+                    pa = psf.psf(T.actual_screen)
+                    pr = psf.psf(T.reconstructed_screen)
 
-                fwhm_actual = psf.fwhm(pa)
-                fwhm_recons = psf.fwhm(pr)
+                    fwhm_actual = psf.fwhm(pa)
+                    fwhm_recons = psf.fwhm(pr)
 
-                out = "{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f}".format(
-                    B.name,
-                    n_coeffs,
-                    ps[0],
-                    ps[1],
-                    asterism[0][0],
-                    asterism[0][1],
-                    target[0][0],
-                    target[0][1],
-                    mse,
-                    fwhm_actual,
-                    fwhm_recons
-                )
-                print(out)
-                f.write(out+"\n")
+                    out = "{},{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f}".format(
+                        B.name,
+                        n_coeffs,
+                        ps[0],
+                        ps[1],
+                        sigma,
+                        asterism[0][0],
+                        asterism[0][1],
+                        target[0][0],
+                        target[0][1],
+                        mse,
+                        fwhm_actual,
+                        fwhm_recons
+                    )
+                    print(out)
+                    f.write(out+"\n")
 
 plt.show()

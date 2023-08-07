@@ -50,14 +50,14 @@ class Kolmogorov():
         phase screen with Kolomgorov turbulence characteristics
         """
         screen = None
-        if seed is not None:
-            screen = self.__cache.check(seed)
+        # if seed is not None:
+        #     screen = self.__cache.check(seed)
 
         if screen is None:
             screen = self.__kolmogorov(seed)
 
-        if seed is not None:
-            self.__cache.add(seed, screen)
+        # if seed is not None:
+        #     self.__cache.add(seed, screen)
 
         return screen
 
