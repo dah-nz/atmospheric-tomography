@@ -1,5 +1,6 @@
+from functools import lru_cache
 import numpy as np
-from util.cache import Cache
+# from util.cache import Cache
 from util.util import *
 
 GRID_MULTIPLIER = 6
@@ -34,7 +35,7 @@ class Tomography():
         self.altitudes = layers
         self.basis = basis
         self.n_modes = n_modes
-        self.proj_cache = Cache("ProjectionMatrices_{}_{}".format(basis.name, n_modes))
+        # self.proj_cache = Cache("ProjectionMatrices_{}_{}".format(basis.name, n_modes))
         self.D = diameter
         self.aperture_size = aperture_size
         self.r0 = r0
@@ -104,6 +105,7 @@ class Tomography():
         target_coeffs = np.matmul(T, W)
 
         return target_coeffs
+
     def _metapupil_diameter(self, beacons):
         """
         Calculate diameters of metapupil at each predefined layer altitude 
@@ -128,6 +130,7 @@ class Tomography():
             r_outer += (self.D / 2)              # Calculate extent of footprint projected onto layer (diameter is of telescope aperture)
             d[a] = r_outer * 2
         return d
+
     def _projectionMatrix(self, location, diameter):
         """
         Generate projection matrix given a circular portion of a unit circle
@@ -190,6 +193,7 @@ class Tomography():
         P = (np.abs(P) > eps) * P
         return P.T
 
+    @lru_cache
     def _getGrid(self, N):
         """
         Get a grid over a unit circle for generating projection matrices 

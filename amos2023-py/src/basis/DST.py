@@ -21,7 +21,7 @@ class DST(Basis):
         super().__init__(c, "DST")
         self.__cache = Cache("basis_{}".format("dst"), max_len=1000)
         self.max_coeffs = max_coeffs
-    @lru_cache
+    @lru_cache(maxsize=64)
     def out(self, size, order):
         """
         Get the Discrete Sine Transform for order
@@ -36,6 +36,8 @@ class DST(Basis):
         c = np.array([0] * (self.N * self.N))
         c[order] = 1
         return self.compose(size, c)
+
+    @lru_cache(maxsize=65536)
     def at_point(self, x, y, size, order):
         """
         Get the Discrete Sine Transform value at a single point within a unit circle
