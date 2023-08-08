@@ -99,11 +99,7 @@ class Kolmogorov():
 
         screen = np.array(screen, dtype=self.type)
         # REMOVE DC OFFSET
-<<<<<<< HEAD
-        screen -= np.average(screen, weights=util.circle(size_chopped/2, size_chopped))
-=======
         screen -= np.average(screen) #, weights=util.circle(size_chopped/2, size_chopped))
->>>>>>> origin/master
         
         return screen
 
