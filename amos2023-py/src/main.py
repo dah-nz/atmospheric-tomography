@@ -20,9 +20,10 @@ wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
 n_coeff_set =   [16, 64] # [25, 36, 64]
+noise_SNR = [0] #, 10, 20, 30]
 
 ps_seed = 2000
-n_phase_screens = 50
+n_phase_screens = 20
 
 # TARGET POSITIONS
 line_theta = 30 * (np.pi/180)   # radians
@@ -59,7 +60,6 @@ for t in np.linspace(0, 2*np.pi, 4, endpoint=False):    # theta angle (acw from 
 
 
 phase_screens = list(zip(range(ps_seed,ps_seed+n_phase_screens), range(ps_seed+n_phase_screens,ps_seed+(2*n_phase_screens))))
-noise_sigma = [0, 0.1, 0.25, 1.0]
 
 # Run tests
 tests = []
@@ -69,11 +69,11 @@ for ps in phase_screens:
         for target in targets.items():
             tests.append((ps, asterism, target))
 
-for sigma in noise_sigma:
+for snr in noise_SNR:
     for n_coeffs in n_coeff_set:
-        file_name = "results_psf_{}_sigma_{}.data".format(n_coeffs, sigma)
+        file_name = "results_psf_{}_SNR_{}.data".format(n_coeffs, snr)
         with open("results/{}".format(file_name), "w") as f:
-            f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed, Sigma, N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,RMSE,FWHM Actual,FWHM Recons\n")
+            f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,Sigma,RMSE,RMSE Ideal,FWHM Actual,FWHM Recons,FWHM Ideal\n")
             basis_functions = [
                 zernike.Zernike(n_coeffs),
                 DCT.DCT(n_coeffs),
@@ -84,7 +84,6 @@ for sigma in noise_sigma:
             for B in basis_functions:
                 tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
                 T = controller.TomographyController(tomo, n_coeffs)
-                # print("{}, {}".format(B.name, n_coeffs))
                 for test in tests:
                     asterism = test[1]
                     T.set_asterism(asterism[1])
@@ -92,34 +91,41 @@ for sigma in noise_sigma:
                     T.set_target(target[1])
                     ps = test[0]
                     T.set_phase_screens(seeds=ps)
-                    if sigma != 0:
+                    if snr != 0:
+                        sigma = util.get_sigma_from_SNR(T.screens[0], snr)
                         T.set_noise(sigma)
 
                     T.run()
                     mask = util.circle(aperture_size/2, aperture_size)
                     masked_actual = mask * T.actual_screen
                     masked_recon = mask * T.reconstructed_screen
-                    mse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+                    masked_ideal = mask * T.actual_screen_from_coeffs
+                    rmse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+                    rmse_ideal = np.sqrt(mean_squared_error(masked_actual, actual_screen_from_coeffs))
                     
                     pa = psf.psf(T.actual_screen)
                     pr = psf.psf(T.reconstructed_screen)
+                    pai = psf.psf(T.actual_screen_from_coeffs)
 
                     fwhm_actual = psf.fwhm(pa)
                     fwhm_recons = psf.fwhm(pr)
+                    fwhm_ideal = psf.fwhm(pai)
 
-                    out = "{},{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f}".format(
+                    out = "{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f}".format(
                         B.name,
                         n_coeffs,
                         ps[0],
                         ps[1],
-                        sigma,
                         asterism[0][0],
                         asterism[0][1],
                         target[0][0],
                         target[0][1],
-                        mse,
+                        sigma,
+                        rmse,
+                        rmse_ideal,
                         fwhm_actual,
-                        fwhm_recons
+                        fwhm_recons,
+                        fwhm_ideal
                     )
                     print(out)
                     f.write(out+"\n")

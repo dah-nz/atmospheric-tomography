@@ -8,6 +8,9 @@ with open("./results/results_64.data", "r") as f:
     raw_data = f.readlines()
 
 keys = raw_data[0].strip().split(',')
+for k in keys:
+    print(k.strip())
+keys = [k.strip() for k in keys]
 
 for l in raw_data[1:]:
     data.append(l.strip().split(','))
