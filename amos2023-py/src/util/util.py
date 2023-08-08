@@ -105,3 +105,21 @@ def pip(polygon, point):
         return path.contains_point(point)
     except SystemError:
         return path.contains_point(point)
+
+#   get_sigma_from_SNR(phase_screen, SNR)
+#   Calculate sigma for a normally distributed random variable given a SNR in decibels
+#   
+#   Inputs:
+#   phase_screen:   Phase screen (phase offset in radians)
+#   SNR:            Desired SNR (db)
+#
+#   Outputs:
+#   sigma:          Std dev. of normally distributed random variable
+def get_sigma_from_SNR(phase_screen, SNR):
+    snr = 10**(SNR/10)
+    print(snr)
+    mean_square = np.mean(np.square(phase_screen))
+    print(mean_square)
+    variance = mean_square / snr
+    print(variance)
+    return np.sqrt(variance)

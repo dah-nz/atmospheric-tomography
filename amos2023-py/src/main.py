@@ -5,7 +5,7 @@ from itertools import combinations
 from skimage.metrics import structural_similarity, mean_squared_error
 
 from basis import DCT, DST, zernike, wavelet
-from tomography import tomography, beacon, controller
+from tomography import tomography, beacon, controller, psf
 from util import util
 import constellations
 
@@ -14,30 +14,32 @@ import constellations
 aperture_size = 256             # number of pixels at telescope aperture
 D =             0.6             # telescope diameter (m)
 r0 =            0.05            # Fried parameter (poor seeing = 5cm, Excellent = 20cm) (m)
-layers =        [1000, 8000]     # layer altitudes (m)
+layers =        [1000, 4000]    # layer altitudes (m)
+f_number =      6.5             # focal number for telescope
+wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
-N_COEFFS = 25
-n_coeff_set =   [N_COEFFS] # [25, 36, 64]
-file_name = "results_{}.data".format(N_COEFFS)
+n_coeff_set =   [16, 64] # [25, 36, 64]
+noise_SNR = [0] #, 10, 20, 30]
+
+ps_seed = 2000
 n_phase_screens = 20
 
 # TARGET POSITIONS
 line_theta = 30 * (np.pi/180)   # radians
-line_spread = 7 # arcseconds
-line_offset = 5 # arcseconds
+line_spread = 3 # arcseconds
+line_offset = 3 # arcseconds
 
 # Set up tests
 guidestar_sets = {}
-for i, (n, g) in enumerate([(3, 30), (3, 60), (6, 60)]):
+for i, (n, g) in enumerate([(3, 7.5), (6, 15)]):
     guidestars = [beacon.Beacon(t, g, gamma_arcseconds=True) for t in np.linspace(i, (2*np.pi)+i, n, endpoint=False)]
     guidestar_sets[(n, g)] = guidestars
 
 cons = constellations.get_natural()
 
 for i, con in enumerate(cons):
-    guidestar_sets[(len(cons), -1-i)] = [beacon.Beacon(t, g) for t, g in con]
-
+    guidestar_sets[(len(con), -1-i)] = [beacon.Beacon(t, g) for t, g in con]
 
 targets = {}
 # line through origin
@@ -52,12 +54,12 @@ targets[(line_theta+(np.pi/2.0), line_offset)] = beacon.Beacon(line_theta+(np.pi
 targets[(line_theta+(np.pi/2.0)-phi, h)] = beacon.Beacon(line_theta+(np.pi/2.0)-phi, h, gamma_arcseconds=True)
 targets[(line_theta+(np.pi/2.0)+phi, h)] = beacon.Beacon(line_theta+(np.pi/2.0)+phi, h, gamma_arcseconds=True)
 for t in np.linspace(0, 2*np.pi, 4, endpoint=False):    # theta angle (acw from horizon)
-    for g in [5, 10]: # gamma angle (from telescope axis)
+    for g in [line_spread, 2 * line_spread]: # gamma angle (from telescope axis)
         target = beacon.Beacon(t, g, gamma_arcseconds=True)
         targets[(t, g)] = target
 
 
-phase_screens = list(zip(range(n_phase_screens), range(n_phase_screens,2*n_phase_screens)))
+phase_screens = list(zip(range(ps_seed,ps_seed+n_phase_screens), range(ps_seed+n_phase_screens,ps_seed+(2*n_phase_screens))))
 
 # Run tests
 tests = []
@@ -67,44 +69,65 @@ for ps in phase_screens:
         for target in targets.items():
             tests.append((ps, asterism, target))
 
-with open("results/results_36.data", "w") as f:
-    f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,RMSE\n")
+for snr in noise_SNR:
     for n_coeffs in n_coeff_set:
-        basis_functions = [
-            zernike.Zernike(n_coeffs),
-            DCT.DCT(n_coeffs),
-            DST.DST(n_coeffs),
-            wavelet.wavelet(n_coeffs, wavelets='haar'),
-            wavelet.wavelet(n_coeffs, wavelets='db2')
-            ]
-        for B in basis_functions:
-            tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
-            T = controller.TomographyController(tomo, n_coeffs)
-            print("{}, {}".format(B.name, n_coeffs))
-            for test in tests:
-                asterism = test[1]
-                T.set_asterism(asterism[1])
-                target = test[2]
-                T.set_target(target[1])
-                ps = test[0]
-                T.set_phase_screens(seeds=ps)
+        file_name = "results_psf_{}_SNR_{}.data".format(n_coeffs, snr)
+        with open("results/{}".format(file_name), "w") as f:
+            f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,Sigma,RMSE,RMSE Ideal,FWHM Actual,FWHM Recons,FWHM Ideal\n")
+            basis_functions = [
+                zernike.Zernike(n_coeffs),
+                DCT.DCT(n_coeffs),
+                DST.DST(n_coeffs),
+                wavelet.wavelet(n_coeffs, wavelets='haar'),
+                wavelet.wavelet(n_coeffs, wavelets='db2')
+                ]
+            for B in basis_functions:
+                tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
+                T = controller.TomographyController(tomo, n_coeffs)
+                for test in tests:
+                    asterism = test[1]
+                    T.set_asterism(asterism[1])
+                    target = test[2]
+                    T.set_target(target[1])
+                    ps = test[0]
+                    T.set_phase_screens(seeds=ps)
+                    if snr != 0:
+                        sigma = util.get_sigma_from_SNR(T.screens[0], snr)
+                        T.set_noise(sigma)
 
-                T.run()
-                mask = util.circle(aperture_size/2, aperture_size)
-                masked_actual = mask * T.actual_screen
-                masked_recon = mask * T.reconstructed_screen
-                mse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+                    T.run()
+                    mask = util.circle(aperture_size/2, aperture_size)
+                    masked_actual = mask * T.actual_screen
+                    masked_recon = mask * T.reconstructed_screen
+                    masked_ideal = mask * T.actual_screen_from_coeffs
+                    rmse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+                    rmse_ideal = np.sqrt(mean_squared_error(masked_actual, actual_screen_from_coeffs))
+                    
+                    pa = psf.psf(T.actual_screen)
+                    pr = psf.psf(T.reconstructed_screen)
+                    pai = psf.psf(T.actual_screen_from_coeffs)
 
-                f.write("{},{},{},{},{},{},{:4f},{},{:.4f}\n".format(
-                    B.name,
-                    n_coeffs,
-                    ps[0],
-                    ps[1],
-                    asterism[0][0],
-                    asterism[0][1],
-                    target[0][0],
-                    target[0][1],
-                    mse
-                ))
+                    fwhm_actual = psf.fwhm(pa)
+                    fwhm_recons = psf.fwhm(pr)
+                    fwhm_ideal = psf.fwhm(pai)
+
+                    out = "{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f}".format(
+                        B.name,
+                        n_coeffs,
+                        ps[0],
+                        ps[1],
+                        asterism[0][0],
+                        asterism[0][1],
+                        target[0][0],
+                        target[0][1],
+                        sigma,
+                        rmse,
+                        rmse_ideal,
+                        fwhm_actual,
+                        fwhm_recons,
+                        fwhm_ideal
+                    )
+                    print(out)
+                    f.write(out+"\n")
 
 plt.show()

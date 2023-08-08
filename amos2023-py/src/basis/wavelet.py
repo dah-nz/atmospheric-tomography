@@ -16,11 +16,14 @@ class wavelet(Basis):
         self.lvl = 1
         self.c_shape = None
         self.c = None
-    @lru_cache
+
+    @lru_cache(maxsize=64)
     def out(self, size, order):
         c = [0] * self.N
         c[order] = 1
         return self.compose(size, c)
+
+    @lru_cache(maxsize=65536)
     def at_point(self, x, y, size, order):
         """
         Get the wavelet value at a single point within a unit circle

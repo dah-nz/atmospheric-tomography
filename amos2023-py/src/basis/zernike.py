@@ -1,3 +1,4 @@
+from functools import lru_cache
 import numpy as np
 
 from basis.basis import Basis
@@ -14,6 +15,8 @@ class Zernike(Basis):
     def __init__(self, max_coeffs):
         super().__init__(max_coeffs, "zernike")
         self.__cache = Cache("basis_{}".format("zernike"), max_len=1000)
+
+    @lru_cache(maxsize=64)
     def out(self, size, order):
         """
         Get the Zernike polynomial for order + 1
@@ -29,6 +32,8 @@ class Zernike(Basis):
         # Add one more to skip piston (DC) mode
 
         return self.__zernike(size, order + 1)
+    
+    @lru_cache(maxsize=65536)
     def at_point(self, x, y, size, order):
         """
         Get the Zernike polynomial value at a single point within a unit circle

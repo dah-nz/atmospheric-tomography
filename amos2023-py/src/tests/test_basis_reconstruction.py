@@ -7,20 +7,22 @@ from util import util
 
 from skimage.metrics import structural_similarity, mean_squared_error
 import hcipy
+import constellations
 
-beacon_angle = 7.5           # arcseconds
+beacon_angle = 15           # arcseconds
 aperture_size = 256         # pixels
 telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
 
 # generate asterism
-beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
+# beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 6, endpoint=False)]
+beacons = [beacon.Beacon(t, g, gamma_arcseconds=True) for t, g in constellations.get_natural()[0]]
 target = beacon.Beacon(0, 0, gamma_arcseconds=True)
 
 aperture = np.zeros((aperture_size, aperture_size))
 
 # Calculate metapupil radius
-layers = [1000, 8000]
+layers = [1000, 4000]
 n_coeffs = 64
 
 bfuncs = [zernike.Zernike(n_coeffs),
