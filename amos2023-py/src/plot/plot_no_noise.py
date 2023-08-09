@@ -4,7 +4,7 @@ import numpy as np
 data = []
 keys = []
 
-with open("./results/results_psf_16_sigma_0.data", "r") as f:
+with open("./results/good/results_psf_64_SNR_0.data", "r") as f:
     raw_data = f.readlines()
 
 keys = raw_data[0].strip().split(',')

@@ -24,18 +24,18 @@ for i, con in enumerate(cons):
 targets = []
 # line through origin
 targets.append((0, 0))
-targets.append((line_theta, line_spread))
-targets.append((line_theta+np.pi, line_spread))
-for t in np.linspace(0, 2*np.pi, 4, endpoint=False):    # theta angle (acw from horizon)
-    for g in [line_spread, 2 * line_spread]: # gamma angle (from telescope axis)
-        targets.append((t, g))
+# targets.append((line_theta, line_spread))
+# targets.append((line_theta+np.pi, line_spread))
+for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from horizon)
+    for g in np.linspace(1.5, 2 * line_spread, 4, endpoint=True): # gamma angle (from telescope axis)
+        targets.append((t + g, g))
 
 #offset line
-h = np.sqrt(line_spread * line_spread + line_offset * line_offset) #distance from origin of spread out points
-phi = np.arctan(line_spread/line_offset) # angle of line points from closest point
-targets.append((line_theta+(np.pi/2.0), line_offset))
-targets.append((line_theta+(np.pi/2.0)-phi, h))
-targets.append((line_theta+(np.pi/2.0)+phi, h))
+# h = np.sqrt(line_spread * line_spread + line_offset * line_offset) #distance from origin of spread out points
+# phi = np.arctan(line_spread/line_offset) # angle of line points from closest point
+# targets.append((line_theta+(np.pi/2.0), line_offset))
+# targets.append((line_theta+(np.pi/2.0)-phi, h))
+# targets.append((line_theta+(np.pi/2.0)+phi, h))
 
 ax = plt.subplot()
 ax.grid(which="both", color='#D8D8D8', linestyle='-', zorder=0)
@@ -66,15 +66,15 @@ x.append(x[0])
 y.append(y[0])
 ax.plot(x, y, 'g--', alpha=0.2)
 
-target_line = [(line_theta, line_spread), (line_theta+np.pi, line_spread)]
-x = [g * np.sin(t) for t, g in target_line]
-y = [g * np.cos(t) for t, g in target_line]
-ax.plot(x, y, 'r--', alpha=0.2)
+# target_line = [(line_theta, line_spread), (line_theta+np.pi, line_spread)]
+# x = [g * np.sin(t) for t, g in target_line]
+# y = [g * np.cos(t) for t, g in target_line]
+# ax.plot(x, y, 'r--', alpha=0.2)
 
-target_line = [(line_theta+(np.pi/2.0)-phi, h), (line_theta+(np.pi/2.0)+phi, h)]
-x = [g * np.sin(t) for t, g in target_line]
-y = [g * np.cos(t) for t, g in target_line]
-ax.plot(x, y, 'r--', alpha=0.2)
+# target_line = [(line_theta+(np.pi/2.0)-phi, h), (line_theta+(np.pi/2.0)+phi, h)]
+# x = [g * np.sin(t) for t, g in target_line]
+# y = [g * np.cos(t) for t, g in target_line]
+# ax.plot(x, y, 'r--', alpha=0.2)
 
 ax.set_xlabel("Angle (arcseconds)")
 ax.set_ylabel("Angle (arcseconds)")

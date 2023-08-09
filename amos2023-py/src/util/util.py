@@ -117,9 +117,9 @@ def pip(polygon, point):
 #   sigma:          Std dev. of normally distributed random variable
 def get_sigma_from_SNR(phase_screen, SNR):
     snr = 10**(SNR/10)
-    print(snr)
+    # print(snr)
     mean_square = np.mean(np.square(phase_screen))
-    print(mean_square)
+    # print(mean_square)
     variance = mean_square / snr
-    print(variance)
+    # print(variance)
     return np.sqrt(variance)
