@@ -33,7 +33,7 @@ class Zernike(Basis):
 
         return self.__zernike(size, order + 1)
     
-    @lru_cache(maxsize=65536)
+    @lru_cache(maxsize=None)
     def at_point(self, x, y, size, order):
         """
         Get the Zernike polynomial value at a single point within a unit circle

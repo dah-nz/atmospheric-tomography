@@ -20,10 +20,10 @@ wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
 n_coeff_set =   [16, 64] # [25, 36, 64]
-noise_SNR = [0] #, 10, 20, 30]
+noise_SNR = [0, 10, 20, 30]
 
 ps_seed = 2000
-n_phase_screens = 20
+n_phase_screens = 2
 
 # TARGET POSITIONS
 line_theta = 30 * (np.pi/180)   # radians
@@ -69,18 +69,18 @@ for ps in phase_screens:
         for target in targets.items():
             tests.append((ps, asterism, target))
 
-for snr in noise_SNR:
-    for n_coeffs in n_coeff_set:
+for n_coeffs in n_coeff_set:
+    basis_functions = [
+        zernike.Zernike(n_coeffs),
+        DCT.DCT(n_coeffs),
+        DST.DST(n_coeffs),
+        wavelet.wavelet(n_coeffs, wavelets='haar'),
+        wavelet.wavelet(n_coeffs, wavelets='db2')
+        ]
+    for snr in noise_SNR:
         file_name = "results_psf_{}_SNR_{}.data".format(n_coeffs, snr)
         with open("results/{}".format(file_name), "w") as f:
-            f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,Sigma,RMSE,RMSE Ideal,FWHM Actual,FWHM Recons,FWHM Ideal\n")
-            basis_functions = [
-                zernike.Zernike(n_coeffs),
-                DCT.DCT(n_coeffs),
-                DST.DST(n_coeffs),
-                wavelet.wavelet(n_coeffs, wavelets='haar'),
-                wavelet.wavelet(n_coeffs, wavelets='db2')
-                ]
+            f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,Sigma,RMSE,RMSE Ideal,FWHM Actual,FWHM Recons,FWHM Ideal,Max Intensity Recons,Max Intensity Actual,Max Intensity Ideal,MSSIM Recon-Actual, MSSIM Recon-Ideal, MSSIM Ideal-Actual\n")
             for B in basis_functions:
                 tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
                 T = controller.TomographyController(tomo, n_coeffs)
@@ -94,6 +94,8 @@ for snr in noise_SNR:
                     if snr != 0:
                         sigma = util.get_sigma_from_SNR(T.screens[0], snr)
                         T.set_noise(sigma)
+                    else:
+                        sigma = 0
 
                     T.run()
                     mask = util.circle(aperture_size/2, aperture_size)
@@ -101,7 +103,7 @@ for snr in noise_SNR:
                     masked_recon = mask * T.reconstructed_screen
                     masked_ideal = mask * T.actual_screen_from_coeffs
                     rmse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
-                    rmse_ideal = np.sqrt(mean_squared_error(masked_actual, actual_screen_from_coeffs))
+                    rmse_ideal = np.sqrt(mean_squared_error(masked_actual, masked_ideal))
                     
                     pa = psf.psf(T.actual_screen)
                     pr = psf.psf(T.reconstructed_screen)
@@ -111,7 +113,15 @@ for snr in noise_SNR:
                     fwhm_recons = psf.fwhm(pr)
                     fwhm_ideal = psf.fwhm(pai)
 
-                    out = "{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f}".format(
+                    max_intensity_r = np.amax(pr)
+                    max_intensity_a = np.amax(pa)
+                    max_intensity_ai = np.amax(pai)
+
+                    mssim_ra = structural_similarity(pr, pa)
+                    mssim_ri = structural_similarity(pr, pai)
+                    mssim_ia = structural_similarity(pai, pa)
+
+                    out = "{},{},{},{},{},{},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f},{:.4f}".format(
                         B.name,
                         n_coeffs,
                         ps[0],
@@ -125,7 +135,13 @@ for snr in noise_SNR:
                         rmse_ideal,
                         fwhm_actual,
                         fwhm_recons,
-                        fwhm_ideal
+                        fwhm_ideal,
+                        max_intensity_r,
+                        max_intensity_a,
+                        max_intensity_ai,
+                        mssim_ra,
+                        mssim_ri,
+                        mssim_ia
                     )
                     print(out)
                     f.write(out+"\n")

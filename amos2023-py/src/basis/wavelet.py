@@ -23,7 +23,7 @@ class wavelet(Basis):
         c[order] = 1
         return self.compose(size, c)
 
-    @lru_cache(maxsize=65536)
+    @lru_cache(maxsize=None)
     def at_point(self, x, y, size, order):
         """
         Get the wavelet value at a single point within a unit circle
