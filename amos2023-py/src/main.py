@@ -20,10 +20,10 @@ wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
 n_coeff_set =   [64] # [16, 64] # [25, 36, 64]
-noise_SNR = [0] # , 10, 20, 30]
+noise_SNR = [0] #, 10, 20, 30]
 
 ps_seed = 3000
-n_phase_screens = 50
+n_phase_screens = 5
 
 # TARGET POSITIONS
 line_theta = 30 * (np.pi/180)   # radians
@@ -54,7 +54,7 @@ targets[(0, 0)] = beacon.Beacon(0, 0, gamma_arcseconds=True)
 # targets[(line_theta+(np.pi/2.0)-phi, h)] = beacon.Beacon(line_theta+(np.pi/2.0)-phi, h, gamma_arcseconds=True)
 # targets[(line_theta+(np.pi/2.0)+phi, h)] = beacon.Beacon(line_theta+(np.pi/2.0)+phi, h, gamma_arcseconds=True)
 for t in np.linspace(0, 2*np.pi, 12, endpoint=False):    # theta angle (acw from horizon)
-    for g in np.linsapce(1.5, 2 * line_spread, 4, endpoint=True): # gamma angle (from telescope axis)
+    for g in np.linspace(1.5, 2 * line_spread, 4, endpoint=True): # gamma angle (from telescope axis)
         target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
         targets[(t + g, g)] = target
 
