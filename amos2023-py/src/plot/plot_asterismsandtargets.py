@@ -5,14 +5,13 @@ from util import util
 
 import constellations
 
-# TARGET POSITIONS
-line_theta = 30 * (np.pi/180)   # radians
-line_spread = 3 # arcseconds
-line_offset = 3 # arcseconds
 
-# Set up tests
+wavelength = 600e-9
+r_0 = 0.05
+
+# SET UP GUIDE STARS
 guidestar_sets = {}
-for i, (n, g) in enumerate([(3, 7.5), (6, 15)]):
+for i, (n, g) in enumerate([(3, 30), (6, 60)]):
     guidestars = [(t, g) for t in np.linspace(i, (2*np.pi)+i, n, endpoint=False)]
     guidestar_sets[(n, g)] = guidestars
 
@@ -21,21 +20,22 @@ cons = constellations.get_natural()
 for i, con in enumerate(cons):
     guidestar_sets[(len(con), -1-i)] = [(t, g * 3600 * 180 / np.pi) for t, g in con]
 
+# TARGET POSITIONS
 targets = []
-# line through origin
 targets.append((0, 0))
-# targets.append((line_theta, line_spread))
-# targets.append((line_theta+np.pi, line_spread))
-for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from horizon)
-    for g in np.linspace(1.5, 2 * line_spread, 4, endpoint=True): # gamma angle (from telescope axis)
-        targets.append((t + g, g))
+for t in np.linspace(0, 2*np.pi, 12, endpoint=False):   # theta angle (acw from horizon)
+    for g in np.linspace(5, 25, 5, endpoint=True):      # gamma angle (from telescope axis)
+        target = (t + g, g)
+        targets.append(target)
 
-#offset line
-# h = np.sqrt(line_spread * line_spread + line_offset * line_offset) #distance from origin of spread out points
-# phi = np.arctan(line_spread/line_offset) # angle of line points from closest point
-# targets.append((line_theta+(np.pi/2.0), line_offset))
-# targets.append((line_theta+(np.pi/2.0)-phi, h))
-# targets.append((line_theta+(np.pi/2.0)+phi, h))
+for t in np.linspace(0, 2*np.pi, 5, endpoint=False):    # theta angle (acw from horizon)
+    for g in np.linspace(35, 75, 5, endpoint=True):     # gamma angle (from telescope axis)
+        target = (t + g, g)
+        targets.append(target)
+
+# calculate isoplanatic angle
+isoplanatic_angle = 2.44 * wavelength / r_0
+isoplanatic_angle = util.rad2arcsec(isoplanatic_angle)
 
 ax = plt.subplot()
 ax.grid(which="both", color='#D8D8D8', linestyle='-', zorder=0)
@@ -55,8 +55,9 @@ x = [g * np.sin(t) for t, g in targets]
 y = [g * np.cos(t) for t, g in targets]
 ax.scatter(x, y, label='Science Target Positions', zorder=3.5)
 
-util.plotcirc(ax, (0, 0), 7.5, '--', alpha=0.2)
-util.plotcirc(ax, (0, 0), 15, '--', alpha=0.2)
+util.plotcirc(ax, (0, 0), 30, '--', alpha=0.2)
+util.plotcirc(ax, (0, 0), 60, '--', alpha=0.2)
+util.plotcirc(ax, (0, 0), isoplanatic_angle, '--', alpha=0.2)
 
 gs = guidestar_sets[(5, -1)]
 gs.sort(key=lambda x: x[0])

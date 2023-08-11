@@ -12,7 +12,7 @@
 
 # import tests.test_tomography
 
-# import tests.test_dct
+import tests.test_dct
 
 # import tests.test_wavelet
 
@@ -22,8 +22,8 @@
 
 # import tests.test_fwhm
 
-import tests.test_basis_reconstruction
+# import tests.test_basis_reconstruction
 
 # import tests.test_psf
 
-import tests.test_snr
+# import tests.test_snr

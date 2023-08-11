@@ -3,7 +3,7 @@ import numpy as np
 # from util.cache import Cache
 from util.util import *
 
-GRID_MULTIPLIER = 6
+GRID_MULTIPLIER = 4
 
 class Tomography():
     """
@@ -51,6 +51,15 @@ class Tomography():
         """
         raise NotImplementedError()
     
+    def get_layer_shapes(self, beacons):
+        mD = self._metapupil_diameter(beacons)
+        metapupil_diameters = [mD[a] for a in self.altitudes]
+        layer_pixels = [int(d/self.D * self.aperture_size + 0.5) for d in metapupil_diameters]
+        layer_grids = [(px, px) for px in layer_pixels]
+        self.metapupil_diameters = metapupil_diameters
+        self.layer_grids = layer_grids
+        return metapupil_diameters, layer_grids
+
     def set_asterism(self, asterism):
         """
         Sets the guidestar asterism for running tomography
@@ -62,10 +71,7 @@ class Tomography():
             List of beacons that define an asterism of guidestars
         """
         self.asterism = asterism
-        mD = self._metapupil_diameter(self.asterism)
-        self.metapupil_diameters = [mD[a] for a in self.altitudes]
-        layer_pixels = [int(d/self.D * self.aperture_size + 0.5) for d in self.metapupil_diameters]
-        self.layer_grids = [(px, px) for px in layer_pixels]
+        # self.metapupil_diameters, self.layer_grids = self.get_layer_shapes(self.asterism)
 
     def run(self, beacons, target, beacon_coeffs):
         """
@@ -120,6 +126,7 @@ class Tomography():
         diameters:
             Dictionary of metapupil diameters, keys are the altitudes 
         """
+
         d = {}
         for a in self.altitudes:
             r_outer = 0                            # outer radius of metapupil
@@ -147,8 +154,6 @@ class Tomography():
         P:
             Projection matrix for transformation from unit circle to a subcircle at location with diameter
         """
-        # pM = self.projCache.check()
-
         screen = np.zeros((self.aperture_size, self.aperture_size))
 
         gridSize = int(GRID_MULTIPLIER * self.n_modes)
@@ -158,8 +163,8 @@ class Tomography():
         # Generate G matrix (unitgrid)
         G = np.zeros((self.n_modes, gridSize))
         for j in range(self.n_modes):
-            for i, (x, y) in enumerate(unitGrid):
-                G[j, i] = self.basis.at_point(x, y, np.shape(screen), j)
+            f = lambda x, y: self.basis.at_point(x, y, np.shape(screen), j)
+            G[j, :] = np.array(list(map(f, unitGrid[:, 0], unitGrid[:, 1])))
 
         # Transform unitgrid to subsection
         if diameter > 1:
@@ -175,8 +180,8 @@ class Tomography():
         # Generate Y matrix (for shifted subsection)
         Y = np.zeros((self.n_modes, gridSize))
         for j in range(self.n_modes):
-            for i, (x, y) in enumerate(subGrid):
-                Y[j, i] = self.basis.at_point(x, y, np.shape(screen), j)
+            f = lambda x, y: self.basis.at_point(x, y, np.shape(screen), j)
+            Y[j, :] = np.array(list(map(f, unitGrid[:, 0], unitGrid[:, 1])))
 
         if G_metapupil:
             Ginv = np.linalg.pinv(G)
@@ -184,7 +189,7 @@ class Tomography():
         else:
             Ginv = np.linalg.pinv(Y)
             Ymat = G
-        
+       
         # Calculate P matrix
         P = np.matmul(Ymat, Ginv)
 
@@ -207,24 +212,8 @@ class Tomography():
         ------
         New unit grid
         """
-        rng = np.random.default_rng(0)
-        radius = self.aperture_size / 2
-        limit = radius * radius
-
-        grid = []
-        while len(grid) < N:
-            x = rng.integers(0, self.aperture_size)
-            y = rng.integers(0, self.aperture_size)
-            if self.basis.name == "zernike":
-                if (x-radius)**2 + (y-radius)**2 <= limit:
-                    grid.append((x, y))
-            else:
-                grid.append((x, y))
-                
-
-        # radius = [((n+1)/N)**0.3 for n in range(N)]
-        # angle = [np.pi*np.pi*N*r for r in radius]
-        # grid = [pol2cart(r, t) for r, t in zip(radius, angle)]
+        rng = np.random.default_rng(N)
+        grid = rng.integers(0, self.aperture_size, size=(N, 2))
         return grid
 
     def _translateGrid(self, grid, shift):

@@ -4,7 +4,6 @@ import numpy as np
 from scipy.fft import dctn, idctn
 
 from basis.basis import Basis
-from util.cache import Cache
 
 class DCT(Basis):
     """
@@ -19,7 +18,6 @@ class DCT(Basis):
         if c * c < max_coeffs:
             c += 1
         super().__init__(c, "DCT")
-        self.__cache = Cache("basis_{}".format("dct"), max_len=1000)
         self.max_coeffs = max_coeffs
 
     @lru_cache(maxsize=64)
@@ -34,7 +32,7 @@ class DCT(Basis):
         order:
             discrete cosine coefficient order
         """
-        c = np.array([0] * (self.N * self.N))
+        c = np.zeros((self.N * self.N,))
         c[order] = 1
         return self.compose(size, c)
 
@@ -58,28 +56,9 @@ class DCT(Basis):
         order:
             cosine order
         """
-
-        # Find x and y 'order'
-        # dim = np.shape(grid)
-        # try:
-        #     max_x = np.amax(abs(x))
-        #     max_y = np.amax(abs(y))
-        # except ValueError:
-        #     max_x = abs(x)
-        #     max_y = abs(y)
-        # m = max(max_x, max_y)
-        # offset_x = 0
-        # offset_y = 0
-        # if m > 1:
-        #     grid = np.zeros((int(dim[0] * max(2 * (m - 1) + 1, 1) + 0.5), int(dim[1] * max(2 * (m - 1) + 1, 1) + 0.5)))
-        #     d0 = np.shape(grid)
-        #     offset_x = (d0[0] - dim[0]) / 2
-        #     offset_y = (d0[1] - dim[1]) / 2
-        # x = np.array((1 + x) * (dim[0]) / 2 + offset_x, dtype=np.int64)
-        # y = np.array((1 + y) * (dim[1]) / 2 + offset_y, dtype=np.int64)
         screen = self.out(size, order)
         def lerp(v0, v1, x):
-            return (v1 - v0) * (x % 1) + v0
+            return (v1 - v0) * (x % 1.0) + v0
         y0 = np.array(y, dtype=np.int32)
         y1 = np.array(y + 1, dtype=np.int32)
         x0 = np.array(x, dtype=np.int32)

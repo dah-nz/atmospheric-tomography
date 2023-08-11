@@ -135,6 +135,6 @@ def get_natural():
             dec= s[1]-s1
             gamma = np.sqrt(ra*ra+dec*dec)
             theta = np.arctan2(dec, ra)
-            cons.append((theta, gamma / 2))
+            cons.append((theta, gamma*1.5))
         cons_degs.append(cons)
     return cons_degs
