@@ -47,7 +47,7 @@ for B in bfuncs:
     print("{}".format(B.name))
     tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
     T = controller.TomographyController(tomo, n_coeffs)
-    T.set_phase_screens(all_beacons, seeds=[1, 2])
+    T.set_phase_screens(all_beacons, seeds=[34, 16])
     T.set_asterism(beacons)
     T.set_target(target)
     # T.set_phase_screens(seeds=[50, 56])

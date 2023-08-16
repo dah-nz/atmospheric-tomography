@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
+from datetime import datetime
 
 from skimage.metrics import structural_similarity, mean_squared_error
 
@@ -19,8 +20,8 @@ f_number =      6.5             # focal number for telescope
 wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
-n_coeff_set =   [16, 64] # [25, 36, 64]
-noise_SNR = [0, 10, 20, 30]
+n_coeff_set = [64]
+noise_SNR = [3, 10, 20, 30]
 
 ps_seed = 4000
 n_phase_screens = 25
@@ -45,22 +46,14 @@ targets = {}
 # line through origin
 targets[(0, 0)] = beacon.Beacon(0, 0, gamma_arcseconds=True)
 all_beacons.append(targets[(0,0)])
-# targets[(line_theta, line_spread)] = beacon.Beacon(line_theta, line_spread, gamma_arcseconds=True)
-# targets[(line_theta+np.pi, line_spread)] = beacon.Beacon(line_theta+np.pi, line_spread, gamma_arcseconds=True)
 
-#offset line
-# h = np.sqrt(line_spread * line_spread + line_offset * line_offset) #distance from origin of spread out points
-# phi = np.arctan(line_spread/line_offset) # angle of line points from closest point
-# targets[(line_theta+(np.pi/2.0), line_offset)] = beacon.Beacon(line_theta+(np.pi/2.0), line_offset, gamma_arcseconds=True)
-# targets[(line_theta+(np.pi/2.0)-phi, h)] = beacon.Beacon(line_theta+(np.pi/2.0)-phi, h, gamma_arcseconds=True)
-# targets[(line_theta+(np.pi/2.0)+phi, h)] = beacon.Beacon(line_theta+(np.pi/2.0)+phi, h, gamma_arcseconds=True)
-for t in np.linspace(0, 2*np.pi, 12, endpoint=False):    # theta angle (acw from horizon)
+for t in np.linspace(0, 2*np.pi, 8, endpoint=False):    # theta angle (acw from horizon)
     for g in np.linspace(5, 25, 5, endpoint=True): # gamma angle (from telescope axis)
         target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
         targets[(t + g, g)] = target
         all_beacons.append(target)
 
-for t in np.linspace(0, 2*np.pi, 5, endpoint=False):    # theta angle (acw from horizon)
+for t in np.linspace(0, 2*np.pi, 3, endpoint=False):    # theta angle (acw from horizon)
     for g in np.linspace(35, 65, 4, endpoint=True): # gamma angle (from telescope axis)
         target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
         targets[(t + g, g)] = target
@@ -83,13 +76,43 @@ for n_coeffs in n_coeff_set:
         zernike.Zernike(n_coeffs),
         DCT.DCT(n_coeffs),
         DST.DST(n_coeffs),
-        wavelet.wavelet(n_coeffs, wavelets='haar'),
+        wavelet.wavelet(n_coeffs, wavelets='Haar'),
         wavelet.wavelet(n_coeffs, wavelets='db2')
         ]
     for snr in noise_SNR:
         file_name = "results_residuals_{}_SNR_{}.data".format(n_coeffs, snr)
         with open("results/{}".format(file_name), "w") as f:
-            f.write("Basis Function,N Coeffs,Layer 1 Seed,Layer 2 Seed,N Guide Stars,Guide Star Angle,Target Theta,Target Gamma,Sigma,RMSE R,RMSE B,RMSE I,RMSE A-I,FWHM R-A,FWHM I-A,MI RA,MI IA,MI R,MI A,MI I,MSSIM RA-IA,MSSIM R-A,MSSIM R-I,MSSIM I-A\n")
+            titles = [
+                "Basis Function",
+                "N Coeffs",
+                "Layer 1 Seed",
+                "Layer 2 Seed",
+                "N Guide Stars",
+                "Guide Star Angle",
+                "Target Theta",
+                "Target Gamma",
+                "SNR",
+                "Sigma",
+                "RMSE B:A",
+                "RMSE R:A",
+                "RMSE I:R",
+                "RMSE I:A",
+                "FWHM R:A",
+                "FWHM I:A",
+                "Max Int. R:A",
+                "Max Int. I:A",
+                "Max Int. R",
+                "Max Int. A",
+                "Max Int. I",
+                "MSSIM R:A-I:A",
+                "MSSIM R:A",
+                "MSSIM R:I",
+                "MSSIM I:A"
+            ]
+            f.write(titles[0])
+            for t in titles[1:]:
+                f.write(",{}".format(t))
+            f.write("\n")
             for B in basis_functions:
                 tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
                 T = controller.TomographyController(tomo, n_coeffs)
@@ -117,8 +140,10 @@ for n_coeffs in n_coeff_set:
                         rmse_ideal = np.sqrt(mean_squared_error(masked_ideal, masked_recon))
                         rmse_baseline = np.sqrt(mean_squared_error(masked_actual, zeros))
                         
-                        pra = psf.psf(T.reconstructed_screen - T.actual_screen)
-                        pia = psf.psf(T.actual_screen_from_coeffs - T.actual_screen)
+                        ra = T.reconstructed_screen - T.actual_screen
+                        pra = psf.psf(ra)
+                        ia = T.actual_screen_from_coeffs - T.actual_screen
+                        pia = psf.psf(ia)
 
                         fwhm_recons = psf.fwhm(pra)
                         fwhm_ideal = psf.fwhm(pia)
@@ -147,16 +172,32 @@ for n_coeffs in n_coeff_set:
                             asterism[0][0],
                             asterism[0][1])
 
-                        for t in [target[0][0], target[0][1],
-                                    sigma, rmse, rmse_baseline,
-                                    rmse_ideal, rmse_actual_ideal,
-                                    fwhm_recons, fwhm_ideal,
-                                    max_intensity_ra, max_intensity_ia,
-                                    max_intensity_r, max_intensity_a,
-                                    max_intensity_ai, mssim_ria, mssim_ra,
-                                    mssim_ri, mssim_ia]:
+                        for t in [
+                            target[0][0],
+                            target[0][1],
+                            snr,
+                            sigma,
+                            rmse_baseline,
+                            rmse,
+                            rmse_ideal,
+                            rmse_actual_ideal,
+                            fwhm_recons,
+                            fwhm_ideal,
+                            max_intensity_ra,
+                            max_intensity_ia,
+                            max_intensity_r,
+                            max_intensity_a,
+                            max_intensity_ai,
+                            mssim_ria,
+                            mssim_ra,
+                            mssim_ri,
+                            mssim_ia
+                            ]:
                             out += ",{:.4f}".format(t)
-                        print(out)
+
+                        now = datetime.now()
+                        time = now.strftime("%H:%M:%S")
+                        print("{}: {}".format(time, out))
                         f.write(out+"\n")
 
 plt.show()

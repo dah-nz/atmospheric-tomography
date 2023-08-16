@@ -4,7 +4,6 @@ import numpy as np
 from scipy.fft import dstn, idstn
 
 from basis.basis import Basis
-from util.cache import Cache
 
 class DST(Basis):
     """
@@ -19,7 +18,6 @@ class DST(Basis):
         if c * c < max_coeffs:
             c += 1
         super().__init__(c, "DST")
-        self.__cache = Cache("basis_{}".format("dst"), max_len=1000)
         self.max_coeffs = max_coeffs
     @lru_cache(maxsize=64)
     def out(self, size, order):

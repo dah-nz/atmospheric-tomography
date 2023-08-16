@@ -1,9 +1,8 @@
 from functools import lru_cache
 import numpy as np
-# from util.cache import Cache
 from util.util import *
 
-GRID_MULTIPLIER = 4
+GRID_MULTIPLIER = 6
 
 class Tomography():
     """
@@ -35,7 +34,6 @@ class Tomography():
         self.altitudes = layers
         self.basis = basis
         self.n_modes = n_modes
-        # self.proj_cache = Cache("ProjectionMatrices_{}_{}".format(basis.name, n_modes))
         self.D = diameter
         self.aperture_size = aperture_size
         self.r0 = r0

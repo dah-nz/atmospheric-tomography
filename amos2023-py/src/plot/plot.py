@@ -14,4 +14,4 @@ def plot_error(axs, x, y_data, color, **kwargs):
     y = np.array([np.mean(d) for d in y_data])
     y_std = np.array([np.std(d) for d in y_data])
     axs.plot(x, y, color=color, **kwargs)
-    axs.fill_between(x, (y-y_std), (y+y_std), color=color, alpha=.1)
+    # axs.fill_between(x, (y-y_std), (y+y_std), color=color, alpha=.1)

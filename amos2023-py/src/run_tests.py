@@ -2,7 +2,7 @@
 
 # import tests.test_beacon
 
-# import tests.test_cutout
+import tests.test_cutout
 
 # import tests.test_zernike
 
@@ -12,7 +12,7 @@
 
 # import tests.test_tomography
 
-import tests.test_dct
+# import tests.test_dct
 
 # import tests.test_wavelet
 

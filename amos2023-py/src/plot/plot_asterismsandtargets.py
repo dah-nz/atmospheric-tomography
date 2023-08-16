@@ -23,12 +23,12 @@ for i, con in enumerate(cons):
 # TARGET POSITIONS
 targets = []
 targets.append((0, 0))
-for t in np.linspace(0, 2*np.pi, 12, endpoint=False):   # theta angle (acw from horizon)
+for t in np.linspace(0, 2*np.pi, 8, endpoint=False):   # theta angle (acw from horizon)
     for g in np.linspace(5, 25, 5, endpoint=True):      # gamma angle (from telescope axis)
         target = (t + g, g)
         targets.append(target)
 
-for t in np.linspace(0, 2*np.pi, 5, endpoint=False):    # theta angle (acw from horizon)
+for t in np.linspace(0, 2*np.pi, 3, endpoint=False):    # theta angle (acw from horizon)
     for g in np.linspace(35, 75, 5, endpoint=True):     # gamma angle (from telescope axis)
         target = (t + g, g)
         targets.append(target)

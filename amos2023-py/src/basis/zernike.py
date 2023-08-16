@@ -2,7 +2,6 @@ from functools import lru_cache
 import numpy as np
 
 from basis.basis import Basis
-from util.cache import Cache
 
 class Zernike(Basis):
     """
@@ -13,8 +12,7 @@ class Zernike(Basis):
     out(grid, order)    Return nth-order Zernike polynomial on a grid
     """
     def __init__(self, max_coeffs):
-        super().__init__(max_coeffs, "zernike")
-        self.__cache = Cache("basis_{}".format("zernike"), max_len=1000)
+        super().__init__(max_coeffs, "Zernike")
 
     @lru_cache(maxsize=64)
     def out(self, size, order):
@@ -53,7 +51,7 @@ class Zernike(Basis):
         y = y / (size[1] / 2) - 1
         return self.__zerni(x, y, order + 1)
         
-
+    @lru_cache(maxsize=64)
     def __zernike(self, dim, order):
         """
         Function to calculate Zernike coefficients in a unit circle
@@ -70,33 +68,27 @@ class Zernike(Basis):
         ------
 
         """
+        N = (min(dim) + 1) / 2
+        diameter = min(dim)
+        radius = diameter / 2
+        sq_radius = radius ** 2
 
-        data = self.__cache.check(order, dim)
+        x = np.arange(-N, N)
+        y = np.arange(-N, N)
 
-        if data is None:
-            N = (min(dim) + 1) / 2
-            diameter = min(dim)
-            radius = diameter / 2
-            sq_radius = radius ** 2
+        [l, k] = np.meshgrid(x, y)
 
-            x = np.arange(-N, N)
-            y = np.arange(-N, N)
+        sq_distance = k ** 2 + l ** 2
 
-            [l, k] = np.meshgrid(x, y)
+        x = l/radius
+        y = k/radius
 
-            sq_distance = k ** 2 + l ** 2
+        zernicoef = self.__zerni(x, y, order)
+        zernicoef *= sq_distance <= sq_radius
+        zernicoef = zernicoef[0:(dim[0]), 0:(dim[1])]
 
-            x = l/radius
-            y = k/radius
 
-            zernicoef = self.__zerni(x, y, order)
-            zernicoef *= sq_distance <= sq_radius
-            zernicoef = zernicoef[0:(dim[0]), 0:(dim[1])]
-
-            self.__cache.force_add(order, zernicoef, dim)
-            return zernicoef
-        else:   
-            return data
+        return zernicoef
 
     def __zerni(self, x, y, j):
         Rnm = 0

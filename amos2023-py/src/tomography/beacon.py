@@ -34,6 +34,7 @@ class Beacon():
     def __init__(self, theta, gamma, motion_path=None, gamma_arcseconds=False):
         self._theta0 = theta
         if gamma_arcseconds:
+            self._gamma_arcsec = gamma
             gamma = util.arcsec2rad(gamma)
         self._gamma0 = gamma
         self.theta = theta
@@ -77,6 +78,7 @@ class Beacon():
         """
         # Cartesian location of star on layer (in metres)
         x, y = self.position(altitude)
+
         # Convert location to pixel position
         screen_dim = max(np.shape(screen))
         cut_out_dim = int(screen_dim * (diameter / screen_size) + 0.5)
