@@ -74,9 +74,6 @@ class TomographyController():
                 self.screens = [phase_screen.kolmogorov(sz, self.T.D, self.T.r0, self.T.aperture_size, seed) / self.screen_gain for sz, seed in zip(layer_size, seeds)]
             else:
                 self.screens = [phase_screen.get(sz, self.T.D, self.T.r0, self.T.aperture_size) / self.screen_gain for sz in layer_size]
-        
-        for s in self.screens:
-            print(s.shape)
 
     def set_noise(self, sigma):
         rng = np.random.default_rng()
