@@ -1,22 +1,45 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from skimage.metrics import mean_squared_error
 
 from tomography import phase_screen
 
-size = (256, 256)
+p0 = 256
+p1 = 550
+p2 = 2607
 
-K = phase_screen.Kolmogorov(size, 0.6/0.05, type=np.float64)
+a0 = np.zeros((p0, p0))
+a1 = np.zeros((p1, p1))
+a2 = np.zeros((p2, p2))
 
+mse1 = []
+mse2 = []
+mse3 = []
 
-for seed in range(144):
-    if seed % 12 == 0:
-        fig, axs = plt.subplots(3, 4)
-    r = int((seed % 12) / 4)
-    c = seed % 4
-    axs[r,c].set_title("Seed {}".format(seed))
-    screen = K.get(seed=seed)
-    axs[r,c].imshow(screen)
+for seed in range(1000):
+    s0 = phase_screen.kolmogorov((p0, p0), 1, 1, p0, 3 * seed, type=np.float64)
+    s1 = phase_screen.kolmogorov((p1, p1), 1, 1, p0, 3 * seed + 1, type=np.float64)
+    s2 = phase_screen.kolmogorov((p2, p2), 1, 1, p0, 3 * seed + 2, type=np.float64)
+    s1cut = s1[int((p1-p0)/2+0.5):int((p1+p0)/2+0.5), int((p1-p0)/2+0.5):int((p1+p0)/2+0.5)]
+    s2cut = s2[int((p2-p0)/2+0.5):int((p2+p0)/2+0.5), int((p2-p0)/2+0.5):int((p2+p0)/2+0.5)]
+    mse1.append(np.sqrt(mean_squared_error(s0, a0)))
+    mse2.append(np.sqrt(mean_squared_error(s1cut, a0)))
+    mse3.append(np.sqrt(mean_squared_error(s2cut, a0)))
+    print("{},{},{},{}".format(seed,mse1[-1], mse2[-1], mse3[-1]))
 
+print("DONE:{},{},{}".format(np.mean(mse1), np.mean(mse2), np.mean(mse3)))
+
+plt.figure()
+plt.imshow(s0)
+plt.figure()
+plt.imshow(s1cut)
+plt.figure()
+plt.imshow(s1)
+plt.figure()
+plt.imshow(s2)
+plt.figure()
+plt.imshow(s2cut)
+plt.show()
 
 # from basis import zernike
 

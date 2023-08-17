@@ -88,9 +88,11 @@ class Beacon():
 
         phase = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
 
-        # mask = util.circle(r, 2 * r)
+        mask = util.circle(r, 2 * r)
         # return phase * mask
-        return phase
+        # return phase
+        return phase - np.mean(phase)
+
     def step(self, dt):
         """
         Shift the beacon location within the telescope FoV

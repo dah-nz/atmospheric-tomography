@@ -2,13 +2,25 @@ from functools import lru_cache
 
 import numpy as np
 import scipy.io as sio
-from scipy.signal import convolve2d
+# from scipy.signal import convolve2d
+# from scipy.ndimage.filters import convolve
+# from scipy.signal import fftconvolve
+import cv2
+
+import random
+
+import hcipy
 
 from util import util
 
 import os
 
 _phase_data_cache = None
+
+def get(size, D, r0, aperture_size, seed=None):
+    if seed is None:
+        seed = random.random()
+    return kolmogorov(size, D, r0, aperture_size, type=np.float64, seed=seed)
 
 class Kolmogorov():
     """ 
@@ -20,7 +32,7 @@ class Kolmogorov():
     get(seed=None)
         Retrieve a phase screen for a certain seed - None returns a random Kolmogorov phase screen
     """
-    def __init__(self, size, D_r0, type=np.float64):
+    def __init__(self, size, D, r0, type=np.float64):
         """
         Parameters
         ----------
@@ -29,16 +41,20 @@ class Kolmogorov():
         D_r0:  float
             D/r0 value, determines severity of turbulence in output phase screens#
         """
-        self._grid = np.zeros(size)
-        self._D_r0 = D_r0
+        self._size = size
+        self._D = D
+        self._r0 = r0
         self.type = type
 
         grid_rows = size[0]
         grid_cols = size[1]
 
+        self.grid = hcipy.make_pupil_grid(self._size, D)
+        self.Cn2 = hcipy.Cn_squared_from_fried_parameter(r0)
+
     def get(self, seed=None):
         """
-        Get a Kolmogorv phase screen of size determined by initialised grid size
+        Get a Kolmogorov phase screen of size determined by initialised grid size
 
         Parameters
         ----------
@@ -49,61 +65,84 @@ class Kolmogorov():
         ------
         phase screen with Kolomgorov turbulence characteristics
         """
-        screen = None
+        # screen = None
         # if seed is not None:
         #     screen = self.__cache.check(seed)
 
-        if screen is None:
-            screen = self.__kolmogorov(seed)
+        # if screen is None:
+        #     screen = self.__kolmogorov(seed)
 
         # if seed is not None:
         #     self.__cache.add(seed, screen)
 
-        return screen
+        # wavelength = 600e-9
 
-    def __kolmogorov(self, seed=None):
-        """
-        Simulation of a phase screen with Kolmogorov Statistics.
-        Starts from an exact 15 x 15 phase screen.
-        Based on function written by Rachel Johnston and Cressida Harding
-        
-        Parameters
-        ----------
-        seed        Seed for screen generation
-        
-        Outputs
-        -------
-        screen      A phase screen with Kolmogorov Statistics of size defined by shape of class attribute grid
-        """
+        # return self.__get_hcipy_screen(self._size, wavelength, seed)
 
-        calculated_size = 15
-        n_increases = 0
-        grid_shape = np.shape(self._grid)
-        while calculated_size < max(grid_shape):
-            calculated_size = 2 * calculated_size - 11
-            n_increases += 1
-        
-        full_screen = generate_phase_screen(n_increases, seed)
-        
-        chopped_screen = full_screen[:grid_shape[0], :grid_shape[1]]
+        return kolmogorov(self._size, self._D, self._r0, seed)
 
-        # Rescale screen for appropriate D_r0 after cropping
-        size_chopped = max(np.shape(chopped_screen))
-        size_full = np.shape(full_screen)[0]
-        scale = ((size_full - 1) / (size_chopped - 1)) ** (5/6)
-        scaled_screen = chopped_screen * scale
+    # @lru_cache(maxsize=None)
+    # def __get_hcipy_screen(self, size, wavelength, seed):
+    #     layer = hcipy.atmosphere.FiniteAtmosphericLayer(self.grid, self.Cn2, seed=seed)
+    #     phase = layer.phase_for(wavelength)
+    #     phase = np.array(phase.shaped)
+    #     return phase - np.mean(phase)
 
-        # Scale screen to specified D_r0
-        # return sio.loadmat("phase.mat", struct_as_record=False)['phase']
-        screen = scaled_screen * (self._D_r0 ** (5/6))
+@lru_cache(maxsize=64)
+def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
+    """
+    Simulation of a phase screen with Kolmogorov Statistics.
+    Starts from an exact 15 x 15 phase screen.
+    Based on function written by Rachel Johnston and Cressida Harding
+    
+    Parameters
+    ----------
+    size        Pixel size for resultant phase screen
+    D           Telescope diameter (m)
+    r0          Fried Parameter (m)
+    Ddim        Pixel size of aperture footprint on phase screen
+    seed        Seed for screen generation
+    
+    Outputs
+    -------
+    screen      A phase screen with Kolmogorov Statistics of size defined by shape of class attribute grid
+    """
 
-        screen = np.array(screen, dtype=self.type)
-        # REMOVE DC OFFSET
-        screen -= np.average(screen) #, weights=util.circle(size_chopped/2, size_chopped))
-        
-        return screen
+    calculated_size = 15
+    n_increases = 0
+    grid_shape = size
+    while calculated_size < max(grid_shape):
+        calculated_size = 2 * calculated_size - 11
+        n_increases += 1
+    
+    full_screen = generate_phase_screen(n_increases, seed)
+    
+    chopped_screen = full_screen[:grid_shape[0], :grid_shape[1]]
 
-@lru_cache(maxsize=None)
+    # Rescale screen for appropriate D_r0 after cropping
+    size_chopped = max(np.shape(chopped_screen))
+    size_full = np.shape(full_screen)[0]
+    scale = ((size_full - 1) / (size_chopped - 1)) ** (5/6)
+    scaled_screen = chopped_screen * scale
+
+    # Scale screen to specified D_r0
+    # return sio.loadmat("phase.mat", struct_as_record=False)['phase']
+    
+    # Account for different D/r0 for taking cut-outs from larger phase screens
+
+    # Specific coefficents to have correct RMSE for phase screens at 1000m (550px) and 8000m (2607px) for a cut-out of 256px
+    k = (0.122) * (max(size) / Ddim) + 1.23
+    # k = 1
+
+    screen = scaled_screen * ((D/r0) ** (5/6)) * k
+
+    screen = np.array(screen, dtype=type)
+    # REMOVE DC OFFSET
+    screen -= np.average(screen) #, weights=util.circle(size_chopped/2, size_chopped))
+    
+    return screen
+
+@lru_cache(maxsize=128)
 def generate_phase_screen(n_increases, seed=None):
     """
     Generates a phase screen with Kolmogorov statistics.
@@ -174,7 +213,10 @@ def generate_phase_screen(n_increases, seed=None):
         filled = np.zeros((r1, c1), dtype=np.cfloat)
         filled[:r1:2, :c1:2] = phase
         # convolved = cconv2d(filled, inter1, 1/r0)
-        convolved = convolve2d(filled, inter1, mode='same')
+        # convolved = convolve(filled, inter1, mode='constant')
+        # convolved = convolve2d(filled, inter1, mode='same')
+        # convolved = fftconvolve(filled, inter1, mode='same')
+        convolved = np.float64(cv2.filter2D(np.float32(filled), ddepth=-1, kernel=np.float32(inter1)))
         convolved = convolved[:r1, :c1]
 
         # Add random residuals
@@ -193,7 +235,10 @@ def generate_phase_screen(n_increases, seed=None):
         mask1 = mask1a + mask1b
 
         # convolved2 = cconv2d(inter1_result, inter2, 1/r0)
-        convolved2 = convolve2d(inter1_result, inter2, mode='same')
+        # convolved2 = convolve(inter1_result, inter2, mode='constant')
+        # convolved2 = convolve2d(inter1_result, inter2, mode='same')
+        # convolved2 = fftconvolve(inter1_result, inter2, mode='same')
+        convolved2 = np.float64(cv2.filter2D(np.float32(inter1_result), ddepth=-1, kernel=np.float32(inter2)))
         convolved2 = convolved2[:r1, :c1]
 
         r_hat /= np.sqrt(2)

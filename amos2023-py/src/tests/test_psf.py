@@ -19,7 +19,7 @@ axs[0].imshow(np.log10(p / p.max()), vmin=-5)
 axs[1].imshow(p)
 
 size = (256, 256)
-k = phase_screen.Kolmogorov(size, 0.6 / 0.05)
+k = phase_screen.Kolmogorov(size, 0.6, 0.05)
 
 fwhm_dist = []
 fwhm2_dist = []

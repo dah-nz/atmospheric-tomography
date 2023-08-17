@@ -8,4 +8,6 @@
 
 # import plot.print_data
 
-import plot.plot_data_by_asterism
+# import plot.plot_data_by_asterism
+
+import plot.plot_results

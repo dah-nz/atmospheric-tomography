@@ -1,31 +1,51 @@
 import numpy as np
 import scipy.optimize as opt
 import scipy.ndimage as sci
+# import pyfftw
 
 from astropy.modeling import models, fitting
+
+from functools import lru_cache
 
 from util import util
 
 Q = 8       # pixels per resolution unit
+j = complex(0, 1)
 
 def get_resolution(wavelength, telescope_diameter, f_number):
     return (wavelength * telescope_diameter * f_number) / Q
 
+@lru_cache()
+def get_aperture(r):
+    return util.circle(r, 2*r), np.zeros((2*r*Q, 2*r*Q))
+
 def psf(ps):
     r = int(max(ps.shape) / 2 + 0.5)
-    aperture = util.circle(r, 2*r)
-    j = complex(0, 1)
-    wf = aperture * np.exp(j * ps)
+    wf, padded = get_aperture(r)
+    wf = wf * np.exp(j * ps)
+
+    padded[Q*r-r:Q*r+r, Q*r-r:Q*r+r] = wf
 
     # zero pad for correct number of airy disk peaks
-    wf = np.pad(wf, (Q-1)*r)
+    # wf = np.pad(wf, (Q-1)*r)
 
-    psf = np.fft.fft2(wf)
-    psf = np.fft.fftshift(psf)
+    # Roughly 10% slower
+    # a = pyfftw.byte_align(wf)
+    # psf = pyfftw.interfaces.numpy_fft.fft2(a)
 
-    m = int((Q * r))
+    f = np.fft.fft2(padded)
+
+    # psf = np.fft.fftshift(f)
+    # m = int((Q * r))
     dr = int(1.2 * r)
-    psf = psf[m-dr:m+dr, m-dr:m+dr]
+    # psf = psf[m-dr:m+dr, m-dr:m+dr]
+
+    n = f.shape[0]
+    psf = np.zeros((2*dr, 2*dr))
+    psf[0:dr, 0:dr] = f[n-dr:n, n-dr:n]
+    psf[dr:2*dr, dr:2*dr] = f[0:dr, 0:dr]
+    psf[0:dr, dr:2*dr] = f[n-dr:n, 0:dr]
+    psf[dr:2*dr, 0:dr] = f[0:dr, n-dr:n]
     
     return (np.abs(psf) ** 2)
     

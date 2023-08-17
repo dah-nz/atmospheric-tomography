@@ -15,7 +15,7 @@ class TomographyController():
     run:
         runs tomographic algorithm using beacon coefficients, and positions of guide beacons and target
     """
-    def __init__(self, tomography, n_coeffs, screen_gain=2):
+    def __init__(self, tomography, n_coeffs, screen_gain=4):
         self.T = tomography
         self.N = n_coeffs
         self.aperture_grid = np.zeros((self.T.aperture_size, self.T.aperture_size))
@@ -70,11 +70,13 @@ class TomographyController():
         if screens is not None:
             self.screens = screens
         else:
-            self.screen_gens = [phase_screen.Kolmogorov(g, self.T.D/self.T.r0, type=np.float64) for g in layer_size]
             if seeds is not None:
-                self.screens = [s.get(seed) / self.screen_gain for s, seed in zip(self.screen_gens, seeds)]
+                self.screens = [phase_screen.kolmogorov(sz, self.T.D, self.T.r0, self.T.aperture_size, seed) / self.screen_gain for sz, seed in zip(layer_size, seeds)]
             else:
-                self.screens = [s.get() / self.screen_gain for s in self.screen_gens]
+                self.screens = [phase_screen.get(sz, self.T.D, self.T.r0, self.T.aperture_size) / self.screen_gain for sz in layer_size]
+        
+        for s in self.screens:
+            print(s.shape)
 
     def set_noise(self, sigma):
         rng = np.random.default_rng()

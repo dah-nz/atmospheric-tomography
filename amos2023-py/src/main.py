@@ -70,6 +70,9 @@ for asterism in guidestar_sets.items():
 
 mask = util.circle(aperture_size/2, aperture_size)
 zeros = np.zeros_like(mask)
+airy_psf = psf.psf(mask)
+airy_max = np.amax(airy_psf)
+airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
 
 for n_coeffs in n_coeff_set:
     basis_functions = [
@@ -80,34 +83,30 @@ for n_coeffs in n_coeff_set:
         wavelet.wavelet(n_coeffs, wavelets='db2')
         ]
     for snr in noise_SNR:
-        file_name = "results_residuals_{}_SNR_{}.data".format(n_coeffs, snr)
+        file_name = "results_mean_shifted_{}_SNR_{}.data".format(n_coeffs, snr)
         with open("results/{}".format(file_name), "w") as f:
             titles = [
-                "Basis Function",
-                "N Coeffs",
-                "Layer 1 Seed",
-                "Layer 2 Seed",
-                "N Guide Stars",
-                "Guide Star Angle",
-                "Target Theta",
-                "Target Gamma",
+                "Basis",
+                "N_Coeffs",
                 "SNR",
+                "L1_Seed",
+                "L2_Seed",
+                "Asterism",
+                "Target_Gamma",
+                "Target_Theta",
                 "Sigma",
-                "RMSE B:A",
-                "RMSE R:A",
-                "RMSE I:R",
-                "RMSE I:A",
-                "FWHM R:A",
-                "FWHM I:A",
-                "Max Int. R:A",
-                "Max Int. I:A",
-                "Max Int. R",
-                "Max Int. A",
-                "Max Int. I",
-                "MSSIM R:A-I:A",
-                "MSSIM R:A",
-                "MSSIM R:I",
-                "MSSIM I:A"
+                "RMSE_BA",
+                "RMSE_RA",
+                "RMSE_IA",
+                "FWHM_RA",
+                "FWHM_IA",
+                "FWHM_Airy",
+                "Strehl_RB",
+                "Strehl_IB",
+                "Strehl_RI",
+                "MSSIM_RI",
+                "MSSIM_RB",
+                "MSSIM_IB",
             ]
             f.write(titles[0])
             for t in titles[1:]:
@@ -115,7 +114,7 @@ for n_coeffs in n_coeff_set:
             f.write("\n")
             for B in basis_functions:
                 tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
-                T = controller.TomographyController(tomo, n_coeffs)
+                T = controller.TomographyController(tomo, n_coeffs, screen_gain=2)
                 for ps in phase_screens:
                     T.set_phase_screens(all_beacons, seeds=ps)
                     for test in tests:
@@ -132,66 +131,66 @@ for n_coeffs in n_coeff_set:
 
                         T.run()
                         
+                        # Mask aperture on tomography output phase screens
                         masked_actual = mask * T.actual_screen
                         masked_recon = mask * T.reconstructed_screen
                         masked_ideal = mask * T.actual_screen_from_coeffs
-                        rmse = np.sqrt(mean_squared_error(masked_actual, masked_recon))
-                        rmse_actual_ideal = np.sqrt(mean_squared_error(masked_actual, masked_ideal))
-                        rmse_ideal = np.sqrt(mean_squared_error(masked_ideal, masked_recon))
-                        rmse_baseline = np.sqrt(mean_squared_error(masked_actual, zeros))
+
+                        # Calculate RMSE error for reconstruction, ideal and baseline to the ground truth
+                        rmse_ra = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+                        rmse_ia = np.sqrt(mean_squared_error(masked_actual, masked_ideal))
+                        rmse_ba = np.sqrt(mean_squared_error(masked_actual, zeros))
                         
-                        ra = T.reconstructed_screen - T.actual_screen
-                        pra = psf.psf(ra)
-                        ia = T.actual_screen_from_coeffs - T.actual_screen
-                        pia = psf.psf(ia)
+                        # Find difference (residuals) between reconstruction and ideal from ground truth
+                        residuals_ra = T.reconstructed_screen - T.actual_screen
+                        residuals_ia = T.actual_screen_from_coeffs - T.actual_screen
 
-                        fwhm_recons = psf.fwhm(pra)
-                        fwhm_ideal = psf.fwhm(pia)
+                        # Find point spread functions for residuals. This is the point spread function for an optical sytem given a perfect wavefront correction method
+                        psf_ra = psf.psf(residuals_ra)
+                        psf_ia = psf.psf(residuals_ia)
 
-                        max_intensity_ra = np.amax(pra)
-                        max_intensity_ia = np.amax(pia)
-                        mssim_ria = structural_similarity(pra, pia)
+                        # Calculate the FWHM for the reconstruction and ideal PSFs
+                        fwhm_ra = psf.fwhm(psf_ra)
+                        fwhm_ia = psf.fwhm(psf_ia)
 
-                        pr = psf.psf(T.reconstructed_screen)
-                        pa = psf.psf(T.actual_screen)
-                        pai = psf.psf(T.actual_screen_from_coeffs)
+                        # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
+                        max_intensity_ra = np.amax(psf_ra)
+                        max_intensity_ia = np.amax(psf_ia)
 
-                        max_intensity_r = np.amax(pr)
-                        max_intensity_a = np.amax(pa)
-                        max_intensity_ai = np.amax(pai)
+                        strehl_rb = max_intensity_ra / airy_max
+                        strehl_ib = max_intensity_ia / airy_max
+                        strehl_ri = max_intensity_ra / max_intensity_ia
 
-                        mssim_ra = structural_similarity(pr, pa)
-                        mssim_ri = structural_similarity(pr, pai)
-                        mssim_ia = structural_similarity(pai, pa)
+                        # Calculate the MSSIM for the PSFs to each other.
+                        mssim_ri = structural_similarity(psf_ra, psf_ia)
+                        mssim_rb = structural_similarity(psf_ra, airy_psf)
+                        mssim_ib = structural_similarity(psf_ia, airy_psf)
 
-                        out = "{},{},{},{},{},{}".format(
-                            B.name,
-                            n_coeffs,
-                            ps[0],
-                            ps[1],
-                            asterism[0][0],
-                            asterism[0][1])
+                        out = "{},{},{},{},{},{},{}".format(
+                            B.name,                     # Basis
+                            n_coeffs,                   # N_Coeffs
+                            snr,                        # SNR
+                            ps[0],                      # L1_Seed
+                            ps[1],                      # L2_Seed
+                            asterism[0][0],             # Asterism
+                            target[0][1]                # Target_Gamma
+                            )
 
                         for t in [
-                            target[0][0],
-                            target[0][1],
-                            snr,
-                            sigma,
-                            rmse_baseline,
-                            rmse,
-                            rmse_ideal,
-                            rmse_actual_ideal,
-                            fwhm_recons,
-                            fwhm_ideal,
-                            max_intensity_ra,
-                            max_intensity_ia,
-                            max_intensity_r,
-                            max_intensity_a,
-                            max_intensity_ai,
-                            mssim_ria,
-                            mssim_ra,
-                            mssim_ri,
-                            mssim_ia
+                            target[0][0],               # Target_Theta
+                            sigma,                      # Sigma
+                            rmse_ba,                    # RMSE_BA
+                            rmse_ra,                    # RMSE_RA
+                            rmse_ia,                    # RMSE_IA
+                            fwhm_ra,                    # FWHM_RA
+                            fwhm_ia,                    # FWHM_IA
+                            airy_fwhm,                  # FWHM_Airy
+                            strehl_rb,                  # Strehl_RB
+                            strehl_ib,                  # Strehl_IB
+                            strehl_ri,                  # Strehl_RI
+                            mssim_ri,                   # MSSIM_RI
+                            mssim_rb,                   # MSSIM_RB
+                            mssim_ib                    # MSSIM_IB
                             ]:
                             out += ",{:.4f}".format(t)
 
