@@ -28,8 +28,8 @@ for t in np.linspace(0, 2*np.pi, 8, endpoint=False):   # theta angle (acw from h
         target = (t + g, g)
         targets.append(target)
 
-for t in np.linspace(0, 2*np.pi, 3, endpoint=False):    # theta angle (acw from horizon)
-    for g in np.linspace(35, 75, 5, endpoint=True):     # gamma angle (from telescope axis)
+for t in np.linspace(0, 2*np.pi, 8, endpoint=False):    # theta angle (acw from horizon)
+    for g in np.linspace(35, 95, 7, endpoint=True):     # gamma angle (from telescope axis)
         target = (t + g, g)
         targets.append(target)
 
@@ -80,8 +80,8 @@ ax.plot(x, y, 'g--', alpha=0.2)
 
 ax.set_xlabel("Angle (arcseconds)")
 ax.set_ylabel("Angle (arcseconds)")
-ax.set_xticks(np.arange(-70, 71, 10))
-ax.set_yticks(np.arange(-70, 71, 10))
+ax.set_xticks(np.arange(-100, 101, 20))
+ax.set_yticks(np.arange(-100, 101, 20))
 ax.axis("equal")
 ax.legend(loc='lower left', bbox_to_anchor=(0.5, 0.95))
 
