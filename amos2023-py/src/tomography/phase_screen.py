@@ -52,7 +52,7 @@ class Kolmogorov():
         self.grid = hcipy.make_pupil_grid(self._size, D)
         self.Cn2 = hcipy.Cn_squared_from_fried_parameter(r0)
 
-    def get(self, seed=None):
+    def get(self, dDim, seed=None):
         """
         Get a Kolmogorov phase screen of size determined by initialised grid size
 
@@ -79,7 +79,7 @@ class Kolmogorov():
 
         # return self.__get_hcipy_screen(self._size, wavelength, seed)
 
-        return kolmogorov(self._size, self._D, self._r0, seed)
+        return kolmogorov(self._size, self._D, self._r0, dDim, seed)
 
     # @lru_cache(maxsize=None)
     # def __get_hcipy_screen(self, size, wavelength, seed):
@@ -131,8 +131,10 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
     # Account for different D/r0 for taking cut-outs from larger phase screens
 
     # Specific coefficents to have correct RMSE for phase screens at 1000m (550px) and 8000m (2607px) for a cut-out of 256px
-    k = (0.122) * (max(size) / Ddim) + 1.23
-    # k = 1
+    if Ddim != max(size):
+        k = (0.122) * (max(size) / Ddim) + 1.23
+    else:
+        k = 1
 
     screen = scaled_screen * ((D/r0) ** (5/6)) * k
 

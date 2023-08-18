@@ -37,14 +37,15 @@ for t in np.linspace(0, 2*np.pi, 3, endpoint=False):    # theta angle (acw from 
 isoplanatic_angle = 2.44 * wavelength / r_0
 isoplanatic_angle = util.rad2arcsec(isoplanatic_angle)
 
-ax = plt.subplot()
+fig, ax = plt.subplots(1, 1)
+fig.set_size_inches(7,7)
 ax.grid(which="both", color='#D8D8D8', linestyle='-', zorder=0)
 
 for k, v in guidestar_sets.items():
-    if k[1] > 1:
-        lbl = 'Test Asterism: {} guidestars, {} arcsecond radius'.format(k[0], k[1])
+    if k[1] != -1:
+        lbl = 'Symmetric, {} guide stars, {}" radius'.format(k[0], k[1])
     else:
-        lbl = 'Natural Guidestar Constellation'
+        lbl = 'Asymmetric, 5 guide stars'
     x = [g * np.sin(t) for t, g in v]
     y = [g * np.cos(t) for t, g in v]
     ax.scatter(x, y, label=lbl, marker='*', zorder=3.0)
@@ -53,7 +54,7 @@ print(targets)
 
 x = [g * np.sin(t) for t, g in targets]
 y = [g * np.cos(t) for t, g in targets]
-ax.scatter(x, y, label='Science Target Positions', zorder=3.5)
+ax.scatter(x, y, label='Target Positions', zorder=3.5)
 
 util.plotcirc(ax, (0, 0), 30, '--', alpha=0.2)
 util.plotcirc(ax, (0, 0), 60, '--', alpha=0.2)
@@ -79,9 +80,9 @@ ax.plot(x, y, 'g--', alpha=0.2)
 
 ax.set_xlabel("Angle (arcseconds)")
 ax.set_ylabel("Angle (arcseconds)")
-ax.set_xticks(np.arange(-40, 41, 10))
-ax.set_yticks(np.arange(-40, 41, 10))
+ax.set_xticks(np.arange(-70, 71, 10))
+ax.set_yticks(np.arange(-70, 71, 10))
 ax.axis("equal")
-ax.legend()
+ax.legend(loc='lower left', bbox_to_anchor=(0.5, 0.95))
 
 plt.show()

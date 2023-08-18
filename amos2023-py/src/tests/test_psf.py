@@ -11,12 +11,23 @@ size = (256, 256)
 
 ps = np.zeros(size)
 
-p = psf.psf(ps)
-print("FWHM of no distortion: {}".format(psf.fwhm(p)))
+Qs = list(range(1, 16 + 1, 1))
+fig, axs = plt.subplots(2, len(Qs))
 
-fig, axs = plt.subplots(1, 2)
-axs[0].imshow(np.log10(p / p.max()), vmin=-5)
-axs[1].imshow(p)
+for i, q in enumerate(Qs): 
+    psf.Q = q
+    p = psf.psf(ps)
+    f = psf.fwhm(p)
+    r = psf.get_resolution(600e-9, 0.6, 6.5)
+    print("FWHM of no distortion: {} with q={} (res={}): {}".format(f, q, r, f*r))
+
+    axs[0, i].imshow(np.log10(p / p.max()), vmin=-5)
+    axs[1, i].imshow(p)
+
+plt.show()
+quit()
+
+psf.Q = 8
 
 size = (256, 256)
 k = phase_screen.Kolmogorov(size, 0.6, 0.05)
@@ -32,18 +43,18 @@ fwhm2_reco = []
 time_2 = []
 
 BASE = 1000
-N_SAMPLES = 30
+N_SAMPLES = 5
 screens = zip(list(range(BASE, BASE+N_SAMPLES)), list(range(BASE+N_SAMPLES, BASE+2*N_SAMPLES)))
 
 bf = DCT.DCT(64)
 
 for a, b in screens:
     print(a, b)
-    ps = k.get(seed=a)
-    ps2 = k.get(seed=b)
+    ps = k.get(256, seed=a)
+    ps2 = k.get(256, seed=b)
 
     ps += ps2
-    ps /= 8
+    ps /= 3
     p = psf.psf(ps)
     dbs = bf.decompose(np.abs(ps))
 

@@ -20,8 +20,8 @@ f_number =      6.5             # focal number for telescope
 wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
-n_coeff_set = [64]
-noise_SNR = [3, 10, 20, 30]
+n_coeff_set = [16] #[16, 64]
+noise_SNR = [0, 3, 10, 20, 30]
 
 ps_seed = 4000
 n_phase_screens = 25
@@ -71,7 +71,7 @@ for asterism in guidestar_sets.items():
 mask = util.circle(aperture_size/2, aperture_size)
 zeros = np.zeros_like(mask)
 airy_psf = psf.psf(mask)
-airy_max = np.amax(airy_psf)
+airy_norm_max = np.amax(airy_psf) / np.sum(airy_psf)
 airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
 
 for n_coeffs in n_coeff_set:
@@ -83,7 +83,7 @@ for n_coeffs in n_coeff_set:
         wavelet.wavelet(n_coeffs, wavelets='db2')
         ]
     for snr in noise_SNR:
-        file_name = "results_mean_shifted_{}_SNR_{}.data".format(n_coeffs, snr)
+        file_name = "results_strehl_fixed_{}_SNR_{}.data".format(n_coeffs, snr)
         with open("results/{}".format(file_name), "w") as f:
             titles = [
                 "Basis",
@@ -154,11 +154,11 @@ for n_coeffs in n_coeff_set:
                         fwhm_ia = psf.fwhm(psf_ia)
 
                         # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
-                        max_intensity_ra = np.amax(psf_ra)
-                        max_intensity_ia = np.amax(psf_ia)
+                        max_intensity_ra = np.amax(psf_ra) / np.sum(psf_ra)
+                        max_intensity_ia = np.amax(psf_ia) / np.sum(psf_ia)
 
-                        strehl_rb = max_intensity_ra / airy_max
-                        strehl_ib = max_intensity_ia / airy_max
+                        strehl_rb = max_intensity_ra / airy_norm_max
+                        strehl_ib = max_intensity_ia / airy_norm_max
                         strehl_ri = max_intensity_ra / max_intensity_ia
 
                         # Calculate the MSSIM for the PSFs to each other.

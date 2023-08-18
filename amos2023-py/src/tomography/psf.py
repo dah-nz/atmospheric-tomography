@@ -12,10 +12,14 @@ from util import util
 Q = 8       # pixels per resolution unit
 j = complex(0, 1)
 
+# Airy disc radius is 1.22 * lambda * f_number
+# Gaussian RMS width is 0.84 * lambda * f_number
+# 
 def get_resolution(wavelength, telescope_diameter, f_number):
-    return (wavelength * telescope_diameter * f_number) / Q
+    return (0.8038 * (1.22 * wavelength * f_number)) / Q
+    # return (wavelength * telescope_diameter * f_number) / Q
 
-@lru_cache()
+# @lru_cache()
 def get_aperture(r):
     return util.circle(r, 2*r), np.zeros((2*r*Q, 2*r*Q))
 
@@ -28,10 +32,6 @@ def psf(ps):
 
     # zero pad for correct number of airy disk peaks
     # wf = np.pad(wf, (Q-1)*r)
-
-    # Roughly 10% slower
-    # a = pyfftw.byte_align(wf)
-    # psf = pyfftw.interfaces.numpy_fft.fft2(a)
 
     f = np.fft.fft2(padded)
 
