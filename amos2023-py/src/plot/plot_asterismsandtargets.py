@@ -38,26 +38,26 @@ isoplanatic_angle = util.rad2arcsec(isoplanatic_angle)
 
 fig, ax = plt.subplots(1, 1)
 fig.set_size_inches(7,7)
-ax.grid(which="both", color='#D8D8D8', linestyle='-', zorder=0)
-
-for k, v in guidestar_sets.items():
+ax.grid(which="both", color='#000000', alpha=0.1, linestyle='-', zorder=0)
+clrs = ["#ff0000", "#00ff00", "#0000ff"]
+for (k, v), c in zip(guidestar_sets.items(), clrs):
     if k[1] != -1:
         lbl = 'Symmetric, {} guide stars, {}" radius'.format(k[0], k[1])
     else:
         lbl = 'Asymmetric, 5 guide stars'
     x = [g * np.sin(t) for t, g in v]
     y = [g * np.cos(t) for t, g in v]
-    ax.scatter(x, y, label=lbl, marker='*', zorder=3.0)
+    ax.scatter(x, y, label=lbl, marker='*', c=c, s=100, zorder=3.0)
 
 print(targets)
 
 x = [g * np.sin(t) for t, g in targets]
 y = [g * np.cos(t) for t, g in targets]
-ax.scatter(x, y, label='Target Positions', marker='+', alpha=0.5, zorder=3.5)
+ax.scatter(x, y, label='Target Positions', c="#000000", s=20, marker='+', alpha=0.75, zorder=3.5)
 
-util.plotcirc(ax, (0, 0), 30, '--', alpha=0.2)
-util.plotcirc(ax, (0, 0), 60, '--', alpha=0.2)
-util.plotcirc(ax, (0, 0), isoplanatic_angle, 'k--', alpha=0.2, label="Isoplanatic Patch")
+util.plotcirc(ax, (0, 0), 30, '--', color=clrs[0], alpha=0.2)
+util.plotcirc(ax, (0, 0), 60, '--', color=clrs[1], alpha=0.2)
+util.plotcirc(ax, (0, 0), isoplanatic_angle, '', linestyle='dashdot', color="#223344", alpha=0.5, label="Isoplanatic Patch")
 
 gs = guidestar_sets[(5, -1)]
 gs.sort(key=lambda x: x[0])
@@ -65,7 +65,7 @@ x = [g * np.sin(t) for t, g in gs]
 y = [g * np.cos(t) for t, g in gs]
 x.append(x[0])
 y.append(y[0])
-ax.plot(x, y, 'g--', alpha=0.2)
+ax.plot(x, y, '--', color=clrs[2], alpha=0.2)
 
 # target_line = [(line_theta, line_spread), (line_theta+np.pi, line_spread)]
 # x = [g * np.sin(t) for t, g in target_line]

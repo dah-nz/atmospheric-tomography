@@ -1,13 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
+# from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from tomography import beacon, tomography, controller, phase_screen, psf
+from tomography import beacon, tomography, controller, psf
 from basis import zernike, DCT, DST, wavelet
 from util import util
 
 from skimage.metrics import structural_similarity, mean_squared_error
-import hcipy
-import constellations
 
 beacon_angle = 30           # arcseconds
 aperture_size = 256         # pixels
@@ -29,7 +28,7 @@ n_coeffs = 64
 bfuncs = [zernike.Zernike(n_coeffs),
           DCT.DCT(n_coeffs),
           DST.DST(n_coeffs),
-          wavelet.wavelet(n_coeffs, wavelets='haar'),
+          wavelet.wavelet(n_coeffs, wavelets='Haar'),
           wavelet.wavelet(n_coeffs, wavelets='db2')
           ]
 
@@ -50,16 +49,12 @@ print("AIRY DISC FWHM: {}".format(psf.fwhm(airy_psf) * resolution))
 for B in bfuncs:
     print("{}".format(B.name))
     tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
-    T = controller.TomographyController(tomo, n_coeffs, screen_gain=5)
-    T.set_phase_screens(all_beacons, seeds=[11, 22])
+    T = controller.TomographyController(tomo, n_coeffs, screen_gain=2.5)
+    T.set_phase_screens(all_beacons, seeds=[33, 44])
     T.set_asterism(beacons)
     T.set_target(target)
-    # T.set_phase_screens(seeds=[50, 56])
-    # T.set_noise(1.0)
 
     calculated_coeffs = T.run()
-
-    # mask = util.circle(T.T.aperture_size/2, T.T.aperture_size)
 
     actual_screen = T.actual_screen * mask
     recon_screen = T.reconstructed_screen * mask
@@ -71,8 +66,7 @@ for B in bfuncs:
     print("Sum Actual: {}; Sum Recons: {}".format(np.sum(actual_screen), np.sum(recon_screen)))
     print("Mean Actual: {}; Mean Recons: {}".format(np.mean(actual_screen), np.mean(recon_screen)))
 
-    # recon_screen = recon_screen * (fss_actual / fss_recon)
-    phase_screens.append(recon_screen)# - actual_screen)
+    phase_screens.append(recon_screen)
     best_phase_screens.append(ideal_screen)
 
     mx.append(max(np.amax(actual_screen), np.amax(recon_screen)))
@@ -110,14 +104,11 @@ fig1, axs1 = plt.subplots(2, 3)
 fig1.set_size_inches(10, 7)
 
 fig2, axs2 = plt.subplots(2, 3)
-fig2.set_size_inches(8, 8)
-
+fig2.set_size_inches(10, 7)
 
 mx.sort(reverse=True)
 mn.sort(reverse=True)
 
-# amx = mx[1]
-# amn = mn[1]
 amx = mx[0]
 amn = mn[0]
 
@@ -128,17 +119,14 @@ max_x = actual_screen.shape[0]/2 * resolution * um
 max_y = actual_screen.shape[1]/2 * resolution * um
 extent=([min_x, max_x, min_y, max_y])
 
-cmap0 = 'gray'
-cmap1 = 'inferno'
+cmap0 = 'viridis'
+cmap1 = 'viridis'
 
 ims1 = []
 ims2 = []
 
 axs1[0, 0].set_title("Actual Distortion Profile")
 ims1.append(axs1[0, 0].imshow(actual_screen, vmax=amx,vmin=amn, cmap=cmap0))
-# axs1[0, 0].set_xlabel('X (pixels)')
-# axs1[0, 0].set_xlabel('Y (pixels)')
-# axs1[0, 0].tick_params(bottom=False, left=False)
 axs1[0, 0].axis('off')
 
 axs2[0, 0].set_title("No Estimate")
@@ -152,9 +140,6 @@ for i in range(0, len(bfuncs)):
     y = (i + 1) % 3
     axs1[x, y].set_title(bfuncs[i].name)
     ims1.append(axs1[x, y].imshow(best_phase_screens[i], vmax=amx,vmin=amn, cmap=cmap0))
-    # axs1[x, y].set_xlabel('X (pixels)')
-    # axs1[x, y].set_ylabel('Y (pixels)')
-    # axs1[x, y].tick_params(bottom=False, left=False)
     axs1[x, y].axis('off')
 
     axs2[x, y].set_title(bfuncs[i].name)
@@ -162,18 +147,15 @@ for i in range(0, len(bfuncs)):
     axs2[x, y].set_xlabel('Focal plane distance [um]')
     axs2[x, y].set_ylabel('Focal plane distance [um]')
 
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-
 fig1.tight_layout()
+fig1.subplots_adjust(bottom=0.05, top=0.95, right=0.88)
+cbar_ax = fig1.add_axes([0.9, 0.15, 0.02, 0.7])
+fig1.colorbar(ims1[0], cax=cbar_ax, label="Phase Offset (radians)", shrink=0.6)
+
 fig2.tight_layout()
-fig1.colorbar(ims1[0], ax=axs1, label="Phase Offset (radians)", shrink=0.6)
-fig2.colorbar(ims2[0], ax=axs2, label=r"Intensity ($log(\frac{\psi(x,y)}{max(\psi(x,y))})$)",
-orientation="horizontal", shrink=0.6)
-
-# divider = make_axes_locatable(axs2)
-# ax_cb = divider.append_axes("below", size="5%", pad=0.05)
-# fig1.add_axes(ax_cb)
-
-# fig1.colorbar(ims2[0], cax=ax_cb, label=r"Intensity ($log(\frac{\psi(x,y)}{max(\psi(x,y))})$)", orientation="horizontal", shrink=0.6)
+fig2.subplots_adjust(bottom=0.15, left=0.1, right=0.9, top=0.98)
+cbar_ax2 = fig2.add_axes([0.25, 0.08, 0.5, 0.03])
+fig2.colorbar(ims2[0], cax=cbar_ax2, label=r"Intensity ($log(\frac{\psi(x,y)}{max(\psi(x,y))})$)",
+orientation="horizontal")
 
 plt.show()

@@ -25,6 +25,7 @@ def get_aperture(r):
 
 def psf(ps):
     r = int(max(ps.shape) / 2 + 0.5)
+    dr = int(1.2 * r)
     wf, padded = get_aperture(r)
     wf = wf * np.exp(j * ps)
 
@@ -37,11 +38,10 @@ def psf(ps):
 
     # psf = np.fft.fftshift(f)
     # m = int((Q * r))
-    dr = int(1.2 * r)
     # psf = psf[m-dr:m+dr, m-dr:m+dr]
 
     n = f.shape[0]
-    psf = np.zeros((2*dr, 2*dr))
+    psf = np.zeros((2*dr, 2*dr), dtype=np.complex128)
     psf[0:dr, 0:dr] = f[n-dr:n, n-dr:n]
     psf[dr:2*dr, dr:2*dr] = f[0:dr, 0:dr]
     psf[0:dr, dr:2*dr] = f[n-dr:n, 0:dr]
