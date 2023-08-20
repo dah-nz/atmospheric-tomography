@@ -16,8 +16,8 @@ altitudes = [1000, 8000]
 
 sz = (256, 256)
 
-gammas = np.linspace(0, 75, 75, endpoint=False)
-thetas = np.linspace(0, 2 * np.pi, 32)
+gammas = np.arange(0, 95, 5)
+thetas = np.linspace(0, 2 * np.pi, 7)
 
 beacons = [Beacon(theta, gamma, gamma_arcseconds=True) for theta in thetas for gamma in gammas]
 
@@ -31,9 +31,11 @@ Z = zernike.Zernike(N)
 T = tomography.Tomography(alts, Z, D, r_0, N)
 md, lg = T.get_layer_shapes(beacons)
 
+print(lg)
+
 gen = []
 for g in lg:
-    gen.append(phase_screen.Kolmogorov(g, D/r_0, type=np.float64))
+    gen.append(phase_screen.Kolmogorov(g, D, r_0, type=np.float64))
 
 seed_pairs = np.random.randint(0, 5000, size=(25,2))
 

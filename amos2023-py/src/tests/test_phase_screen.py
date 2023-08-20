@@ -5,8 +5,8 @@ from skimage.metrics import mean_squared_error
 from tomography import phase_screen
 
 p0 = 256
-p1 = 550
-p2 = 2607
+p1 = 628
+p2 = 3235
 
 a0 = np.zeros((p0, p0))
 a1 = np.zeros((p1, p1))
@@ -16,7 +16,7 @@ mse1 = []
 mse2 = []
 mse3 = []
 
-for seed in range(1000):
+for seed in range(100):
     s0 = phase_screen.kolmogorov((p0, p0), 1, 1, p0, 3 * seed, type=np.float64)
     s1 = phase_screen.kolmogorov((p1, p1), 1, 1, p0, 3 * seed + 1, type=np.float64)
     s2 = phase_screen.kolmogorov((p2, p2), 1, 1, p0, 3 * seed + 2, type=np.float64)

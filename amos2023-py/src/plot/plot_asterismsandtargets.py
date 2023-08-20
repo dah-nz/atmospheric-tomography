@@ -5,7 +5,6 @@ from util import util
 
 import constellations
 
-
 wavelength = 600e-9
 r_0 = 0.05
 
@@ -24,11 +23,11 @@ for i, con in enumerate(cons):
 targets = []
 targets.append((0, 0))
 for t in np.linspace(0, 2*np.pi, 8, endpoint=False):   # theta angle (acw from horizon)
-    for g in np.linspace(5, 25, 5, endpoint=True):      # gamma angle (from telescope axis)
+    for g in np.linspace(5, 30, 6, endpoint=True):      # gamma angle (from telescope axis)
         target = (t + g, g)
         targets.append(target)
 
-for t in np.linspace(0, 2*np.pi, 8, endpoint=False):    # theta angle (acw from horizon)
+for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from horizon)
     for g in np.linspace(35, 95, 7, endpoint=True):     # gamma angle (from telescope axis)
         target = (t + g, g)
         targets.append(target)
@@ -54,11 +53,11 @@ print(targets)
 
 x = [g * np.sin(t) for t, g in targets]
 y = [g * np.cos(t) for t, g in targets]
-ax.scatter(x, y, label='Target Positions', zorder=3.5)
+ax.scatter(x, y, label='Target Positions', marker='+', alpha=0.5, zorder=3.5)
 
 util.plotcirc(ax, (0, 0), 30, '--', alpha=0.2)
 util.plotcirc(ax, (0, 0), 60, '--', alpha=0.2)
-util.plotcirc(ax, (0, 0), isoplanatic_angle, '--', alpha=0.2)
+util.plotcirc(ax, (0, 0), isoplanatic_angle, 'k--', alpha=0.2, label="Isoplanatic Patch")
 
 gs = guidestar_sets[(5, -1)]
 gs.sort(key=lambda x: x[0])
@@ -80,9 +79,9 @@ ax.plot(x, y, 'g--', alpha=0.2)
 
 ax.set_xlabel("Angle (arcseconds)")
 ax.set_ylabel("Angle (arcseconds)")
-ax.set_xticks(np.arange(-100, 101, 20))
-ax.set_yticks(np.arange(-100, 101, 20))
+ax.set_xticks(np.arange(-90, 91, 30))
+ax.set_yticks(np.arange(-90, 91, 30))
 ax.axis("equal")
-ax.legend(loc='lower left', bbox_to_anchor=(0.5, 0.95))
+ax.legend(loc='lower left', bbox_to_anchor=(0.5, 0.93))
 
 plt.show()

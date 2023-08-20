@@ -20,8 +20,8 @@ f_number =      6.5             # focal number for telescope
 wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
-n_coeff_set = [16] #[16, 64]
-noise_SNR = [0, 3, 10, 20, 30]
+n_coeff_set = [64] # [16, 64]
+noise_SNR = [0] # [0, 3, 10, 20, 30]
 
 ps_seed = 4000
 n_phase_screens = 25
@@ -48,13 +48,13 @@ targets[(0, 0)] = beacon.Beacon(0, 0, gamma_arcseconds=True)
 all_beacons.append(targets[(0,0)])
 
 for t in np.linspace(0, 2*np.pi, 8, endpoint=False):    # theta angle (acw from horizon)
-    for g in np.linspace(5, 25, 5, endpoint=True): # gamma angle (from telescope axis)
+    for g in np.linspace(5, 30, 6, endpoint=True): # gamma angle (from telescope axis)
         target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
         targets[(t + g, g)] = target
         all_beacons.append(target)
 
-for t in np.linspace(0, 2*np.pi, 3, endpoint=False):    # theta angle (acw from horizon)
-    for g in np.linspace(35, 65, 4, endpoint=True): # gamma angle (from telescope axis)
+for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from horizon)
+    for g in np.linspace(35, 95, 7, endpoint=True): # gamma angle (from telescope axis)
         target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
         targets[(t + g, g)] = target
         all_beacons.append(target)
@@ -68,51 +68,54 @@ for asterism in guidestar_sets.items():
     for target in targets.items():
         tests.append((asterism, target))
 
+norm_scaler = 1e-4
+
 mask = util.circle(aperture_size/2, aperture_size)
 zeros = np.zeros_like(mask)
 airy_psf = psf.psf(mask)
-airy_norm_max = np.amax(airy_psf) / np.sum(airy_psf)
 airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
+airy_psf_norm = airy_psf / (np.sum(airy_psf) * norm_scaler)
+airy_norm_max = np.amax(airy_psf_norm)
 
 for n_coeffs in n_coeff_set:
     basis_functions = [
-        zernike.Zernike(n_coeffs),
-        DCT.DCT(n_coeffs),
-        DST.DST(n_coeffs),
-        wavelet.wavelet(n_coeffs, wavelets='Haar'),
-        wavelet.wavelet(n_coeffs, wavelets='db2')
+        # ('z', zernike.Zernike(n_coeffs)),
+        ('dct', DCT.DCT(n_coeffs)),
+        ('dst', DST.DST(n_coeffs))
+        # ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
+        # ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
         ]
     for snr in noise_SNR:
-        file_name = "results_strehl_fixed_{}_SNR_{}.data".format(n_coeffs, snr)
-        with open("results/{}".format(file_name), "w") as f:
-            titles = [
-                "Basis",
-                "N_Coeffs",
-                "SNR",
-                "L1_Seed",
-                "L2_Seed",
-                "Asterism",
-                "Target_Gamma",
-                "Target_Theta",
-                "Sigma",
-                "RMSE_BA",
-                "RMSE_RA",
-                "RMSE_IA",
-                "FWHM_RA",
-                "FWHM_IA",
-                "FWHM_Airy",
-                "Strehl_RB",
-                "Strehl_IB",
-                "Strehl_RI",
-                "MSSIM_RI",
-                "MSSIM_RB",
-                "MSSIM_IB",
-            ]
-            f.write(titles[0])
-            for t in titles[1:]:
-                f.write(",{}".format(t))
-            f.write("\n")
-            for B in basis_functions:
+        for i, B in basis_functions:
+            file_name = "results_home_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
+            with open("results/{}".format(file_name), "w") as f:
+                titles = [
+                    "Basis",
+                    "N_Coeffs",
+                    "SNR",
+                    "L1_Seed",
+                    "L2_Seed",
+                    "Asterism",
+                    "Target_Gamma",
+                    "Target_Theta",
+                    "Sigma",
+                    "RMSE_BA",
+                    "RMSE_RA",
+                    "RMSE_IA",
+                    "FWHM_RA",
+                    "FWHM_IA",
+                    "FWHM_Airy",
+                    "Strehl_RB",
+                    "Strehl_IB",
+                    "Strehl_RI",
+                    "MSSIM_RI",
+                    "MSSIM_RB",
+                    "MSSIM_IB",
+                ]
+                f.write(titles[0])
+                for t in titles[1:]:
+                    f.write(",{}".format(t))
+                f.write("\n")
                 tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
                 T = controller.TomographyController(tomo, n_coeffs, screen_gain=2)
                 for ps in phase_screens:
@@ -154,17 +157,20 @@ for n_coeffs in n_coeff_set:
                         fwhm_ia = psf.fwhm(psf_ia)
 
                         # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
-                        max_intensity_ra = np.amax(psf_ra) / np.sum(psf_ra)
-                        max_intensity_ia = np.amax(psf_ia) / np.sum(psf_ia)
+                        psf_ra_norm = psf_ra / (np.sum(psf_ra) * norm_scaler)
+                        psf_ia_norm = psf_ia / (np.sum(psf_ia) * norm_scaler)
+
+                        max_intensity_ra = np.amax(psf_ra_norm)
+                        max_intensity_ia = np.amax(psf_ia_norm)
 
                         strehl_rb = max_intensity_ra / airy_norm_max
                         strehl_ib = max_intensity_ia / airy_norm_max
                         strehl_ri = max_intensity_ra / max_intensity_ia
 
                         # Calculate the MSSIM for the PSFs to each other.
-                        mssim_ri = structural_similarity(psf_ra, psf_ia)
-                        mssim_rb = structural_similarity(psf_ra, airy_psf)
-                        mssim_ib = structural_similarity(psf_ia, airy_psf)
+                        mssim_ri = structural_similarity(psf_ra_norm, psf_ia_norm)
+                        mssim_rb = structural_similarity(psf_ra_norm, airy_psf_norm)
+                        mssim_ib = structural_similarity(psf_ia_norm, airy_psf_norm)
 
                         out = "{},{},{},{},{},{},{}".format(
                             B.name,                     # Basis
