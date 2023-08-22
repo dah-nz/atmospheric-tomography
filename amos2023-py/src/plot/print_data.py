@@ -3,58 +3,60 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 
-df_64_0 = pd.read_csv("./results/results_residuals_64_SNR_0.data")
-df_16_0 = pd.read_csv("./results/results_residuals_16_SNR_0.data")
-df_64_0.loc[:, "SNR"] = 0
-df_16_0.loc[:, "SNR"] = 0
+from plot import data
+from tomography import psf
 
-f = open("data.csv", 'w')
+df = data.load()
 
-for t, df in [("Coeffs: 64; SNR: 0", df_64_0), ("Coeffs: 16; SNR: 0", df_16_0)]:
-    df.loc[:, "Strehl"] = df.loc[:, "Max Int. R:A"] / df.loc[:, "Max Int. I:A"]
-    df.loc[:, "RMSE Baseline"] = df.loc[:, "RMSE B:A"] - df.loc[:, "RMSE R:A"]
-    df.loc[:, "RMSE Diff"] = df.loc[:, "RMSE R:A"] - df.loc[:, "RMSE I:A"]
-    df.loc[:, "FWHM Diff"] = df.loc[:, "FWHM R:A"] - df.loc[:, "FWHM I:A"]
-    f.write(t + "\n")
-    for basis in df["Basis Function"].unique():
-        f.write("Basis: {}\n".format(basis))
-        for target in df["Target Gamma"].unique():
-            f.write("Target: {}\n".format(target))
-            out_df = df.loc[(df["Target Gamma"] == target) & (df["Basis Function"] == basis)][["RMSE R:A", "RMSE B:A", "RMSE I:A", "FWHM R:A", "FWHM I:A", "FWHM Diff", "Strehl", "MSSIM R:A-I:A"]].agg(["mean", "std"])
-            test_df = df.loc[(df["Target Gamma"] == target) & (df["Basis Function"] == basis)]
-            d = np.array(test_df.loc[:, "RMSE R:A"])
-            ci = stats.t.interval(0.95, d.shape[0], loc=np.mean(d), scale=stats.sem(d))
-            out_df["95% CI LB"] = ci[0]
-            out_df["95% CI UB"] = ci[1]
-            f.write(out_df.to_string() + "\n")
-            # f.write("95% Conf Interval :{}\n".format(ci))
-            # fitting = stats.ttest_rel(test_df.loc[:, "RMSE R:A"], test_df.loc[:, "RMSE B:A"], alternative="less")
-            # f.write("Fitting Error T-Test pValue, {:1.2e}\n".format(fitting.pvalue))
-            # tomo = stats.ttest_rel(test_df.loc[:, "RMSE R:A"], test_df.loc[:, "RMSE I:A"], alternative="greater")
-            # f.write("Tomography Error T-Test pValue, {:1.2e}\n".format(tomo.pvalue))
-            # fwhm = stats.ttest_rel(test_df.loc[:, "FWHM R:A"], test_df.loc[:, "FWHM I:A"], alternative="greater")
-            # f.write("FWHM Error T-Test pValue, {:1.2e}\n".format(fwhm.pvalue))
+df0 = df.loc[df["Target_Gamma"] == 0, :].copy()
 
-# Compare 
-# df = pd.concat([df_64_0, df_16_0])
-# coeffs = df["N Coeffs"].unique()
-# bf = df["Basis Function"].unique()
-# sets = []
-# for n in coeffs:
-#     for b in bf:
-#         sets.append((b,n))
+# Table for RMSE
+print(" & & \multicolumn{2}{c}{Mean RMSE (radians)} \\\\")
+print("Basis Function & Coefficients & Reconstruction & Ideal \\\\")
+print("No estimate & - & {:.4f} & - \\\\".format(df0["RMSE_BA"].mean()))
+for basis in df0["Basis"].unique():
+    mean16 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 16)][["RMSE_RA", "RMSE_IA"]].mean()
+    mean64 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 64)][["RMSE_RA", "RMSE_IA"]].mean()
+    print("{} & {} & {:.4f} & {:.4f} \\\\".format(basis, 16, mean16["RMSE_RA"], mean16["RMSE_IA"]))
+    print("& {} & {:.4f} & {:.4f} \\\\".format(64, mean64["RMSE_RA"], mean64["RMSE_IA"]))
 
-# print(sets)
+resolution = psf.get_resolution(600e-9, 0.6, 6.5) * 1e6
+print(" & & \multicolumn{2}{c}{Mean FWHM (um)} \\\\")
+print("Basis Function & Coefficients & Reconstruction & Ideal \\\\")
+print("Airy disk & - & {:.4f} & - \\\\".format(df0["FWHM_Airy"].mean() * resolution))
+df0.loc[:, "FWHM_RRatio"] = df0.loc[:, "FWHM_Airy"] / df0.loc[:, "FWHM_RA"]
+df0.loc[:, "FWHM_IRatio"] = df0.loc[:, "FWHM_Airy"] / df0.loc[:, "FWHM_IA"]
+for basis in df0["Basis"].unique():
+    mean16 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 16)][["FWHM_RRatio", "FWHM_IRatio"]].mean()
+    mean64 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 64)][["FWHM_RRatio", "FWHM_IRatio"]].mean()
+    print("{} & {} & {:.4f} & {:.4f} \\\\".format(basis, 16, mean16["FWHM_RRatio"], mean16["FWHM_IRatio"]))
+    print("& {} & {:.4f} & {:.4f} \\\\".format(64, mean64["FWHM_RRatio"], mean64["FWHM_IRatio"]))
 
-# for ab, an in sets:
-#     for bb, bn in sets:
-#         if an is not bn or ab is not bb:
-#             test_a = df.loc[(df["Target Gamma"] == 0) & (df["N Coeffs"] == an) & (df["Basis Function"] == ab)]
-#             test_b = df.loc[(df["Target Gamma"] == 0) & (df["N Coeffs"] == bn) & (df["Basis Function"] == bb)]
-#             test = stats.ttest_rel(test_a.loc[:, "RMSE R:A"], test_b.loc[:, "RMSE R:A"])
-#             conf = stats.t.interval()
-#             f.write("{}:{} and {}:{}\n".format(ab, an, bb, bn))
-#             f.write("T-Test, {}\n".format(test.pvalue))
-            
+# for basis in df0["Basis"].unique():
+#     t = stats.ttest_1samp(df0[df0["Basis"] == basis]['FWHM_IA'], popmean=df0["FWHM_Airy"].mean())
+#     print(basis)
+#     print(t.statistic)
+#     print(t.pvalue)
+#     print(t.df)
+#     print(t.confidence_interval(0.95))
 
-f.close()
+    # mean16 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 16)][["FWHM_RA", "FWHM_IA"]].mean()
+    # mean64 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 64)][["FWHM_RA", "FWHM_IA"]].mean()
+    # print("{} & {} & {:.4f} & {:.4f} \\\\".format(basis, 16, mean16["FWHM_RA"] * resolution, mean16["FWHM_IA"] * resolution))
+    # print("& {} & {:.4f} & {:.4f} \\\\".format(64, mean64["FWHM_RA"] * resolution, mean64["FWHM_IA"] * resolution))
+
+print(" & & \multicolumn{2}{c}{Mean Strehl Ratio} \\\\")
+print("Basis Function & Coefficients & Reconstruction & Ideal \\\\")
+for basis in df0["Basis"].unique():
+    mean16 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 16)][["Strehl_RB", "Strehl_IB"]].mean()
+    mean64 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 64)][["Strehl_RB", "Strehl_IB"]].mean()
+    print("{} & {} & {:.4f} & {:.4f} \\\\".format(basis, 16, mean16["Strehl_RB"], mean16["Strehl_IB"]))
+    print("& {} & {:.4f} & {:.4f} \\\\".format(64, mean64["Strehl_RB"], mean64["Strehl_IB"]))
+
+print(" & & \multicolumn{2}{c}{Mean MSSIM} \\\\")
+print("Basis Function & Coefficients & Reconstruction & Ideal \\\\")
+for basis in df0["Basis"].unique():
+    mean16 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 16)][["MSSIM_RB", "MSSIM_IB"]].mean()
+    mean64 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 64)][["MSSIM_RB", "MSSIM_IB"]].mean()
+    print("{} & {} & {:.4f} & {:.4f} \\\\".format(basis, 16, mean16["MSSIM_RB"], mean16["MSSIM_IB"]))
+    print("& {} & {:.4f} & {:.4f} \\\\".format(64, mean64["MSSIM_RB"], mean64["MSSIM_IB"]))

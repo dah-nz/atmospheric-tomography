@@ -1,0 +1,22 @@
+import pandas as pd
+
+def load():
+    df_16_0 =       pd.read_csv("./results/results_home_16_SNR_0.data")
+    df_64_0_z =     pd.read_csv("./results/results_home_64_SNR_0_z.data")
+    df_64_0_dct =   pd.read_csv("./results/results_home_64_SNR_0_dct.data")
+    df_64_0_dst =   pd.read_csv("./results/results_home_64_SNR_0_dst.data")
+    df_64_0_wd =    pd.read_csv("./results/results_home_64_SNR_0_wd.data")
+    df_64_0_wh =    pd.read_csv("./results/results_home_64_SNR_0_wh.data")
+
+    df_64_0 = pd.concat([df_64_0_z, df_64_0_dct, df_64_0_dst, df_64_0_wd, df_64_0_wh])
+
+    return pd.concat([df_16_0, df_64_0])
+
+def load_noise():
+    dfs = []
+    for n in [0, 3, 6, 10, 13, 16, 20, 23, 26, 30]:
+        for b in ['z', 'dct', 'dst', 'wh', 'wd']:
+            dfs.append(pd.read_csv("./results/results_noise_16_SNR_{}_{}.data".format(n, b)))
+            dfs.append(pd.read_csv("./results/results_noise_64_SNR_{}_{}.data".format(n, b)))
+    
+    return pd.concat(dfs)

@@ -1,12 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib import rc
 # from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from tomography import beacon, tomography, controller, psf
 from basis import zernike, DCT, DST, wavelet
 from util import util
+from plot import colours
 
 from skimage.metrics import structural_similarity, mean_squared_error
+
+rc('font',**{'family':'serif'})
+rc('text', usetex=True)
 
 beacon_angle = 30           # arcseconds
 aperture_size = 256         # pixels
@@ -49,7 +55,7 @@ print("AIRY DISC FWHM: {}".format(psf.fwhm(airy_psf) * resolution))
 for B in bfuncs:
     print("{}".format(B.name))
     tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
-    T = controller.TomographyController(tomo, n_coeffs, screen_gain=2.5)
+    T = controller.TomographyController(tomo, n_coeffs)
     T.set_phase_screens(all_beacons, seeds=[33, 44])
     T.set_asterism(beacons)
     T.set_target(target)
@@ -119,8 +125,11 @@ max_x = actual_screen.shape[0]/2 * resolution * um
 max_y = actual_screen.shape[1]/2 * resolution * um
 extent=([min_x, max_x, min_y, max_y])
 
-cmap0 = 'viridis'
-cmap1 = 'viridis'
+clrs = colours.palette()[:3]
+my_cmap = LinearSegmentedColormap.from_list("Sunset", clrs)
+
+cmap0 = my_cmap
+cmap1 = my_cmap
 
 ims1 = []
 ims2 = []

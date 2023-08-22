@@ -1,27 +1,20 @@
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib import rc
+from plot import data, colours
 
 from tomography import psf
 
-# Plot data for SNR = 0, different asterisms
+df = data.load()
 
-df_16_0 =       pd.read_csv("./results/results_home_16_SNR_0.data")
-df_64_0_z =     pd.read_csv("./results/results_home_64_SNR_0_z.data")
-df_64_0_dct =   pd.read_csv("./results/results_home_64_SNR_0_dct.data")
-df_64_0_dst =   pd.read_csv("./results/results_home_64_SNR_0_dst.data")
-df_64_0_wd =    pd.read_csv("./results/results_home_64_SNR_0_wd.data")
-df_64_0_wh =    pd.read_csv("./results/results_home_64_SNR_0_wh.data")
-
-df_64_0 = pd.concat([df_64_0_z, df_64_0_dct, df_64_0_dst, df_64_0_wd, df_64_0_wh])
-
-df_ra = pd.concat([df_16_0, df_64_0])
-df_ba = pd.concat([df_16_0, df_64_0])
-df_ia = pd.concat([df_16_0, df_64_0])
+df_ra = data.load() # pd.concat([df_16_0, df_64_0])
+df_ba = data.load() # pd.concat([df_16_0, df_64_0])
+df_ia = data.load() # pd.concat([df_16_0, df_64_0])
 
 # Plot settings
-sns.set_context("poster") #, font_scale=2, rc={"lines.linewidth": 2.5})
-sns.set_style("whitegrid")
+sns.set_theme(context="poster", style="whitegrid", font="serif") #, font_scale=2, rc={"lines.linewidth": 2.5})
+# sns.set_style("whitegrid")
 
 label_coeffs = "N Coefficients"
 label_series = "Asterism"
@@ -31,12 +24,18 @@ ast6 = '6 stars at 60" radius'
 ast5 = '5 stars asymmetric'
 ideal = "Best estimate"
 baseline = "No estimate"
+airydisk = "No distortion (Airy disk)"
 
-c0 = "#2D4059FF"
-c1 = "#EA5455FF"
-c2 = "#EFCB68FF"
-c3 = "#00A9A580"
-c4 = "#95B2B880"
+color_dict = colours.palette(
+    [
+        ast3,
+        ast6,
+        ast5,
+        ideal,
+        baseline,
+        airydisk
+    ]
+)
 
 lw = 2
 
@@ -55,8 +54,6 @@ df_ba.loc[:, label_series] = baseline
 
 df = pd.concat([df_ra, df_ia, df_ba])
 df.rename(columns={"N_Coeffs": label_coeffs}, inplace=True)
-
-color_dict = { ast3: c0, ast6: c1, ast5: c2, ideal: c3, baseline: c4 }
 
 g = sns.relplot(
     data=df, kind="line",
@@ -82,7 +79,6 @@ um_per_m            = 1e6   # um per metre
 resolution = psf.get_resolution(wavelength, telescope_diameter, f_number) * um_per_m
 
 baseline = "No distortion (Airy disk)"
-color_dict = { ast3: c0, ast6: c1, ast5: c2, ideal: c3 }
 
 df_ra.loc[:, "FWHM"] = df_ra.loc[:, "FWHM_Airy"] / df_ra.loc[:, "FWHM_RA"] # * resolution
 df_ra.loc[df_ra["Asterism"] == 3, label_series] = ast3
@@ -117,7 +113,6 @@ for ax in g.axes.flat:
 
 
 # Plot Strehl Data
-color_dict = { ast3: c0, ast6: c1, ast5: c2, ideal: c3, baseline: c4 }
 df_ra.loc[:, "Strehl"] = df_ra.loc[:, "Strehl_RB"]
 df_ra.loc[df_ra["Asterism"] == 3, label_series] = ast3
 df_ra.loc[df_ra["Asterism"] == 6, label_series] = ast6
@@ -148,7 +143,6 @@ for ax in g.axes.flat:
 
 # Plot MSSIM data
 baseline = "No distortion (Airy disk)"
-color_dict = { ast3: c0, ast6: c1, ast5: c2, ideal: c3, baseline: c4 }
 
 df_ra.loc[:, "MSSIM"] = df_ra.loc[:, "MSSIM_RB"]
 df_ra.loc[df_ra["Asterism"] == 3, label_series] = ast3
@@ -177,42 +171,24 @@ g = sns.relplot(
 for ax in g.axes.flat:
     ax.set_xticks(range(0, 91, 30))
 
-plt.show()
-quit()
-# Plot data for SNR changing, aggregate asterisms
+# Plot violin plots of different basis functions
+# df = pd.concat([df_16_0, df_64_0])
+# df = df.loc[df["Target_Gamma"] == 0, :]
 
-df_16_0 = pd.read_csv("./results/results_mean_shifted_16_SNR_0.data")
-df_16_3 = pd.read_csv("./results/results_mean_shifted_16_SNR_3.data")
-df_16_10 = pd.read_csv("./results/results_mean_shifted_16_SNR_10.data")
-df_16_20 = pd.read_csv("./results/results_mean_shifted_16_SNR_20.data")
-df_16_30 = pd.read_csv("./results/results_mean_shifted_16_SNR_30.data")
-# df_64_0 = pd.read_csv("./results/results_mean_shifted_64_SNR_0.data")
-# df_64_3 = pd.read_csv("./results/results_mean_shifted_64_SNR_3.data")
+# g = sns.catplot(data=df, kind="violin", x="Asterism", y="RMSE_RA", hue="N_Coeffs", col="Basis", 
+#     split=True, cut=0, col_wrap=3, facet_kws=dict(legend_out=False),)
+# (g.set_axis_labels('Basis Function', 'RMSE (radians)')
+#     .tight_layout()
+# )
+# sns.move_legend(g, "upper right", bbox_to_anchor=(1, 1))
 
-baseline = "No estimate"
-label_series = "Basis"
+# plt.figure()
+# g = sns.violinplot(data=df, x="Basis", y="FWHM_RA", hue="Asterism", cut=0)
 
-# Plot RMSE data
-DFs = [df_16_3, df_16_10, df_16_20, df_16_30]
-for df in DFs:
-    df["RMSE %"] = df["RMSE_RA"] - df_16_0["RMSE_RA"]
+# plt.figure()
+# g = sns.violinplot(data=df, x="Basis", y="Strehl_RB", hue="Asterism", cut=0)
 
-df = pd.concat(DFs)
-df.rename(columns={"N_Coeffs": label_coeffs}, inplace=True)
-
-color_dict = { "Zernike": c0, "DCT": c1, "DST": c2, "Wavelets (Haar)": c3, "Wavelets (db2)": c4, baseline: "#00000080" }
-
-g = sns.relplot(
-    data=df, kind="line",
-    x="Target_Gamma", y="RMSE %", col="SNR",
-    hue=label_series, style=label_coeffs,
-    errorbar=None, palette=color_dict
-)
-
-(g.set_axis_labels('Target Angle (")', 'RMSE (radians)')
-    .set_titles("SNR: {col_name}dB")
-    .tight_layout(w_pad=0.4)
-)
+# plt.figure()
+# g = sns.violinplot(data=df, x="Basis", y="MSSIM_RB", hue="Asterism", cut=0)
 
 plt.show()
-

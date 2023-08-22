@@ -42,3 +42,5 @@ packages/
 *.jpeg
 *.gif
 *.data
+*.zip
+*.csv

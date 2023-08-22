@@ -9,7 +9,7 @@ from functools import lru_cache
 
 from util import util
 
-Q = 8       # pixels per resolution unit
+Q = 6       # pixels per resolution unit
 j = complex(0, 1)
 
 # Airy disc radius is 1.22 * lambda * f_number
@@ -21,7 +21,7 @@ def get_resolution(wavelength, telescope_diameter, f_number):
 
 # @lru_cache()
 def get_aperture(r):
-    return util.circle(r, 2*r), np.zeros((2*r*Q, 2*r*Q))
+    return util.circle(r, 2*r), np.zeros((2*r*Q, 2*r*Q), dtype=np.complex128)
 
 def psf(ps):
     r = int(max(ps.shape) / 2 + 0.5)

@@ -22,7 +22,7 @@ target = beacon.Beacon(0, 0, gamma_arcseconds=True)
 aperture = np.zeros((aperture_size, aperture_size))
 
 # Calculate metapupil radius
-layers = [1000, 4000]
+layers = [1000, 8000]
 n_coeffs = 64
 
 bfuncs = [zernike.Zernike(n_coeffs),

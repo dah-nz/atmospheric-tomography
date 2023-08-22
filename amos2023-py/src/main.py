@@ -87,7 +87,7 @@ for n_coeffs in n_coeff_set:
         ]
     for snr in noise_SNR:
         for i, B in basis_functions:
-            file_name = "results_home_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
+            file_name = "results_noise_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
             with open("results/{}".format(file_name), "w") as f:
                 titles = [
                     "Basis",
@@ -117,7 +117,7 @@ for n_coeffs in n_coeff_set:
                     f.write(",{}".format(t))
                 f.write("\n")
                 tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
-                T = controller.TomographyController(tomo, n_coeffs, screen_gain=2)
+                T = controller.TomographyController(tomo, n_coeffs)
                 for ps in phase_screens:
                     T.set_phase_screens(all_beacons, seeds=ps)
                     for test in tests:
@@ -135,7 +135,7 @@ for n_coeffs in n_coeff_set:
                         T.run()
                         
                         # Mask aperture on tomography output phase screens
-                        masked_actual = mask * T.actual_screen
+                        masked_actual = mask * T.noiseless_screen
                         masked_recon = mask * T.reconstructed_screen
                         masked_ideal = mask * T.actual_screen_from_coeffs
 

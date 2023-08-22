@@ -1,12 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import rc
 
 from util import util
+from plot import colours
 
 import constellations
 
 wavelength = 600e-9
 r_0 = 0.05
+
+rc('font',**{'family':'serif'})
+rc('text', usetex=True)
 
 # SET UP GUIDE STARS
 guidestar_sets = {}
@@ -39,7 +44,7 @@ isoplanatic_angle = util.rad2arcsec(isoplanatic_angle)
 fig, ax = plt.subplots(1, 1)
 fig.set_size_inches(7,7)
 ax.grid(which="both", color='#000000', alpha=0.1, linestyle='-', zorder=0)
-clrs = ["#ff0000", "#00ff00", "#0000ff"]
+clrs = colours.palette()
 for (k, v), c in zip(guidestar_sets.items(), clrs):
     if k[1] != -1:
         lbl = 'Symmetric, {} guide stars, {}" radius'.format(k[0], k[1])
@@ -82,6 +87,6 @@ ax.set_ylabel("Angle (arcseconds)")
 ax.set_xticks(np.arange(-90, 91, 30))
 ax.set_yticks(np.arange(-90, 91, 30))
 ax.axis("equal")
-ax.legend(loc='lower left', bbox_to_anchor=(0.5, 0.93))
+ax.legend(loc='lower left', bbox_to_anchor=(0.5, 0.93), framealpha=1.0)
 
 plt.show()

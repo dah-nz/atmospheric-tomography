@@ -12,14 +12,19 @@ a0 = np.zeros((p0, p0))
 a1 = np.zeros((p1, p1))
 a2 = np.zeros((p2, p2))
 
+variance = 1.0299*(0.6/0.05)**(5/3)
+sigma = np.sqrt(variance)
+print("Sigma^2 = 1.0299*(D/r_0)^(5/3) = {}".format(variance))
+print("Sigma = {}".format(sigma))
+
 mse1 = []
 mse2 = []
 mse3 = []
 
 for seed in range(100):
-    s0 = phase_screen.kolmogorov((p0, p0), 1, 1, p0, 3 * seed, type=np.float64)
-    s1 = phase_screen.kolmogorov((p1, p1), 1, 1, p0, 3 * seed + 1, type=np.float64)
-    s2 = phase_screen.kolmogorov((p2, p2), 1, 1, p0, 3 * seed + 2, type=np.float64)
+    s0 = phase_screen.kolmogorov((p0, p0), 0.6, 0.05, p0, 3 * seed, type=np.float64)
+    s1 = phase_screen.kolmogorov((p1, p1), 0.6, 0.05, p0, 3 * seed + 1, type=np.float64) * (sigma / 4.89)
+    s2 = phase_screen.kolmogorov((p2, p2), 0.6, 0.05, p0, 3 * seed + 2, type=np.float64) * (sigma / 3.06)
     s1cut = s1[int((p1-p0)/2+0.5):int((p1+p0)/2+0.5), int((p1-p0)/2+0.5):int((p1+p0)/2+0.5)]
     s2cut = s2[int((p2-p0)/2+0.5):int((p2+p0)/2+0.5), int((p2-p0)/2+0.5):int((p2+p0)/2+0.5)]
     mse1.append(np.sqrt(mean_squared_error(s0, a0)))

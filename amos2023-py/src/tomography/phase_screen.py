@@ -130,24 +130,30 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
     
     # Account for different D/r0 for taking cut-outs from larger phase screens
 
-    # Specific coefficents to have correct RMSE for phase screens at 1000m (550px) and 8000m (2607px) for a cut-out of 256px
-    # This holds for target positions out to 75"
-    # for target positions out to 95", the sizes are 628px and 3235px.
+
+    screen = scaled_screen * ((D/r0) ** (5/6))
+
+    screen = np.array(screen, dtype=type)
+    # REMOVE DC OFFSET
+    screen -= np.average(screen)
+
+    sigma = np.sqrt(1.0299*(D/r0)**(5/3))
+    # Specific coefficents to have correct RMSE for phase screens at 1000m (628px) and 8000m (3235px) for a cut-out of 256px
+    # for target positions out to 95"
     if Ddim != max(size):
-        if max(size) == 550 or max(size) == 2607:
-            k = (0.122) * (max(size) / Ddim) + 1.23
-        elif max(size) == 628 or max(size) == 3235:
-            k = (0.095) * (max(size) / Ddim) + 1.38
+        if max(size) == 550:
+            k = 1
+        elif max(size) == 2607:
+            k = 1
+        elif max(size) == 628:
+            k = sigma / 4.89
+        elif max(size) == 3235:
+            k = sigma / 3.06
         else:
             k = 1
     else:
         k = 1
-
-    screen = scaled_screen * ((D/r0) ** (5/6)) * k
-
-    screen = np.array(screen, dtype=type)
-    # REMOVE DC OFFSET
-    screen -= np.average(screen) #, weights=util.circle(size_chopped/2, size_chopped))
+    screen = screen * k
     
     return screen
 

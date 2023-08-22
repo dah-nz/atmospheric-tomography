@@ -15,7 +15,7 @@ class TomographyController():
     run:
         runs tomographic algorithm using beacon coefficients, and positions of guide beacons and target
     """
-    def __init__(self, tomography, n_coeffs, screen_gain=4):
+    def __init__(self, tomography, n_coeffs, screen_gain=1):
         self.T = tomography
         self.N = n_coeffs
         self.aperture_grid = np.zeros((self.T.aperture_size, self.T.aperture_size))
@@ -115,6 +115,7 @@ class TomographyController():
         b_shifted = np.reshape(self.beacon_coeffs_raw, (len(set_up), len(self.asterism), -1))
         self.beacon_coeffs_sum = np.sum(b_shifted, 0)
         self.beacon_coeffs = np.reshape(self.beacon_coeffs_sum, (len(self.asterism) * self.N, -1))
+
         self.calculated_coeffs = self.T.run(self.asterism, self.target, self.beacon_coeffs)
 
         self.reconstructed_screen = self.T.basis.compose(np.shape(self.aperture_grid), self.calculated_coeffs)
@@ -125,6 +126,10 @@ class TomographyController():
         # set_up = zip(self.T.altitudes, self.screens, self.T.metapupil_diameters)
 
         self.actual_screen = np.sum([self.target.cut_out(self.T.D, a, s, md) for a, s, md in set_up], 0)
+        if self.noise:
+            self.noiseless_screen = np.sum([self.target.cut_out(self.T.D, a, s, md) for s, (a, _, md) in zip(self.screens, set_up)], 0)
+        else:
+            self.noiseless_screen = self.actual_screen
         self.actual_coeffs = self.T.basis.decompose(self.actual_screen)
         self.actual_screen_from_coeffs = self.T.basis.compose(np.shape(self.actual_screen), self.actual_coeffs)
 
