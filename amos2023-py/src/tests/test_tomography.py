@@ -7,14 +7,15 @@ from util import util
 
 from skimage.metrics import structural_similarity, mean_squared_error
 
-beacon_angle = 15           # arcseconds
+beacon_angle = 0           # arcseconds
+n_guide_stars = 1
 aperture_size = 256         # pixels
 telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
 
 # generate asterism
-beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
-target = beacon.Beacon(0, 0, gamma_arcseconds=True)
+beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, n_guide_stars, endpoint=False)]
+target = beacon.Beacon(0, 10, gamma_arcseconds=True)
 all_beacons = beacons + [target]
 
 aperture = np.zeros((aperture_size, aperture_size))
@@ -51,18 +52,32 @@ fig, axes = plt.subplots(len(layers), len(beacons))
 fig.suptitle("Beacon Cut Outs")
 for b in range(len(beacons)):
     for l in range(len(layers)):
-        axes[l, b].imshow(T.beacon_cut_outs[l * len(beacons) + b])
+        if len(beacons) > 1:
+            ax = axes[l, b]
+        else:
+            ax = axes[l]
+        ax.imshow(T.beacon_cut_outs[l * len(beacons) + b])
+
 
 fig, axes = plt.subplots(len(layers) + 3, len(beacons))
 fig.suptitle("Beacon Coefficients")
 for l in range(len(layers)):
     for b in range(len(beacons)):
-        axes[l, b].plot(T.beacon_coeffs_raw[l * len(beacons) + b])
+        if len(beacons) > 1:
+            ax = axes[l, b]
+        else:
+            ax = axes[l]
+        ax.plot(T.beacon_coeffs_raw[l * len(beacons) + b])
 for b in range(len(beacons)):
     b_sum = np.sum([T.beacon_coeffs_raw[l * len(beacons) + b] for l in range(len(layers))], 0)
-    axes[len(layers), b].plot(b_sum)
-    axes[len(layers) + 1, b].plot(T.beacon_coeffs_sum[b])
-    axes[len(layers) + 2, b].plot(b_sum - T.beacon_coeffs_sum[b])
+    if len(beacons) > 1:
+        axes[len(layers), b].plot(b_sum)
+        axes[len(layers) + 1, b].plot(T.beacon_coeffs_sum[b])
+        axes[len(layers) + 2, b].plot(b_sum - T.beacon_coeffs_sum[b])
+    else:
+        axes[len(layers)].plot(b_sum)
+        axes[len(layers) + 1].plot(T.beacon_coeffs_sum[b])
+        axes[len(layers) + 2].plot(b_sum - T.beacon_coeffs_sum[b])
 
 plt.figure()
 plt.title("Beacon Input to Tomography Algorithm")

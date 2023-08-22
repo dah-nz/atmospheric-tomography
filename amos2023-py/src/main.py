@@ -20,7 +20,7 @@ f_number =      6.5             # focal number for telescope
 wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
-n_coeff_set = [64] # [16, 64]
+n_coeff_set = [16] # [16, 64]
 noise_SNR = [0] # [0, 3, 10, 20, 30]
 
 ps_seed = 4000
@@ -30,7 +30,7 @@ n_phase_screens = 25
 all_beacons = []
 # Set up tests
 guidestar_sets = {}
-for i, (n, g) in enumerate([(3, 30), (6, 60)]):
+for i, (n, g) in enumerate([(1, 0), (3, 30), (6, 60)]):
     guidestars = [beacon.Beacon(t, g, gamma_arcseconds=True) for t in np.linspace(i, (2*np.pi)+i, n, endpoint=False)]
     all_beacons += guidestars
     guidestar_sets[(n, g)] = guidestars
@@ -54,7 +54,7 @@ for t in np.linspace(0, 2*np.pi, 8, endpoint=False):    # theta angle (acw from 
         all_beacons.append(target)
 
 for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from horizon)
-    for g in np.linspace(35, 95, 7, endpoint=True): # gamma angle (from telescope axis)
+    for g in np.linspace(40, 100, 7, endpoint=True): # gamma angle (from telescope axis)
         target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
         targets[(t + g, g)] = target
         all_beacons.append(target)
@@ -79,15 +79,15 @@ airy_norm_max = np.amax(airy_psf_norm)
 
 for n_coeffs in n_coeff_set:
     basis_functions = [
-        # ('z', zernike.Zernike(n_coeffs)),
+        ('z', zernike.Zernike(n_coeffs)),
         ('dct', DCT.DCT(n_coeffs)),
-        ('dst', DST.DST(n_coeffs))
-        # ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
-        # ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
+        ('dst', DST.DST(n_coeffs)),
+        ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
+        ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
         ]
     for snr in noise_SNR:
         for i, B in basis_functions:
-            file_name = "results_noise_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
+            file_name = "results_sigma_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
             with open("results/{}".format(file_name), "w") as f:
                 titles = [
                     "Basis",

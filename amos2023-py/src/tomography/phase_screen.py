@@ -149,6 +149,10 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
             k = sigma / 4.89
         elif max(size) == 3235:
             k = sigma / 3.06
+        elif max(size) == 670:
+            k = sigma / 4.72
+        elif max(size) == 3566:
+            k = sigma / 3.07
         else:
             k = 1
     else:
