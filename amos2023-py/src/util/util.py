@@ -123,3 +123,13 @@ def get_sigma_from_SNR(phase_screen, SNR):
     variance = mean_square / snr
     # print(variance)
     return np.sqrt(variance)
+
+def cut_around_max(data, factor=4):
+    yc, xc = np.unravel_index(np.argmax(data), data.shape)
+    xd = int(data.shape[0] / factor + 0.5)
+    yd = int(data.shape[1] / factor + 0.5)
+    x0 = max(0, xc - xd)
+    x1 = min(data.shape[0], xc + xd)
+    y0 = max(0, yc - yd)
+    y1 = min(data.shape[0], yc + yd)
+    return data[x0:x1, y0:y1]

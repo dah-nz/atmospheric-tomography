@@ -14,7 +14,7 @@ from skimage.metrics import structural_similarity, mean_squared_error
 rc('font',**{'family':'serif'})
 rc('text', usetex=True)
 
-beacon_angle = 30           # arcseconds
+beacon_angle = 5           # arcseconds
 aperture_size = 256         # pixels
 telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
@@ -52,11 +52,10 @@ wavelength = 600e-9 # m
 f_number = 6.5
 resolution = psf.get_resolution(wavelength, telescope_diameter, f_number)
 
-norm_scaler = 1e-4
 airy_psf = psf.psf(mask)
 airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
-airy_psf_norm = airy_psf / (np.sum(np.abs(airy_psf)) * norm_scaler)
-airy_norm_max = np.amax(airy_psf_norm)
+airy_max = np.amax(airy_psf)
+
 zeros = np.zeros_like(mask)
 
 print("AIRY DISC FWHM: {}\"".format(psf.fwhm(airy_psf) * resolution))
@@ -65,16 +64,16 @@ for B in bfuncs:
     print("{}".format(B.name))
     tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
     T = controller.TomographyController(tomo, n_coeffs)
-    T.set_phase_screens(all_beacons, seeds=[4000, 4025])
+    T.set_phase_screens(all_beacons, seeds=[4003, 4028])
     T.set_asterism(beacons)
     T.set_target(target)
 
     calculated_coeffs = T.run()
 
     # Mask aperture on tomography output phase screens
-    masked_actual = mask * T.noiseless_screen
-    masked_recon = mask * T.reconstructed_screen
-    masked_ideal = mask * T.actual_screen_from_coeffs
+    masked_actual = mask * (T.noiseless_screen - np.mean(T.noiseless_screen))
+    masked_recon = mask * (T.reconstructed_screen - np.mean(T.reconstructed_screen))
+    masked_ideal = mask * (T.actual_screen_from_coeffs - np.mean(T.actual_screen_from_coeffs))
 
     # Calculate RMSE error for reconstruction, ideal and baseline to the ground truth
     rmse_ra = np.sqrt(mean_squared_error(masked_actual, masked_recon))
@@ -89,26 +88,21 @@ for B in bfuncs:
     psf_ra = psf.psf(residuals_ra)
     psf_ia = psf.psf(residuals_ia)
     psf_ba = psf.psf(masked_actual)
-
-    # Normalise PSFs
-    psf_ra_norm = psf_ra / (np.sum(np.abs(psf_ra)) * norm_scaler)
-    psf_ia_norm = psf_ia / (np.sum(np.abs(psf_ia)) * norm_scaler)
-    psf_ba_norm = psf_ba / (np.sum(np.abs(psf_ba)) * norm_scaler)
-
+    
     # Calculate the FWHM for the reconstruction and ideal PSFs
-    fwhm_ra = psf.fwhm(psf_ra_norm)
-    fwhm_ia = psf.fwhm(psf_ia_norm)
-    fwhm_ba = psf.fwhm(psf_ba_norm)
+    fwhm_ra = psf.fwhm(psf_ra)
+    fwhm_ia = psf.fwhm(psf_ia)
+    fwhm_ba = psf.fwhm(psf_ba)
 
     # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
-    strehl_rb = np.amax(psf_ra_norm) / airy_norm_max
-    strehl_ib = np.amax(psf_ia_norm) / airy_norm_max
-    strehl_ab = np.amax(psf_ba_norm) / airy_norm_max                        
+    strehl_rb = np.amax(psf_ra) / airy_max
+    strehl_ib = np.amax(psf_ia) / airy_max
+    strehl_ab = np.amax(psf_ba) / airy_max
 
     # Calculate the MSSIM for the PSFs to each other.
-    mssim_ab = structural_similarity(psf_ba_norm, airy_psf_norm)
-    mssim_rb = structural_similarity(psf_ra_norm, airy_psf_norm)
-    mssim_ib = structural_similarity(psf_ia_norm, airy_psf_norm)
+    mssim_rb = structural_similarity(psf_ra, airy_psf)
+    mssim_ib = structural_similarity(psf_ia, airy_psf)
+    mssim_ab = structural_similarity(psf_ba, airy_psf)
 
     print("RMSE_RA:   {}".format(mean_squared_error(masked_recon, masked_actual)))
     print("RMSE_IA:   {}".format(mean_squared_error(masked_ideal, masked_actual)))
@@ -130,8 +124,8 @@ for B in bfuncs:
     mn.append(min(np.amin(masked_actual), np.amin(masked_recon)))
     phase_screens.append(masked_recon)
     best_phase_screens.append(masked_ideal)
-    psfs.append(psf_ia_norm)
-    recon_psfs.append(psf_ra_norm)
+    psfs.append(psf_ia)
+    recon_psfs.append(psf_ra)
 
 fig, axs = plt.subplots(1, 1)
 grid = T.T._getGrid(4 * n_coeffs)
@@ -173,7 +167,7 @@ ims1.append(axs1[0, 0].imshow(masked_actual, vmax=amx,vmin=amn, cmap=cmap0))
 axs1[0, 0].axis('off')
 
 axs2[0, 0].set_title("Actual Distortion Profile")
-ims2.append(axs2[0, 0].imshow(np.log10(psf_ba_norm / airy_norm_max), vmin=-5, extent=extent, cmap=cmap1))
+ims2.append(axs2[0, 0].imshow(np.log10(psf_ba / airy_max), vmin=-5, extent=extent, cmap=cmap1))
 axs2[0, 0].set_xlabel('Focal plane angle (")')
 axs2[0, 0].set_ylabel('Focal plane angle (")')
 axs2[0, 0].set_xticks([-4, -2, 0, 2, 4])
@@ -189,12 +183,12 @@ for i in range(0, len(bfuncs)):
     axs1[x, y].axis('off')
 
     axs2[x, y].set_title(bfuncs[i].name)
-    ims2.append(axs2[x, y].imshow(np.log10(psfs[i] / airy_norm_max), vmin=-5, extent=extent, cmap=cmap1))
+    ims2.append(axs2[x, y].imshow(np.log10(psfs[i] / airy_max), vmin=-5, extent=extent, cmap=cmap1))
 
     axs3[0, i].set_title("{}\nIdeal".format(bfuncs[i].name))
     axs3[1, i].set_title("Reconstruction")
-    ims3.append(axs3[0, i].imshow(np.log10(psfs[i] / airy_norm_max), vmin=-5, extent=extent, cmap=cmap1))
-    ims3.append(axs3[1, i].imshow(np.log10(recon_psfs[i] / airy_norm_max), vmin=-5, extent=extent, cmap=cmap1))
+    ims3.append(axs3[0, i].imshow(np.log10(psfs[i] / airy_max), vmin=-5, extent=extent, cmap=cmap1))
+    ims3.append(axs3[1, i].imshow(np.log10(recon_psfs[i] / airy_max), vmin=-5, extent=extent, cmap=cmap1))
     axs3[0, i].set_xlabel('')
     axs3[1, i].set_xlabel('Focal plane angle (")')
     axs3[0, i].set_xticks([])

@@ -47,7 +47,7 @@ def psf(ps):
     return (np.abs(psf) ** 2)
     
 def fwhm(psf, wavelength=600e-9, f_number=6.5):
-    x, y  = getFWHM_LevMarLSQ(psf)
+    (x, y), _  = getFWHM_LevMarLSQ(psf)
     f = x + y
     return f / 2
 
@@ -70,14 +70,15 @@ def getFWHM_LevMarLSQ(data, sigma=4):
 
     fit_w = fitting.LevMarLSQFitter()
 
-    yc, xc = np.unravel_index(np.argmax(data), data.shape)
-    xd = int(data.shape[0] / 4 + 0.5)
-    yd = int(data.shape[1] / 4 + 0.5)
-    x0 = max(0, xc - xd)
-    x1 = min(data.shape[0], xc + xd)
-    y0 = max(0, yc - yd)
-    y1 = min(data.shape[0], yc + yd)
-    data_cut = data[x0:x1, y0:y1]
+    data_cut = util.cut_around_max(data)
+    # yc, xc = np.unravel_index(np.argmax(data), data.shape)
+    # xd = int(data.shape[0] / 4 + 0.5)
+    # yd = int(data.shape[1] / 4 + 0.5)
+    # x0 = max(0, xc - xd)
+    # x1 = min(data.shape[0], xc + xd)
+    # y0 = max(0, yc - yd)
+    # y1 = min(data.shape[0], yc + yd)
+    # data_cut = data[x0:x1, y0:y1]
     y0, x0 = np.unravel_index(np.argmax(data_cut), data_cut.shape)
     amp = np.amax(data_cut)
 
@@ -96,7 +97,7 @@ def getFWHM_LevMarLSQ(data, sigma=4):
     yFWHM = g.y_fwhm
     # thetaFWHM = g.theta[0]
 
-    return (xFWHM, yFWHM) #, thetaFWHM, model_data
+    return (xFWHM, yFWHM), g
 
 def fwhm_full(psf, wavelength=600e-9, f_number=6.5):
     x, y  = getFWHM_LevMarLSQ_FULL(psf)

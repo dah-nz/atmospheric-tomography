@@ -24,6 +24,8 @@ cons = constellations.get_natural()
 for i, con in enumerate(cons):
     guidestar_sets[(len(con), -1-i)] = [(t, g * 3600 * 180 / np.pi) for t, g in con]
 
+guidestar_sets[(1, 0)] = [(0, 0)]
+
 # TARGET POSITIONS
 targets = []
 targets.append((0, 0))
@@ -33,7 +35,7 @@ for t in np.linspace(0, 2*np.pi, 8, endpoint=False):   # theta angle (acw from h
         targets.append(target)
 
 for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from horizon)
-    for g in np.linspace(35, 95, 7, endpoint=True):     # gamma angle (from telescope axis)
+    for g in np.linspace(40, 100, 7, endpoint=True):     # gamma angle (from telescope axis)
         target = (t + g, g)
         targets.append(target)
 
@@ -46,7 +48,9 @@ fig.set_size_inches(7,7)
 ax.grid(which="both", color='#000000', alpha=0.1, linestyle='-', zorder=0)
 clrs = colours.palette()
 for (k, v), c in zip(guidestar_sets.items(), clrs):
-    if k[1] != -1:
+    if k[0] == 1:
+        lbl = 'Single guide star'
+    elif k[1] != -1:
         lbl = 'Symmetric, {} guide stars, {}" radius'.format(k[0], k[1])
     else:
         lbl = 'Asymmetric, 5 guide stars'

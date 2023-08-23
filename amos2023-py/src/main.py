@@ -80,10 +80,10 @@ airy_norm_max = np.amax(airy_psf_norm)
 for n_coeffs in n_coeff_set:
     basis_functions = [
         ('z', zernike.Zernike(n_coeffs)),
-        # ('dct', DCT.DCT(n_coeffs)),
-        # ('dst', DST.DST(n_coeffs)),
-        # ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
-        # ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
+        ('dct', DCT.DCT(n_coeffs)),
+        ('dst', DST.DST(n_coeffs)),
+        ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
+        ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
         ]
     for snr in noise_SNR:
         for i, B in basis_functions:
@@ -136,9 +136,9 @@ for n_coeffs in n_coeff_set:
                         T.run()
                         
                         # Mask aperture on tomography output phase screens
-                        masked_actual = mask * T.noiseless_screen
-                        masked_recon = mask * T.reconstructed_screen
-                        masked_ideal = mask * T.actual_screen_from_coeffs
+                        masked_actual = mask * (T.noiseless_screen - np.mean(T.noiseless_screen))
+                        masked_recon = mask * (T.reconstructed_screen - np.mean(T.reconstructed_screen))
+                        masked_ideal = mask * (T.actual_screen_from_coeffs - np.mean(T.actual_screen_from_coeffs))
 
                         # Calculate RMSE error for reconstruction, ideal and baseline to the ground truth
                         rmse_ra = np.sqrt(mean_squared_error(masked_actual, masked_recon))
@@ -153,26 +153,21 @@ for n_coeffs in n_coeff_set:
                         psf_ra = psf.psf(residuals_ra)
                         psf_ia = psf.psf(residuals_ia)
                         psf_ba = psf.psf(masked_actual)
-
-                        # Normalise PSFs
-                        psf_ra_norm = psf_ra / (np.sum(np.abs(psf_ra)) * norm_scaler)
-                        psf_ia_norm = psf_ia / (np.sum(np.abs(psf_ia)) * norm_scaler)
-                        psf_ba_norm = psf_ba / (np.sum(np.abs(psf_ba)) * norm_scaler)
-
+                        
                         # Calculate the FWHM for the reconstruction and ideal PSFs
-                        fwhm_ra = psf.fwhm(psf_ra_norm)
-                        fwhm_ia = psf.fwhm(psf_ia_norm)
-                        fwhm_ba = psf.fwhm(psf_ba_norm)
+                        fwhm_ra = psf.fwhm(psf_ra)
+                        fwhm_ia = psf.fwhm(psf_ia)
+                        fwhm_ba = psf.fwhm(psf_ba)
 
                         # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
-                        strehl_rb = np.amax(psf_ra_norm) / airy_norm_max
-                        strehl_ib = np.amax(psf_ia_norm) / airy_norm_max
-                        strehl_ab = np.amax(psf_ba_norm) / airy_norm_max                        
+                        strehl_rb = np.amax(psf_ra) / airy_max
+                        strehl_ib = np.amax(psf_ia) / airy_max
+                        strehl_ab = np.amax(psf_ba) / airy_max
 
                         # Calculate the MSSIM for the PSFs to each other.
-                        mssim_ab = structural_similarity(psf_ba_norm, airy_psf_norm)
-                        mssim_rb = structural_similarity(psf_ra_norm, airy_psf_norm)
-                        mssim_ib = structural_similarity(psf_ia_norm, airy_psf_norm)
+                        mssim_rb = structural_similarity(psf_ra, airy_psf)
+                        mssim_ib = structural_similarity(psf_ia, airy_psf)
+                        mssim_ab = structural_similarity(psf_ba, airy_psf)
 
                         out = "{},{},{},{},{},{},{}".format(
                             B.name,                     # Basis
