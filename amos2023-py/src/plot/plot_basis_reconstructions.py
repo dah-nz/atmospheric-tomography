@@ -100,9 +100,8 @@ for B in bfuncs:
     strehl_ab = np.amax(psf_ba) / airy_max
 
     # Calculate the MSSIM for the PSFs to each other.
-    mssim_rb = structural_similarity(psf_ra, airy_psf)
-    mssim_ib = structural_similarity(psf_ia, airy_psf)
-    mssim_ab = structural_similarity(psf_ba, airy_psf)
+    mssim_rb = structural_similarity(masked_recon, masked_actual)
+    mssim_ib = structural_similarity(masked_ideal, masked_actual)
 
     print("RMSE_RA:   {}".format(mean_squared_error(masked_recon, masked_actual)))
     print("RMSE_IA:   {}".format(mean_squared_error(masked_ideal, masked_actual)))
@@ -118,7 +117,6 @@ for B in bfuncs:
 
     print("MSSIM_RB:  {}".format(mssim_rb))
     print("MSSIM_IB:  {}".format(mssim_ib))
-    print("MSSIM_AB:  {}".format(mssim_ab))
 
     mx.append(max(np.amax(masked_actual), np.amax(masked_recon)))
     mn.append(min(np.amin(masked_actual), np.amin(masked_recon)))

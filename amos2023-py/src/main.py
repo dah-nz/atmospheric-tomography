@@ -68,14 +68,11 @@ for asterism in guidestar_sets.items():
     for target in targets.items():
         tests.append((asterism, target))
 
-norm_scaler = 1e-4
-
 mask = util.circle(aperture_size/2, aperture_size)
 zeros = np.zeros_like(mask)
 airy_psf = psf.psf(mask)
+airy_max = np.amax(airy_psf)
 airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
-airy_psf_norm = airy_psf / (np.sum(airy_psf) * norm_scaler)
-airy_norm_max = np.amax(airy_psf_norm)
 
 for n_coeffs in n_coeff_set:
     basis_functions = [
@@ -87,7 +84,7 @@ for n_coeffs in n_coeff_set:
         ]
     for snr in noise_SNR:
         for i, B in basis_functions:
-            file_name = "results_sigma2_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
+            file_name = "results_230823_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
             with open("results/{}".format(file_name), "w") as f:
                 titles = [
                     "Basis",
@@ -109,9 +106,8 @@ for n_coeffs in n_coeff_set:
                     "Strehl_RB",
                     "Strehl_IB",
                     "Strehl_AB",
-                    "MSSIM_RB",
-                    "MSSIM_IB",
-                    "MSSIM_AB",
+                    "MSSIM_RA",
+                    "MSSIM_IA",
                 ]
                 f.write(titles[0])
                 for t in titles[1:]:
@@ -165,9 +161,8 @@ for n_coeffs in n_coeff_set:
                         strehl_ab = np.amax(psf_ba) / airy_max
 
                         # Calculate the MSSIM for the PSFs to each other.
-                        mssim_rb = structural_similarity(psf_ra, airy_psf)
-                        mssim_ib = structural_similarity(psf_ia, airy_psf)
-                        mssim_ab = structural_similarity(psf_ba, airy_psf)
+                        mssim_rb = structural_similarity(masked_recon, masked_actual)
+                        mssim_ib = structural_similarity(masked_ideal, masked_actual)
 
                         out = "{},{},{},{},{},{},{}".format(
                             B.name,                     # Basis
@@ -194,7 +189,6 @@ for n_coeffs in n_coeff_set:
                             strehl_ab,                  # Strehl_AB
                             mssim_rb,                   # MSSIM_RB
                             mssim_ib,                   # MSSIM_IB
-                            mssim_ab,                   # MSSIM_AB
                             ]:
                             out += ",{:.4f}".format(t)
 
