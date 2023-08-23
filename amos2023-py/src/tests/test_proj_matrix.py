@@ -6,7 +6,7 @@ from util import util
 from basis import zernike
 
 Z = zernike.Zernike(50)
-T = tomography.Tomography([0], Z, 50, 1.0)
+T = tomography.Tomography([0], Z, 0.6, 0.05, 50)
 
 n_points = 250
 def getCircle(radius, n_points, centre=(0,0), angle=2*np.pi):
@@ -47,13 +47,11 @@ errors = []
 for loc in locs:
     P = T._projectionMatrix(tuple(loc), scale)
     # P = np.transpose(P)
-    mode_screen = np.zeros((size, size))
-    mode_screen = phase_screen.fromCoefficients(Z, mode_screen, modes)
+    mode_screen = Z.compose((size, size), modes)
     sub_modes = np.matmul(P, modes)
-    sub_mode_screen = np.zeros((int(scale*size), int(scale*size)))
-    sub_mode_screen = phase_screen.fromCoefficients(Z, sub_mode_screen, sub_modes)
+    sub_mode_screen = Z.compose((int(scale*size), int(scale*size)), sub_modes)
     reconstructed_modes = np.matmul(np.linalg.pinv(P), sub_modes)
-    reconstructed_screen = phase_screen.fromCoefficients(Z, mode_screen, reconstructed_modes)
+    reconstructed_screen = Z.compose((size, size), reconstructed_modes)
     error = mode_screen - reconstructed_screen
     errors.append(np.sqrt(np.average(error * error)))
 
@@ -70,13 +68,11 @@ modes = test_modes[0]
 P = T._projectionMatrix(tuple(location), scale)
 # P = np.transpose(P)
 # Calculate subpupils
-mode_screen = np.zeros((size, size))
-mode_screen = phase_screen.fromCoefficients(Z, mode_screen, modes)
+mode_screen = Z.compose((size, size), modes)
 sub_modes = np.matmul(P, modes)
-sub_mode_screen = np.zeros((int(scale*size), int(scale*size)))
-sub_mode_screen = phase_screen.fromCoefficients(Z, sub_mode_screen, sub_modes)
+sub_mode_screen = Z.compose((int(scale*size), int(scale*size)), sub_modes)
 reconstructed_modes = np.matmul(np.linalg.pinv(P), sub_modes)
-reconstructed_screen = phase_screen.fromCoefficients(Z, mode_screen, reconstructed_modes)
+reconstructed_screen = Z.compose((size, size), reconstructed_modes)
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 

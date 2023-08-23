@@ -22,8 +22,10 @@ r_0 = 0.05                  # m
 # generate asterism
 beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
 target = beacon.Beacon(0, 0, gamma_arcseconds=True)
+offset_beacons = [beacon.Beacon(180 * np.pi/180, t, gamma_arcseconds=True) for t in [30, 60, 90]]
+extra_beacon = beacon.Beacon(0, 100, gamma_arcseconds=True)
 
-all_beacons = [target] + beacons
+all_beacons = [target] + beacons + offset_beacons + [extra_beacon]
 
 aperture = np.zeros((aperture_size, aperture_size))
 mask = util.circle(aperture_size/2, aperture_size)
@@ -41,6 +43,7 @@ bfuncs = [zernike.Zernike(n_coeffs),
 phase_screens = []
 best_phase_screens = []
 psfs = []
+recon_psfs = []
 
 mn = []
 mx = []
@@ -49,58 +52,86 @@ wavelength = 600e-9 # m
 f_number = 6.5
 resolution = psf.get_resolution(wavelength, telescope_diameter, f_number)
 
+norm_scaler = 1e-4
 airy_psf = psf.psf(mask)
-print("AIRY DISC FWHM: {}".format(psf.fwhm(airy_psf) * resolution))
+airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
+airy_psf_norm = airy_psf / (np.sum(np.abs(airy_psf)) * norm_scaler)
+airy_norm_max = np.amax(airy_psf_norm)
+zeros = np.zeros_like(mask)
+
+print("AIRY DISC FWHM: {}\"".format(psf.fwhm(airy_psf) * resolution))
 
 for B in bfuncs:
     print("{}".format(B.name))
     tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
     T = controller.TomographyController(tomo, n_coeffs)
-    T.set_phase_screens(all_beacons, seeds=[33, 44])
+    T.set_phase_screens(all_beacons, seeds=[4000, 4025])
     T.set_asterism(beacons)
     T.set_target(target)
 
     calculated_coeffs = T.run()
 
-    actual_screen = T.actual_screen * mask
-    recon_screen = T.reconstructed_screen * mask
-    ideal_screen = T.actual_screen_from_coeffs * mask
+    # Mask aperture on tomography output phase screens
+    masked_actual = mask * T.noiseless_screen
+    masked_recon = mask * T.reconstructed_screen
+    masked_ideal = mask * T.actual_screen_from_coeffs
 
-    fss_actual = np.amax(actual_screen)-np.amin(actual_screen)
-    fss_recon = np.amax(recon_screen)-np.amin(recon_screen)
-    print("Diff Actual: {}; Diff Recons: {}".format(fss_actual, fss_recon))
-    print("Sum Actual: {}; Sum Recons: {}".format(np.sum(actual_screen), np.sum(recon_screen)))
-    print("Mean Actual: {}; Mean Recons: {}".format(np.mean(actual_screen), np.mean(recon_screen)))
+    # Calculate RMSE error for reconstruction, ideal and baseline to the ground truth
+    rmse_ra = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+    rmse_ia = np.sqrt(mean_squared_error(masked_actual, masked_ideal))
+    rmse_ba = np.sqrt(mean_squared_error(masked_actual, zeros))
+    
+    # Find difference (residuals) between reconstruction and ideal from ground truth
+    residuals_ra = masked_recon - masked_actual
+    residuals_ia = masked_ideal - masked_actual
 
-    phase_screens.append(recon_screen)
-    best_phase_screens.append(ideal_screen)
+    # Find point spread functions for residuals. This is the point spread function for an optical sytem given a perfect wavefront correction method
+    psf_ra = psf.psf(residuals_ra)
+    psf_ia = psf.psf(residuals_ia)
+    psf_ba = psf.psf(masked_actual)
 
-    mx.append(max(np.amax(actual_screen), np.amax(recon_screen)))
-    mn.append(min(np.amin(actual_screen), np.amin(recon_screen)))
+    # Normalise PSFs
+    psf_ra_norm = psf_ra / (np.sum(np.abs(psf_ra)) * norm_scaler)
+    psf_ia_norm = psf_ia / (np.sum(np.abs(psf_ia)) * norm_scaler)
+    psf_ba_norm = psf_ba / (np.sum(np.abs(psf_ba)) * norm_scaler)
 
-    focal_ideal = psf.psf(T.actual_screen_from_coeffs - actual_screen)
-    print("Ideal Residuals FWHM: {}".format(psf.fwhm(focal_ideal) * resolution))
+    # Calculate the FWHM for the reconstruction and ideal PSFs
+    fwhm_ra = psf.fwhm(psf_ra_norm)
+    fwhm_ia = psf.fwhm(psf_ia_norm)
+    fwhm_ba = psf.fwhm(psf_ba_norm)
 
-    focal_recon = psf.psf(recon_screen - actual_screen)
-    print("Recon Residuals FWHM: {}".format(psf.fwhm(focal_recon) * resolution))
+    # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
+    strehl_rb = np.amax(psf_ra_norm) / airy_norm_max
+    strehl_ib = np.amax(psf_ia_norm) / airy_norm_max
+    strehl_ab = np.amax(psf_ba_norm) / airy_norm_max                        
 
-    print("MSSIM Recon-Airy: {}".format(structural_similarity(focal_recon, airy_psf)))
-    print("MSSIM Ideal-Airy: {}".format(structural_similarity(focal_ideal, airy_psf)))
-    print("MSSIM: {}".format(structural_similarity(focal_recon, focal_ideal)))
+    # Calculate the MSSIM for the PSFs to each other.
+    mssim_ab = structural_similarity(psf_ba_norm, airy_psf_norm)
+    mssim_rb = structural_similarity(psf_ra_norm, airy_psf_norm)
+    mssim_ib = structural_similarity(psf_ia_norm, airy_psf_norm)
 
-    norm_airy = np.amax(airy_psf) / np.sum(airy_psf)
-    norm_reco = np.amax(focal_recon) / np.sum(focal_recon)
-    norm_idea = np.amax(focal_ideal) / np.sum(focal_ideal)
+    print("RMSE_RA:   {}".format(mean_squared_error(masked_recon, masked_actual)))
+    print("RMSE_IA:   {}".format(mean_squared_error(masked_ideal, masked_actual)))
+    print("RMSE_BA:   {}".format(mean_squared_error(np.zeros_like(masked_actual), masked_actual)))
 
-    print("Strehl Recon: {}".format(norm_reco / norm_airy))
-    print("Strehl Ideal: {}".format(norm_idea / norm_airy))
-    print("Ratio Comparative: {}".format(norm_reco / norm_idea))
+    print("FWHM_RA:   {}".format(fwhm_ra)) # * resolution))
+    print("FWHM_IA:   {}".format(fwhm_ia)) # * resolution))
+    print("FWHM_BA:   {}".format(fwhm_ba)) # * resolution))
 
-    print("Recons RMSE:   {}".format(mean_squared_error(recon_screen, actual_screen)))
-    print("Ideal RMSE:    {}".format(mean_squared_error(ideal_screen, actual_screen)))
-    print("No Guess RMSE: {}".format(mean_squared_error(np.zeros_like(recon_screen), actual_screen)))
+    print("Strehl_RB: {}".format(strehl_rb))
+    print("Strehl_IB: {}".format(strehl_ib))
+    print("Strehl_AB: {}".format(strehl_ab))
 
-    psfs.append(np.log10(focal_recon / np.amax(focal_recon)))
+    print("MSSIM_RB:  {}".format(mssim_rb))
+    print("MSSIM_IB:  {}".format(mssim_ib))
+    print("MSSIM_AB:  {}".format(mssim_ab))
+
+    mx.append(max(np.amax(masked_actual), np.amax(masked_recon)))
+    mn.append(min(np.amin(masked_actual), np.amin(masked_recon)))
+    phase_screens.append(masked_recon)
+    best_phase_screens.append(masked_ideal)
+    psfs.append(psf_ia_norm)
+    recon_psfs.append(psf_ra_norm)
 
 fig, axs = plt.subplots(1, 1)
 grid = T.T._getGrid(4 * n_coeffs)
@@ -112,17 +143,19 @@ fig1.set_size_inches(10, 7)
 fig2, axs2 = plt.subplots(2, 3)
 fig2.set_size_inches(10, 7)
 
+fig3, axs3 = plt.subplots(2, 5)
+fig3.set_size_inches(10, 6)
+
 mx.sort(reverse=True)
 mn.sort(reverse=True)
 
 amx = mx[0]
 amn = mn[0]
 
-um = 1e6
-min_x = -actual_screen.shape[0]/2 * resolution * um
-min_y = -actual_screen.shape[1]/2 * resolution * um
-max_x = actual_screen.shape[0]/2 * resolution * um
-max_y = actual_screen.shape[1]/2 * resolution * um
+min_x = -masked_actual.shape[0]/2 * resolution
+min_y = -masked_actual.shape[1]/2 * resolution
+max_x = masked_actual.shape[0]/2 * resolution
+max_y = masked_actual.shape[1]/2 * resolution
 extent=([min_x, max_x, min_y, max_y])
 
 clrs = colours.palette()[:3]
@@ -133,16 +166,20 @@ cmap1 = my_cmap
 
 ims1 = []
 ims2 = []
+ims3 = []
 
 axs1[0, 0].set_title("Actual Distortion Profile")
-ims1.append(axs1[0, 0].imshow(actual_screen, vmax=amx,vmin=amn, cmap=cmap0))
+ims1.append(axs1[0, 0].imshow(masked_actual, vmax=amx,vmin=amn, cmap=cmap0))
 axs1[0, 0].axis('off')
 
-axs2[0, 0].set_title("No Estimate")
-actual_psf = psf.psf(actual_screen)
-ims2.append(axs2[0, 0].imshow(np.log10(actual_psf / np.amax(actual_psf)), vmin=-5, extent=extent, cmap=cmap1))
-axs2[0, 0].set_xlabel('Focal plane distance [um]')
-axs2[0, 0].set_ylabel('Focal plane distance [um]')
+axs2[0, 0].set_title("Actual Distortion Profile")
+ims2.append(axs2[0, 0].imshow(np.log10(psf_ba_norm / airy_norm_max), vmin=-5, extent=extent, cmap=cmap1))
+axs2[0, 0].set_xlabel('Focal plane angle (")')
+axs2[0, 0].set_ylabel('Focal plane angle (")')
+axs2[0, 0].set_xticks([-4, -2, 0, 2, 4])
+axs2[0, 0].set_yticks([-4, -2, 0, 2, 4])
+
+
 
 for i in range(0, len(bfuncs)):
     x = int((i + 1) / 3)
@@ -152,9 +189,33 @@ for i in range(0, len(bfuncs)):
     axs1[x, y].axis('off')
 
     axs2[x, y].set_title(bfuncs[i].name)
-    ims2.append(axs2[x, y].imshow(psfs[i], vmin=-5, extent=extent, cmap=cmap1))
-    axs2[x, y].set_xlabel('Focal plane distance [um]')
-    axs2[x, y].set_ylabel('Focal plane distance [um]')
+    ims2.append(axs2[x, y].imshow(np.log10(psfs[i] / airy_norm_max), vmin=-5, extent=extent, cmap=cmap1))
+
+    axs3[0, i].set_title("{}\nIdeal".format(bfuncs[i].name))
+    axs3[1, i].set_title("Reconstruction")
+    ims3.append(axs3[0, i].imshow(np.log10(psfs[i] / airy_norm_max), vmin=-5, extent=extent, cmap=cmap1))
+    ims3.append(axs3[1, i].imshow(np.log10(recon_psfs[i] / airy_norm_max), vmin=-5, extent=extent, cmap=cmap1))
+    axs3[0, i].set_xlabel('')
+    axs3[1, i].set_xlabel('Focal plane angle (")')
+    axs3[0, i].set_xticks([])
+    axs3[0, i].set_yticks([])
+    axs3[1, i].set_yticks([])
+    axs3[1, i].set_xticks([-4, -2, 0, 2, 4])
+
+axs2[0, 0].set_ylabel('Focal plane angle (")')
+axs2[1, 0].set_ylabel('Focal plane angle (")')
+for y in range(3):
+    axs2[1, y].set_xlabel('Focal plane angle (")')
+    axs2[0, y].set_xlabel('')
+    axs2[1, y].set_xticks([-4, -2, 0, 2, 4])
+    axs2[0, y].set_xticks([])
+axs2[0, 0].set_yticks([-4, -2, 0, 2, 4])
+axs2[1, 0].set_yticks([-4, -2, 0, 2, 4])
+
+axs3[0, 0].set_ylabel('Focal plane angle (")')
+axs3[1, 0].set_ylabel('Focal plane angle (")')
+axs3[0, 0].set_yticks([-4, -2, 0, 2, 4])
+axs3[1, 0].set_yticks([-4, -2, 0, 2, 4])
 
 fig1.tight_layout()
 fig1.subplots_adjust(bottom=0.05, top=0.95, right=0.88)
@@ -163,8 +224,66 @@ fig1.colorbar(ims1[0], cax=cbar_ax, label="Phase Offset (radians)", shrink=0.6)
 
 fig2.tight_layout()
 fig2.subplots_adjust(bottom=0.15, left=0.1, right=0.9, top=0.98)
-cbar_ax2 = fig2.add_axes([0.25, 0.08, 0.5, 0.03])
-fig2.colorbar(ims2[0], cax=cbar_ax2, label=r"Intensity ($log(\frac{\psi(x,y)}{max(\psi(x,y))})$)",
+cbar_ax2 = fig2.add_axes([0.25, 0.09, 0.5, 0.018])
+fig2.colorbar(ims2[0], cax=cbar_ax2, label=r"Intensity ($\mathrm{log}_{10}(\frac{\mathrm{PSF}(u, v)}{\mathrm{max}(\mathrm{PSF_{airy}}(u, v))})$)",
 orientation="horizontal")
+
+fig3.tight_layout()
+fig3.subplots_adjust(bottom=0.15, left=0.1, right=0.9, top=0.98)
+cbar_ax3 = fig3.add_axes([0.25, 0.10, 0.5, 0.02])
+fig3.colorbar(ims3[0], cax=cbar_ax3, label=r"Intensity ($\mathrm{log}_{10}(\frac{\mathrm{PSF}(u, v)}{\mathrm{max}(\mathrm{PSF_{airy}}(u, v))})$)",
+orientation="horizontal")
+
+
+fig, axs = plt.subplots(1, 2)
+fig.set_size_inches(9, 5)
+axs[0].imshow(T.screens[0], cmap=cmap0)
+axs[0].set_xticks([79, 335, 591], labels=[-0.6, 0, 0.6])
+axs[0].set_yticks([79, 335, 591], labels=[-0.6, 0, 0.6])
+axs[0].set_xlabel("Location (m)")
+axs[0].set_ylabel("Location (m)")
+axs[0].set_title("Layer at 1000m")
+
+axs[1].imshow(T.screens[1], cmap=cmap0)
+axs[1].set_xticks([247, 759, 1271, 1783, 2295, 2807, 3319], labels=[-3.6, -2.4, -1.2, 0, 1.2, 2.4, 3.6])
+axs[1].set_yticks([247, 759, 1271, 1783, 2295, 2807, 3319], labels=[-3.6, -2.4, -1.2, 0, 1.2, 2.4, 3.6])
+axs[1].set_ylabel("Location (m)")
+axs[1].set_xlabel("Location (m)")
+axs[1].set_title("Layer at 8000m")
+
+def getCircle(radius, n_points, centre=(0,0), angle=2*np.pi):
+    circle = [util.pol2cart(radius, t/n_points*angle) for t in range(n_points + 1)]
+    return [x + centre[0] for x, _ in circle], [y + centre[1] for _, y in circle]
+
+for gs in beacons:
+    a0 = gs.position(1000)
+    x, y = getCircle(aperture_size/2, 50, centre=(335+(256/0.6)*a0[0], 335+(256/0.6)*a0[1]))
+    axs[0].plot(x, y, 'w')
+
+    a1 = gs.position(8000)
+    x, y = getCircle(aperture_size/2, 50, centre=(1783+(256/0.6)*a1[0], 1783+(256/0.6)*a1[1]))
+    axs[1].plot(x, y, 'w')
+
+target_colours = ['#0C2340C0', '#0C2340A0', '#0C234080']
+for tp, c in zip(offset_beacons, target_colours):
+    a0 = tp.position(1000)
+    x, y = getCircle(aperture_size/2, 50, centre=(335+(256/0.6)*a0[0], 335+(256/0.6)*a0[1]))
+    axs[0].plot(x, y, linestyle='dashed', color=c)
+
+    a1 = tp.position(8000)
+    x, y = getCircle(aperture_size/2, 50, centre=(1783+(256/0.6)*a1[0], 1783+(256/0.6)*a1[1]))
+    axs[1].plot(x, y, linestyle='dashed', color=c)
+
+x, y = getCircle(aperture_size/2, 50, centre=(335, 335))
+axs[0].plot(x, y, 'k--')
+
+x, y = getCircle(aperture_size/2, 50, centre=(1783, 1783))
+axs[1].plot([], 'w', label="Guide Star")
+axs[1].plot(x, y, 'k--', label="Target at 0\"")
+axs[1].plot([], color=target_colours[0], linestyle='dashed', label="Target at 30\"")
+axs[1].plot([], color=target_colours[1], linestyle='dashed', label="Target at 60\"")
+axs[1].plot([], color=target_colours[2], linestyle='dashed', label="Target at 90\"")
+axs[1].legend()
+fig.tight_layout()
 
 plt.show()

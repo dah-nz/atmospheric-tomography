@@ -20,7 +20,7 @@ f_number =      6.5             # focal number for telescope
 wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
-n_coeff_set = [16] # [16, 64]
+n_coeff_set = [16, 64]
 noise_SNR = [0] # [0, 3, 10, 20, 30]
 
 ps_seed = 4000
@@ -80,14 +80,14 @@ airy_norm_max = np.amax(airy_psf_norm)
 for n_coeffs in n_coeff_set:
     basis_functions = [
         ('z', zernike.Zernike(n_coeffs)),
-        ('dct', DCT.DCT(n_coeffs)),
-        ('dst', DST.DST(n_coeffs)),
-        ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
-        ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
+        # ('dct', DCT.DCT(n_coeffs)),
+        # ('dst', DST.DST(n_coeffs)),
+        # ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
+        # ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
         ]
     for snr in noise_SNR:
         for i, B in basis_functions:
-            file_name = "results_sigma_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
+            file_name = "results_sigma2_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
             with open("results/{}".format(file_name), "w") as f:
                 titles = [
                     "Basis",
@@ -99,18 +99,19 @@ for n_coeffs in n_coeff_set:
                     "Target_Gamma",
                     "Target_Theta",
                     "Sigma",
-                    "RMSE_BA",
                     "RMSE_RA",
                     "RMSE_IA",
+                    "RMSE_BA",
                     "FWHM_RA",
                     "FWHM_IA",
+                    "FWHM_BA",
                     "FWHM_Airy",
                     "Strehl_RB",
                     "Strehl_IB",
-                    "Strehl_RI",
-                    "MSSIM_RI",
+                    "Strehl_AB",
                     "MSSIM_RB",
                     "MSSIM_IB",
+                    "MSSIM_AB",
                 ]
                 f.write(titles[0])
                 for t in titles[1:]:
@@ -145,30 +146,31 @@ for n_coeffs in n_coeff_set:
                         rmse_ba = np.sqrt(mean_squared_error(masked_actual, zeros))
                         
                         # Find difference (residuals) between reconstruction and ideal from ground truth
-                        residuals_ra = T.reconstructed_screen - T.actual_screen
-                        residuals_ia = T.actual_screen_from_coeffs - T.actual_screen
+                        residuals_ra = masked_recon - masked_actual
+                        residuals_ia = masked_ideal - masked_actual
 
                         # Find point spread functions for residuals. This is the point spread function for an optical sytem given a perfect wavefront correction method
                         psf_ra = psf.psf(residuals_ra)
                         psf_ia = psf.psf(residuals_ia)
+                        psf_ba = psf.psf(masked_actual)
+
+                        # Normalise PSFs
+                        psf_ra_norm = psf_ra / (np.sum(np.abs(psf_ra)) * norm_scaler)
+                        psf_ia_norm = psf_ia / (np.sum(np.abs(psf_ia)) * norm_scaler)
+                        psf_ba_norm = psf_ba / (np.sum(np.abs(psf_ba)) * norm_scaler)
 
                         # Calculate the FWHM for the reconstruction and ideal PSFs
-                        fwhm_ra = psf.fwhm(psf_ra)
-                        fwhm_ia = psf.fwhm(psf_ia)
+                        fwhm_ra = psf.fwhm(psf_ra_norm)
+                        fwhm_ia = psf.fwhm(psf_ia_norm)
+                        fwhm_ba = psf.fwhm(psf_ba_norm)
 
                         # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
-                        psf_ra_norm = psf_ra / (np.sum(psf_ra) * norm_scaler)
-                        psf_ia_norm = psf_ia / (np.sum(psf_ia) * norm_scaler)
-
-                        max_intensity_ra = np.amax(psf_ra_norm)
-                        max_intensity_ia = np.amax(psf_ia_norm)
-
-                        strehl_rb = max_intensity_ra / airy_norm_max
-                        strehl_ib = max_intensity_ia / airy_norm_max
-                        strehl_ri = max_intensity_ra / max_intensity_ia
+                        strehl_rb = np.amax(psf_ra_norm) / airy_norm_max
+                        strehl_ib = np.amax(psf_ia_norm) / airy_norm_max
+                        strehl_ab = np.amax(psf_ba_norm) / airy_norm_max                        
 
                         # Calculate the MSSIM for the PSFs to each other.
-                        mssim_ri = structural_similarity(psf_ra_norm, psf_ia_norm)
+                        mssim_ab = structural_similarity(psf_ba_norm, airy_psf_norm)
                         mssim_rb = structural_similarity(psf_ra_norm, airy_psf_norm)
                         mssim_ib = structural_similarity(psf_ia_norm, airy_psf_norm)
 
@@ -185,18 +187,19 @@ for n_coeffs in n_coeff_set:
                         for t in [
                             target[0][0],               # Target_Theta
                             sigma,                      # Sigma
-                            rmse_ba,                    # RMSE_BA
                             rmse_ra,                    # RMSE_RA
                             rmse_ia,                    # RMSE_IA
+                            rmse_ba,                    # RMSE_BA
                             fwhm_ra,                    # FWHM_RA
                             fwhm_ia,                    # FWHM_IA
+                            fwhm_ba,                    # FWHM_BA
                             airy_fwhm,                  # FWHM_Airy
                             strehl_rb,                  # Strehl_RB
                             strehl_ib,                  # Strehl_IB
-                            strehl_ri,                  # Strehl_RI
-                            mssim_ri,                   # MSSIM_RI
+                            strehl_ab,                  # Strehl_AB
                             mssim_rb,                   # MSSIM_RB
-                            mssim_ib                    # MSSIM_IB
+                            mssim_ib,                   # MSSIM_IB
+                            mssim_ab,                   # MSSIM_AB
                             ]:
                             out += ",{:.4f}".format(t)
 

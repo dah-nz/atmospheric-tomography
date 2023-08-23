@@ -21,16 +21,23 @@ mse1 = []
 mse2 = []
 mse3 = []
 
-for seed in range(100):
-    s0 = phase_screen.kolmogorov((p0, p0), 0.6, 0.05, p0, 3 * seed, type=np.float64)
-    s1 = phase_screen.kolmogorov((p1, p1), 0.6, 0.05, p0, 3 * seed + 1, type=np.float64) * (sigma / 4.72)
-    s2 = phase_screen.kolmogorov((p2, p2), 0.6, 0.05, p0, 3 * seed + 2, type=np.float64) * (sigma / 3.08)
-    s1cut = s1[int((p1-p0)/2+0.5):int((p1+p0)/2+0.5), int((p1-p0)/2+0.5):int((p1+p0)/2+0.5)]
-    s2cut = s2[int((p2-p0)/2+0.5):int((p2+p0)/2+0.5), int((p2-p0)/2+0.5):int((p2+p0)/2+0.5)]
+ps_seed = 4000
+n_phase_screens = 50
+
+for seed in range(n_phase_screens):
+    s0 = phase_screen.kolmogorov((p0, p0), 0.6, 0.05, p0, ps_seed + seed, type=np.float64)
+    s1 = phase_screen.kolmogorov((p1, p1), 0.6, 0.05, p0, ps_seed + seed, type=np.float64) # * (sigma / 4.72)
+    s2 = phase_screen.kolmogorov((p2, p2), 0.6, 0.05, p0, ps_seed + seed, type=np.float64) # * (sigma / 3.08)
     mse1.append(np.sqrt(mean_squared_error(s0, a0)))
-    mse2.append(np.sqrt(mean_squared_error(s1cut, a0)))
-    mse3.append(np.sqrt(mean_squared_error(s2cut, a0)))
-    print("{},{},{},{}".format(seed,mse1[-1], mse2[-1], mse3[-1]))
+    for l0 in range(-int((p1-p0)/2), int((p1-p0)/2)+1, int((p1-p0)/10)):
+        for l1 in range(-int((p1-p0)/2), int((p1-p0)/2)+1, int((p1-p0)/10)):
+            s1cut = s1[int((p1-p0)/2+l0+0.5):int((p1+p0)/2+l0+0.5), int((p1-p0)/2+l1+0.5):int((p1+p0)/2+l1+0.5)]
+            mse2.append(np.sqrt(mean_squared_error(s1cut, a0)))
+    for l2 in range(-int((p2-p0)/2), int((p2-p0)/2)+1, int((p2-p0)/10)):
+        for l3 in range(-int((p2-p0)/2), int((p2-p0)/2)+1, int((p2-p0)/10)):        
+            s2cut = s2[int((p2-p0)/2+l2+0.5):int((p2+p0)/2+l2+0.5), int((p2-p0)/2+l3+0.5):int((p2+p0)/2+l3+0.5)]
+            mse3.append(np.sqrt(mean_squared_error(s2cut, a0)))
+    print("{},{},{},{}".format(seed, np.mean(mse1), np.mean(mse2), np.mean(mse3)))
 
 print("DONE:{},{},{}".format(np.mean(mse1), np.mean(mse2), np.mean(mse3)))
 

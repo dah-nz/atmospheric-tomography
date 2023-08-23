@@ -12,12 +12,9 @@ from util import util
 Q = 6       # pixels per resolution unit
 j = complex(0, 1)
 
-# Airy disc radius is 1.22 * lambda * f_number
-# Gaussian RMS width is 0.84 * lambda * f_number
-# 
+# Airy disc radius is 1.22 * lambda / diameter (radians)
 def get_resolution(wavelength, telescope_diameter, f_number):
-    return (0.8038 * (1.22 * wavelength * f_number)) / Q
-    # return (wavelength * telescope_diameter * f_number) / Q
+    return util.rad2arcsec((1.22 * wavelength / telescope_diameter) / Q)
 
 # @lru_cache()
 def get_aperture(r):

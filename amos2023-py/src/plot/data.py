@@ -1,16 +1,21 @@
 import pandas as pd
 
 def load():
-    df_16_0 =       pd.read_csv("./results/results_home_16_SNR_0.data")
-    df_64_0_z =     pd.read_csv("./results/results_home_64_SNR_0_z.data")
-    df_64_0_dct =   pd.read_csv("./results/results_home_64_SNR_0_dct.data")
-    df_64_0_dst =   pd.read_csv("./results/results_home_64_SNR_0_dst.data")
-    df_64_0_wd =    pd.read_csv("./results/results_home_64_SNR_0_wd.data")
-    df_64_0_wh =    pd.read_csv("./results/results_home_64_SNR_0_wh.data")
+    # df_64_0_z =     pd.read_csv("./results/results_sigma_64_SNR_0_z.data")
+    # df_64_0_dct =   pd.read_csv("./results/results_sigma_64_SNR_0_dct.data")
+    # df_64_0_dst =   pd.read_csv("./results/results_sigma_64_SNR_0_dst.data")
+    # df_64_0_wd =    pd.read_csv("./results/results_sigma_64_SNR_0_wd.data")
+    # df_64_0_wh =    pd.read_csv("./results/results_sigma_64_SNR_0_wh.data")
+    df_16_0_z =     pd.read_csv("./results/results_sigma_16_SNR_0_z.data")
+    df_16_0_dct =   pd.read_csv("./results/results_sigma_16_SNR_0_dct.data")
+    df_16_0_dst =   pd.read_csv("./results/results_sigma_16_SNR_0_dst.data")
+    df_16_0_wd =    pd.read_csv("./results/results_sigma_16_SNR_0_wd.data")
+    df_16_0_wh =    pd.read_csv("./results/results_sigma_16_SNR_0_wh.data")
 
-    df_64_0 = pd.concat([df_64_0_z, df_64_0_dct, df_64_0_dst, df_64_0_wd, df_64_0_wh])
+    df_16_0 = pd.concat([df_16_0_z, df_16_0_dct, df_16_0_dst, df_16_0_wd, df_16_0_wh])
+    # df_64_0 = pd.concat([df_64_0_z, df_64_0_dct, df_64_0_dst, df_64_0_wd, df_64_0_wh])
 
-    return pd.concat([df_16_0, df_64_0])
+    return df_16_0 # pd.concat([df_16_0, df_64_0])
 
 def load_noise():
     dfs = []
