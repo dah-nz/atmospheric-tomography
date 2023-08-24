@@ -1,7 +1,9 @@
-import numpy as np
-import matplotlib.pyplot as plt
 from itertools import combinations
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+
+import numpy as np
+import matplotlib.pyplot as plt
 
 from skimage.metrics import structural_similarity, mean_squared_error
 
@@ -9,6 +11,7 @@ from basis import DCT, DST, zernike, wavelet
 from tomography import tomography, beacon, controller, psf, phase_screen
 from util import util
 import constellations
+
 
 
 # BASIC PARAMETERS
@@ -81,127 +84,140 @@ airy_psf = psf.psf(mask)
 airy_max = np.amax(airy_psf)
 airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
 
-for n_coeffs in n_coeff_set:
-    basis_functions = [
-        # ('z', zernike.Zernike(n_coeffs)),
-        # ('dct', DCT.DCT(n_coeffs)),
-        # ('dst', DST.DST(n_coeffs)),
-        # ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
-        ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
+def run(snr, i, B):
+    now = datetime.now()
+    time = now.strftime("%H:%M:%S")
+    print("{}: Running {} [{}], SNR={}".format(time, B.name, B.N, snr))
+    file_name = "results_230824c_{}_SNR_{}_{}.data".format(B.N, snr, i)
+    with open("results/{}".format(file_name), "w") as f:
+        titles = [
+            "Basis",
+            "N_Coeffs",
+            "SNR",
+            "L1_Seed",
+            "L2_Seed",
+            "Asterism",
+            "Target_Gamma",
+            "Target_Theta",
+            "Sigma",
+            "RMSE_RA",
+            "RMSE_IA",
+            "RMSE_BA",
+            "FWHM_RA",
+            "FWHM_IA",
+            "FWHM_BA",
+            "FWHM_Airy",
+            "Strehl_RB",
+            "Strehl_IB",
+            "Strehl_AB",
+            "MSSIM_RA",
+            "MSSIM_IA",
         ]
-    for snr in noise_SNR:
-        for i, B in basis_functions:
-            file_name = "results_230824c_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
-            with open("results/{}".format(file_name), "w") as f:
-                titles = [
-                    "Basis",
-                    "N_Coeffs",
-                    "SNR",
-                    "L1_Seed",
-                    "L2_Seed",
-                    "Asterism",
-                    "Target_Gamma",
-                    "Target_Theta",
-                    "Sigma",
-                    "RMSE_RA",
-                    "RMSE_IA",
-                    "RMSE_BA",
-                    "FWHM_RA",
-                    "FWHM_IA",
-                    "FWHM_BA",
-                    "FWHM_Airy",
-                    "Strehl_RB",
-                    "Strehl_IB",
-                    "Strehl_AB",
-                    "MSSIM_RA",
-                    "MSSIM_IA",
-                ]
-                f.write(titles[0])
-                for t in titles[1:]:
-                    f.write(",{}".format(t))
-                f.write("\n")
-                tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
-                T = controller.TomographyController(tomo, n_coeffs)
-                for ps, screens in zip(ps_seeds, phase_screens):
-                    T.set_phase_screens(all_beacons, screens=screens)
-                    for test in tests:
-                        asterism = test[0]
-                        T.set_asterism(asterism[1])
-                        target = test[1]
-                        T.set_target(target[1])
-                        
-                        if snr != 0:
-                            sigma = util.get_sigma_from_SNR(T.screens[0], snr)
-                            T.set_noise(sigma)
-                        else:
-                            sigma = 0
+        f.write(titles[0])
+        for t in titles[1:]:
+            f.write(",{}".format(t))
+        f.write("\n")
+        tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
+        T = controller.TomographyController(tomo, n_coeffs)
+        for ps, screens in zip(ps_seeds, phase_screens):
+            T.set_phase_screens(all_beacons, screens=screens)
+            now = datetime.now()
+            time = now.strftime("%H:%M:%S")
+            print("{}: Running {} [{}]: Tests for phase screens: {}".format(time, B.name, B.N, ps))
+            for test in tests:
+                asterism = test[0]
+                T.set_asterism(asterism[1])
+                target = test[1]
+                T.set_target(target[1])
+                
+                if snr != 0:
+                    sigma = util.get_sigma_from_SNR(T.screens[0], snr)
+                    T.set_noise(sigma)
+                else:
+                    sigma = 0
 
-                        T.run()
-                        
-                        # Mask aperture on tomography output phase screens
-                        masked_actual = mask * (T.noiseless_screen - np.mean(T.noiseless_screen))
-                        masked_recon = mask * (T.reconstructed_screen - np.mean(T.reconstructed_screen))
-                        masked_ideal = mask * (T.actual_screen_from_coeffs - np.mean(T.actual_screen_from_coeffs))
+                T.run()
+                
+                # Mask aperture on tomography output phase screens
+                masked_actual = mask * (T.noiseless_screen - np.mean(T.noiseless_screen))
+                masked_recon = mask * (T.reconstructed_screen - np.mean(T.reconstructed_screen))
+                masked_ideal = mask * (T.actual_screen_from_coeffs - np.mean(T.actual_screen_from_coeffs))
 
-                        # Calculate RMSE error for reconstruction, ideal and baseline to the ground truth
-                        rmse_ra = np.sqrt(mean_squared_error(masked_actual, masked_recon))
-                        rmse_ia = np.sqrt(mean_squared_error(masked_actual, masked_ideal))
-                        rmse_ba = np.sqrt(mean_squared_error(masked_actual, zeros))
-                        
-                        # Find difference (residuals) between reconstruction and ideal from ground truth
-                        residuals_ra = masked_recon - masked_actual
-                        residuals_ia = masked_ideal - masked_actual
+                # Calculate RMSE error for reconstruction, ideal and baseline to the ground truth
+                rmse_ra = np.sqrt(mean_squared_error(masked_actual, masked_recon))
+                rmse_ia = np.sqrt(mean_squared_error(masked_actual, masked_ideal))
+                rmse_ba = np.sqrt(mean_squared_error(masked_actual, zeros))
+                
+                # Find difference (residuals) between reconstruction and ideal from ground truth
+                residuals_ra = masked_recon - masked_actual
+                residuals_ia = masked_ideal - masked_actual
 
-                        # Find point spread functions for residuals. This is the point spread function for an optical sytem given a perfect wavefront correction method
-                        psf_ra = psf.psf(residuals_ra)
-                        psf_ia = psf.psf(residuals_ia)
-                        psf_ba = psf.psf(masked_actual)
-                        
-                        # Calculate the FWHM for the reconstruction and ideal PSFs
-                        fwhm_ra = psf.fwhm(psf_ra)
-                        fwhm_ia = psf.fwhm(psf_ia)
-                        fwhm_ba = psf.fwhm(psf_ba)
+                # Find point spread functions for residuals. This is the point spread function for an optical sytem given a perfect wavefront correction method
+                psf_ra = psf.psf(residuals_ra)
+                psf_ia = psf.psf(residuals_ia)
+                psf_ba = psf.psf(masked_actual)
+                
+                # Calculate the FWHM for the reconstruction and ideal PSFs
+                fwhm_ra = psf.fwhm(psf_ra)
+                fwhm_ia = psf.fwhm(psf_ia)
+                fwhm_ba = psf.fwhm(psf_ba)
 
-                        # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
-                        strehl_rb = np.amax(psf_ra) / airy_max
-                        strehl_ib = np.amax(psf_ia) / airy_max
-                        strehl_ab = np.amax(psf_ba) / airy_max
+                # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
+                strehl_rb = np.amax(psf_ra) / airy_max
+                strehl_ib = np.amax(psf_ia) / airy_max
+                strehl_ab = np.amax(psf_ba) / airy_max
 
-                        # Calculate the MSSIM for the PSFs to each other.
-                        mssim_rb = structural_similarity(masked_recon, masked_actual)
-                        mssim_ib = structural_similarity(masked_ideal, masked_actual)
+                # Calculate the MSSIM for the PSFs to each other.
+                mssim_rb = structural_similarity(masked_recon, masked_actual)
+                mssim_ib = structural_similarity(masked_ideal, masked_actual)
 
-                        out = "{},{},{},{},{},{},{}".format(
-                            B.name,                     # Basis
-                            n_coeffs,                   # N_Coeffs
-                            snr,                        # SNR
-                            ps[0],                      # L1_Seed
-                            ps[1],                      # L2_Seed
-                            asterism[0],                # Asterism
-                            target[0][1]                # Target_Gamma
-                            )
+                out = "{},{},{},{},{},{},{}".format(
+                    B.name,                     # Basis
+                    n_coeffs,                   # N_Coeffs
+                    snr,                        # SNR
+                    ps[0],                      # L1_Seed
+                    ps[1],                      # L2_Seed
+                    asterism[0],                # Asterism
+                    target[0][1]                # Target_Gamma
+                    )
 
-                        for t in [
-                            target[0][0],               # Target_Theta
-                            sigma,                      # Sigma
-                            rmse_ra,                    # RMSE_RA
-                            rmse_ia,                    # RMSE_IA
-                            rmse_ba,                    # RMSE_BA
-                            fwhm_ra,                    # FWHM_RA
-                            fwhm_ia,                    # FWHM_IA
-                            fwhm_ba,                    # FWHM_BA
-                            airy_fwhm,                  # FWHM_Airy
-                            strehl_rb,                  # Strehl_RB
-                            strehl_ib,                  # Strehl_IB
-                            strehl_ab,                  # Strehl_AB
-                            mssim_rb,                   # MSSIM_RB
-                            mssim_ib,                   # MSSIM_IB
-                            ]:
-                            out += ",{:.4f}".format(t)
+                for t in [
+                    target[0][0],               # Target_Theta
+                    sigma,                      # Sigma
+                    rmse_ra,                    # RMSE_RA
+                    rmse_ia,                    # RMSE_IA
+                    rmse_ba,                    # RMSE_BA
+                    fwhm_ra,                    # FWHM_RA
+                    fwhm_ia,                    # FWHM_IA
+                    fwhm_ba,                    # FWHM_BA
+                    airy_fwhm,                  # FWHM_Airy
+                    strehl_rb,                  # Strehl_RB
+                    strehl_ib,                  # Strehl_IB
+                    strehl_ab,                  # Strehl_AB
+                    mssim_rb,                   # MSSIM_RB
+                    mssim_ib,                   # MSSIM_IB
+                    ]:
+                    out += ",{:.4f}".format(t)
 
-                        now = datetime.now()
-                        time = now.strftime("%H:%M:%S")
-                        print("{}: {}".format(time, out))
-                        f.write(out+"\n")
+                f.write(out+"\n")
+    now = datetime.now()
+    time = now.strftime("%H:%M:%S")
+    print("{}: Completed {} [{}], SNR={}".format(time, B.name, B.N, snr))
+
+
+with ThreadPoolExecutor(max_workers=6) as thread_pool:
+    for n_coeffs in n_coeff_set:
+        basis_functions = [
+            ('z', zernike.Zernike(n_coeffs)),
+            ('dct', DCT.DCT(n_coeffs)),
+            ('dst', DST.DST(n_coeffs)),
+            ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
+            ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
+            ]
+        for snr in noise_SNR:
+            for i, B in basis_functions:
+                thread_pool.submit(run, snr, i, B)
+
+print(">>> COMPLETE <<<")
 
 plt.show()
