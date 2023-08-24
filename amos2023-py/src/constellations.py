@@ -135,6 +135,12 @@ def get_natural():
             dec= s[1]-s1
             gamma = np.sqrt(ra*ra+dec*dec)
             theta = np.arctan2(dec, ra)
-            cons.append((theta, gamma*1.5))
+            cons.append((theta, gamma))
         cons_degs.append(cons)
     return cons_degs
+
+if __name__ == "__main__":
+    from util import util
+    for con in get_natural():
+        for star in con:
+            print("{},{}".format(star[0], util.rad2arcsec(star[1])))
