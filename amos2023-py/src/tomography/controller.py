@@ -63,7 +63,8 @@ class TomographyController():
             A list of seeds for each layer
         """
 
-        _, layer_size = self.T.get_layer_shapes(beacons)
+        d, layer_size = self.T.get_layer_shapes(beacons)
+        print(d)
 
         self.noise = False
         self.noisy_screens = []
@@ -74,6 +75,7 @@ class TomographyController():
                 self.screens = [phase_screen.kolmogorov(sz, self.T.D, self.T.r0, self.T.aperture_size, seed) / self.screen_gain for sz, seed in zip(layer_size, seeds)]
             else:
                 self.screens = [phase_screen.get(sz, self.T.D, self.T.r0, self.T.aperture_size) / self.screen_gain for sz in layer_size]
+        print(np.shape(self.screens[0]))
 
     def set_noise(self, sigma):
         rng = np.random.default_rng()

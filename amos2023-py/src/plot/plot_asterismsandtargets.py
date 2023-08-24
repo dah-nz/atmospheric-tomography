@@ -15,7 +15,7 @@ rc('text', usetex=True)
 
 # SET UP GUIDE STARS
 guidestar_sets = {}
-for i, (n, g) in enumerate([(3, 30), (6, 60)]):
+for i, (n, g) in enumerate([(3, 15), (3, 30), (6, 60)]):
     guidestars = [(t, g) for t in np.linspace(i, (2*np.pi)+i, n, endpoint=False)]
     guidestar_sets[(n, g)] = guidestars
 
@@ -41,10 +41,11 @@ for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from 
 
 # calculate isoplanatic angle
 isoplanatic_angle = 2.44 * wavelength / r_0
-isoplanatic_angle = util.rad2arcsec(isoplanatic_angle)
+isoplanatic_angle = 0.9 # util.rad2arcsec(isoplanatic_angle)
 
-fig, ax = plt.subplots(1, 1)
-fig.set_size_inches(7,7)
+fig = plt.figure(figsize=(9,7))
+ax = fig.add_axes([0.1, 0.1, 0.65, 0.85])
+# fig.set_size_inches(9,7)
 ax.grid(which="both", color='#000000', alpha=0.1, linestyle='-', zorder=0)
 clrs = colours.palette()
 for (k, v), c in zip(guidestar_sets.items(), clrs):
@@ -60,13 +61,15 @@ for (k, v), c in zip(guidestar_sets.items(), clrs):
 
 print(targets)
 
-x = [g * np.sin(t) for t, g in targets]
+x = [g * np.sin(t) for t, g in targets] 
 y = [g * np.cos(t) for t, g in targets]
-ax.scatter(x, y, label='Target Positions', c="#000000", s=20, marker='+', alpha=0.75, zorder=3.5)
 
-util.plotcirc(ax, (0, 0), 30, '--', color=clrs[0], alpha=0.2)
-util.plotcirc(ax, (0, 0), 60, '--', color=clrs[1], alpha=0.2)
-util.plotcirc(ax, (0, 0), isoplanatic_angle, '', linestyle='dashdot', color="#223344", alpha=0.5, label="Isoplanatic Patch")
+ax.scatter(x, y, label='Target Positions', c="#3C5233", s=20, marker='+', alpha=0.75, zorder=3.5)
+
+util.plotcirc(ax, (0, 0), 15, '--', color=clrs[0], alpha=0.2)
+util.plotcirc(ax, (0, 0), 30, '--', color=clrs[1], alpha=0.2)
+util.plotcirc(ax, (0, 0), 60, '--', color=clrs[2], alpha=0.2)
+# util.plotcirc(ax, (0, 0), isoplanatic_angle, '', linestyle='dashdot', color=clrs[4], alpha=0.5, label="Isoplanatic Patch")
 
 gs = guidestar_sets[(5, -1)]
 gs.sort(key=lambda x: x[0])
@@ -74,7 +77,7 @@ x = [g * np.sin(t) for t, g in gs]
 y = [g * np.cos(t) for t, g in gs]
 x.append(x[0])
 y.append(y[0])
-ax.plot(x, y, '--', color=clrs[2], alpha=0.2)
+ax.plot(x, y, '--', color=clrs[3], alpha=0.2)
 
 # target_line = [(line_theta, line_spread), (line_theta+np.pi, line_spread)]
 # x = [g * np.sin(t) for t, g in target_line]
@@ -91,6 +94,6 @@ ax.set_ylabel("Angle (arcseconds)")
 ax.set_xticks(np.arange(-90, 91, 30))
 ax.set_yticks(np.arange(-90, 91, 30))
 ax.axis("equal")
-ax.legend(loc='lower left', bbox_to_anchor=(0.5, 0.93), framealpha=1.0)
+ax.legend(loc='lower left', bbox_to_anchor=(0.85, 0.745), framealpha=1.0)
 
 plt.show()

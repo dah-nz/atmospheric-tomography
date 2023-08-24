@@ -6,7 +6,7 @@ from datetime import datetime
 from skimage.metrics import structural_similarity, mean_squared_error
 
 from basis import DCT, DST, zernike, wavelet
-from tomography import tomography, beacon, controller, psf
+from tomography import tomography, beacon, controller, psf, phase_screen
 from util import util
 import constellations
 
@@ -30,16 +30,16 @@ n_phase_screens = 25
 all_beacons = []
 # Set up tests
 guidestar_sets = {}
-for i, (n, g) in enumerate([(1, 0), (3, 30), (6, 60)]):
+for i, (n, g) in enumerate([(1, 0), (3, 15), (3, 30), (6, 60)]):
     guidestars = [beacon.Beacon(t, g, gamma_arcseconds=True) for t in np.linspace(i, (2*np.pi)+i, n, endpoint=False)]
     all_beacons += guidestars
-    guidestar_sets[(n, g)] = guidestars
+    guidestar_sets["{}_{}".format(n, g)] = guidestars
 
 cons = constellations.get_natural()
 
 for i, con in enumerate(cons):
     guidestars = [beacon.Beacon(t, g) for t, g in con]
-    guidestar_sets[(len(con), -1-i)] = guidestars
+    guidestar_sets["5_Asym"] = guidestars
     all_beacons += guidestars
 
 targets = {}
@@ -59,8 +59,6 @@ for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from 
         targets[(t + g, g)] = target
         all_beacons.append(target)
 
-phase_screens = list(zip(range(ps_seed,ps_seed+n_phase_screens), range(ps_seed+n_phase_screens,ps_seed+(2*n_phase_screens))))
-
 # Run tests
 tests = []
 
@@ -69,6 +67,15 @@ for asterism in guidestar_sets.items():
         tests.append((asterism, target))
 
 mask = util.circle(aperture_size/2, aperture_size)
+
+ps_seeds = list(zip(range(ps_seed,ps_seed+n_phase_screens), range(ps_seed+n_phase_screens,ps_seed+(2*n_phase_screens))))
+phase_screens = []
+for s0, s1 in ps_seeds:
+    scr0 = phase_screen.kolmogorov((670, 670), D, r0, aperture_size, s0)
+    scr1 = phase_screen.kolmogorov((3566, 3566), D, r0, aperture_size, s1)
+    phase_screens.append((scr0, scr1))
+    print("Phase screens {} and {} generated".format(s0, s1))
+
 zeros = np.zeros_like(mask)
 airy_psf = psf.psf(mask)
 airy_max = np.amax(airy_psf)
@@ -76,15 +83,15 @@ airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
 
 for n_coeffs in n_coeff_set:
     basis_functions = [
-        ('z', zernike.Zernike(n_coeffs)),
-        ('dct', DCT.DCT(n_coeffs)),
-        ('dst', DST.DST(n_coeffs)),
-        ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
+        # ('z', zernike.Zernike(n_coeffs)),
+        # ('dct', DCT.DCT(n_coeffs)),
+        # ('dst', DST.DST(n_coeffs)),
+        # ('wh', wavelet.wavelet(n_coeffs, wavelets='Haar')),
         ('wd', wavelet.wavelet(n_coeffs, wavelets='db2'))
         ]
     for snr in noise_SNR:
         for i, B in basis_functions:
-            file_name = "results_230823_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
+            file_name = "results_230824c_{}_SNR_{}_{}.data".format(n_coeffs, snr, i)
             with open("results/{}".format(file_name), "w") as f:
                 titles = [
                     "Basis",
@@ -115,8 +122,8 @@ for n_coeffs in n_coeff_set:
                 f.write("\n")
                 tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
                 T = controller.TomographyController(tomo, n_coeffs)
-                for ps in phase_screens:
-                    T.set_phase_screens(all_beacons, seeds=ps)
+                for ps, screens in zip(ps_seeds, phase_screens):
+                    T.set_phase_screens(all_beacons, screens=screens)
                     for test in tests:
                         asterism = test[0]
                         T.set_asterism(asterism[1])
@@ -170,7 +177,7 @@ for n_coeffs in n_coeff_set:
                             snr,                        # SNR
                             ps[0],                      # L1_Seed
                             ps[1],                      # L2_Seed
-                            asterism[0][0],             # Asterism
+                            asterism[0],                # Asterism
                             target[0][1]                # Target_Gamma
                             )
 

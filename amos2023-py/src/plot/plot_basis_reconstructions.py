@@ -9,12 +9,14 @@ from basis import zernike, DCT, DST, wavelet
 from util import util
 from plot import colours
 
+import constellations
+
 from skimage.metrics import structural_similarity, mean_squared_error
 
 rc('font',**{'family':'serif'})
 rc('text', usetex=True)
 
-beacon_angle = 5           # arcseconds
+beacon_angle = 15           # arcseconds
 aperture_size = 256         # pixels
 telescope_diameter = 0.6    # m
 r_0 = 0.05                  # m
@@ -102,6 +104,7 @@ for B in bfuncs:
     # Calculate the MSSIM for the PSFs to each other.
     mssim_rb = structural_similarity(masked_recon, masked_actual)
     mssim_ib = structural_similarity(masked_ideal, masked_actual)
+    mssim_ab = structural_similarity(masked_actual, zeros)
 
     print("RMSE_RA:   {}".format(mean_squared_error(masked_recon, masked_actual)))
     print("RMSE_IA:   {}".format(mean_squared_error(masked_ideal, masked_actual)))
@@ -117,6 +120,7 @@ for B in bfuncs:
 
     print("MSSIM_RB:  {}".format(mssim_rb))
     print("MSSIM_IB:  {}".format(mssim_ib))
+    print("MSSIM_AB:  {}".format(mssim_ab))
 
     mx.append(max(np.amax(masked_actual), np.amax(masked_recon)))
     mn.append(min(np.amin(masked_actual), np.amin(masked_recon)))
@@ -245,19 +249,22 @@ axs[1].set_title("Layer at 8000m")
 
 def getCircle(radius, n_points, centre=(0,0), angle=2*np.pi):
     circle = [util.pol2cart(radius, t/n_points*angle) for t in range(n_points + 1)]
-    return [x + centre[0] for x, _ in circle], [y + centre[1] for _, y in circle]
+    return ([x + centre[0] for x, _ in circle], [y + centre[1] for _, y in circle])
 
+beacons = constellations.get_natural()[0]
+beacons = [beacon.Beacon(t, g) for t, g in beacons]
 for gs in beacons:
     a0 = gs.position(1000)
-    x, y = getCircle(aperture_size/2, 50, centre=(335+(256/0.6)*a0[0], 335+(256/0.6)*a0[1]))
+    x, y = getCircle(aperture_size/2, 50, centre=(335+(256/0.6)*a0[1], 335+(256/0.6)*-a0[0]))
     axs[0].plot(x, y, 'w')
 
     a1 = gs.position(8000)
-    x, y = getCircle(aperture_size/2, 50, centre=(1783+(256/0.6)*a1[0], 1783+(256/0.6)*a1[1]))
+    x, y = getCircle(aperture_size/2, 50, centre=(1783+(256/0.6)*a1[1], 1783+(256/0.6)*-a1[0]))
     axs[1].plot(x, y, 'w')
 
+offset_targets = [beacon.Beacon(135 * np.pi/180, t, gamma_arcseconds=True) for t in [30, 60, 90]]
 target_colours = ['#0C2340C0', '#0C2340A0', '#0C234080']
-for tp, c in zip(offset_beacons, target_colours):
+for tp, c in zip(offset_targets, target_colours):
     a0 = tp.position(1000)
     x, y = getCircle(aperture_size/2, 50, centre=(335+(256/0.6)*a0[0], 335+(256/0.6)*a0[1]))
     axs[0].plot(x, y, linestyle='dashed', color=c)
@@ -270,12 +277,44 @@ x, y = getCircle(aperture_size/2, 50, centre=(335, 335))
 axs[0].plot(x, y, 'k--')
 
 x, y = getCircle(aperture_size/2, 50, centre=(1783, 1783))
-axs[1].plot([], 'w', label="Guide Star")
+axs[1].plot([], 'w', label="Asymmetric asterism")
 axs[1].plot(x, y, 'k--', label="Target at 0\"")
 axs[1].plot([], color=target_colours[0], linestyle='dashed', label="Target at 30\"")
 axs[1].plot([], color=target_colours[1], linestyle='dashed', label="Target at 60\"")
 axs[1].plot([], color=target_colours[2], linestyle='dashed', label="Target at 90\"")
 axs[1].legend()
 fig.tight_layout()
+
+if False:
+    print("MSSIM Baseline calculations")
+    targets = {}
+    # line through origin
+    targets[(0, 0)] = beacon.Beacon(0, 0, gamma_arcseconds=True)
+    all_beacons.append(targets[(0,0)])
+
+    for t in np.linspace(0, 2*np.pi, 8, endpoint=False):    # theta angle (acw from horizon)
+        for g in np.linspace(5, 30, 6, endpoint=True): # gamma angle (from telescope axis)
+            target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
+            targets[(t + g, g)] = target
+            all_beacons.append(target)
+
+    for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from horizon)
+        for g in np.linspace(40, 100, 7, endpoint=True): # gamma angle (from telescope axis)
+            target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
+            targets[(t + g, g)] = target
+            all_beacons.append(target)
+
+    with open("mssim_baseline.data", 'w') as f:
+        f.write("L1 Seed,L2 Seed,Target_Gamma,Target_Theta,MSSIM")
+        for seeds in zip(list(range(4000, 4025)), list(range(4025, 4050))):
+            T.set_phase_screens(all_beacons, seeds=seeds)
+            for pos, target in targets.items():
+                T.set_target(target)
+                calculated_coeffs = T.run()
+                masked_actual = mask * (T.noiseless_screen - np.mean(T.noiseless_screen))
+                out = "{},{},{},{:.4f}".format(seeds[0], seeds[1], pos[1], pos[0])
+                out += ",{:.4f}".format(structural_similarity(masked_actual, zeros))
+                f.write(out + "\n")
+                print(out)
 
 plt.show()

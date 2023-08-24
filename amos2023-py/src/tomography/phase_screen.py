@@ -88,7 +88,7 @@ class Kolmogorov():
     #     phase = np.array(phase.shaped)
     #     return phase - np.mean(phase)
 
-@lru_cache(maxsize=64)
+# @lru_cache(maxsize=64)
 def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
     """
     Simulation of a phase screen with Kolmogorov Statistics.
@@ -138,22 +138,24 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
     screen -= np.average(screen)
 
     sigma = np.sqrt(1.0299*(D/r0)**(5/3))
-    # Specific coefficents to have correct RMSE for phase screens at 1000m (628px) and 8000m (3235px) for a cut-out of 256px
-    # for target positions out to 95"
+    # Specific coefficents to have correct RMSE for phase screens at 1000m (670px) and 8000m (3566px) for a cut-out of 256px
+    # for target positions out to 100"
     if Ddim != max(size):
         if max(size) == 670:
-            k = sigma / 6.47
+            k = sigma / 3.5899
         elif max(size) == 3566:
-            k = sigma / 6.97
+            k = sigma / 0.9957
         else:
             k = 1
     else:
         k = 1
+    # k = 1
+    # print(max(size), k)
     screen = screen * k
     
     return screen
 
-@lru_cache(maxsize=128)
+# @lru_cache(maxsize=128)
 def generate_phase_screen(n_increases, seed=None):
     """
     Generates a phase screen with Kolmogorov statistics.
