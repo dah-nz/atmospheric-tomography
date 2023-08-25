@@ -45,22 +45,20 @@ for i, con in enumerate(cons):
     guidestar_sets["5_Asym"] = guidestars
     all_beacons += guidestars
 
+# (angle start, angle end, number of angle steps, number of targets per angle)
+target_settings = [(5, 30, 6, 8), (40, 100, 7, 6)] # Standard, no noise.
+# target_settings = [(5, 30, 6, 3), (40, 90, 6, 3)] # Noise.
 targets = {}
 # line through origin
 targets[(0, 0)] = beacon.Beacon(0, 0, gamma_arcseconds=True)
 all_beacons.append(targets[(0,0)])
 
-for t in np.linspace(0, 2*np.pi, 8, endpoint=False):    # theta angle (acw from horizon)
-    for g in np.linspace(5, 30, 6, endpoint=True): # gamma angle (from telescope axis)
-        target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
-        targets[(t + g, g)] = target
-        all_beacons.append(target)
-
-for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from horizon)
-    for g in np.linspace(40, 100, 7, endpoint=True): # gamma angle (from telescope axis)
-        target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
-        targets[(t + g, g)] = target
-        all_beacons.append(target)
+for gS, gE, gN, sN in target_settings:
+    for t in np.linspace(0, 2*np.pi, sN, endpoint=False):    # theta angle (acw from horizon)
+        for g in np.linspace(gS, gE, gN, endpoint=True): # gamma angle (from telescope axis)
+            target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
+            targets[(t + g, g)] = target
+            all_beacons.append(target)
 
 # Run tests
 tests = []
@@ -89,12 +87,12 @@ airy_max = np.amax(airy_psf)
 airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
 
 now = datetime.now()
-run_time = now.strftime("%y%m%d_%H%H%S")
+run_time = now.strftime("%y%m%d_%H%M%S")
 
 def run(snr, i, B):
     now = datetime.now()
     time = now.strftime("%H:%M:%S")
-    print(">>> {}: Starting {:16} [{}], SNR={}".format(time, B.name, B.N, snr))
+    print(">>> {}: Starting {:20} [{}], SNR={}".format(time, B.name, B.N, snr))
     file_name = "results_{}_{}_SNR_{}_{}.data".format(run_time, B.N, snr, i)
     with open("results/{}".format(file_name), "w") as f:
         titles = [
@@ -215,7 +213,7 @@ def run(snr, i, B):
                 if tracker % 10 == 0:
                     now = datetime.now()
                     time = now.strftime("%H:%M:%S")
-                    print("{}: {:16} [{}]: {}".format(time, B.name, B.N, out))
+                    print("{:20} | {}: {:16} [{}]: {}".format(file_name, time, B.name, B.N, out))
 
     now = datetime.now()
     time = now.strftime("%H:%M:%S")

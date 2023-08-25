@@ -7,11 +7,10 @@ from plot import data, colours
 
 from tomography import psf
 
-# df = data.load()
 
-df_ra = data.load() # pd.concat([df_16_0, df_64_0])
-df_ba = data.load() # pd.concat([df_16_0, df_64_0])
-df_ia = data.load() # pd.concat([df_16_0, df_64_0])
+df_ra = data.load()
+df_ba = data.load()
+df_ia = data.load()
 
 # Plot settings
 sns.set_theme(context="poster", style="whitegrid", font="serif", rc={"lines.linewidth": 1.25}) #, font_scale=2)
@@ -121,7 +120,7 @@ g = sns.relplot(
 for ax in g.axes.flat:
     ax.set_xticks(range(0, 91, 30))
 
-
+"""
 # Plot Strehl Data
 strehl = lambda sigma: np.exp(-(sigma)**2)
 df_ra.loc[:, "Strehl"] = strehl(df_ra.loc[:, "RMSE_RA"]) # df_ra.loc[:, "Strehl_RB"]
@@ -152,6 +151,7 @@ g = sns.relplot(
 
 for ax in g.axes.flat:
     ax.set_xticks(range(0, 91, 30))
+"""
 
 # Plot Strehl Data
 df_ra.loc[:, "Strehl"] = df_ra.loc[:, "Strehl_RB"]
@@ -190,10 +190,10 @@ df_ra.loc[:, "MSSIM"] = df_ra.loc[:, "MSSIM_RA"]
 df_ia.loc[:, "MSSIM"] = df_ia.loc[:, "MSSIM_IA"]
 df_ia.loc[:, label_series] = ideal
 
-# df_ba.loc[:, "MSSIM"] = df_ba.loc[:, "MSSIM_AB"]
-# df_ba.loc[:, label_series] = baseline
+df_ba.loc[:, "MSSIM"] = df_ba.loc[:, "MSSIM_BA"]
+df_ba.loc[:, label_series] = baseline
 
-df = pd.concat([df_ra, df_ia])
+df = pd.concat([df_ra, df_ia, df_ba])
 df.rename(columns={"N_Coeffs": label_coeffs}, inplace=True)
 
 g = sns.relplot(

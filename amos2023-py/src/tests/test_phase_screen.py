@@ -73,7 +73,7 @@ for s0, s1 in phase_screens:
         mse3.append(util.rmse(s2cut, a0, mask=mask))
         msesum.append(util.rmse(np.sum([s1cut, s2cut], 0), a0, mask=mask))
         s1cut = s1cut - np.mean(s1cut)
-        s2cut = s1cut - np.mean(s2cut)
+        s2cut = s2cut - np.mean(s2cut)
         mse2a.append(util.rmse(s1cut, a0, mask=mask))
         mse3a.append(util.rmse(s2cut, a0, mask=mask))
         suma = np.sum([s1cut, s2cut], 0)

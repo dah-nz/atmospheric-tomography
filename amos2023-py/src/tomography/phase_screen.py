@@ -140,18 +140,14 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
     sigma = np.sqrt(1.0299*(D/r0)**(5/3))
     # Specific coefficents to have correct RMSE for phase screens at 1000m (670px) and 8000m (3566px) for a cut-out of 256px
     # for target positions out to 100"
+    k = 1
     if Ddim != max(size):
-        if r0 == 0.05:
-            k = (sigma / 6.3816)
-        elif r0 == 0.07:
-            k = 1
-    else:
-        k = 1
-    # k = 1
-    # print(max(size), k)
-    screen = screen * k
+        if max(size) == 3566:
+            k = (sigma / 0.8825) / np.sqrt(2)
+        elif max(size) == 670:
+            k = (sigma / 3.1908) / np.sqrt(2)
     
-    return screen
+    return screen * k
 
 # @lru_cache(maxsize=128)
 def generate_phase_screen(n_increases, seed=None):

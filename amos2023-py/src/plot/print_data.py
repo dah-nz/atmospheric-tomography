@@ -13,7 +13,7 @@ df0 = df.loc[(df["Target_Gamma"] == 0) & (df["Asterism"] != "1_0"), :].copy()
 # Table for RMSE
 print(" & & \multicolumn{2}{c}{RMSE (radians)}& \multicolumn{2}{c}{MSSIM} \\\\")
 print("Basis Function & Coefficients & Reconstruction & Ideal & Reconstruction & Ideal \\\\")
-print("No estimate & - & {:.4f} & - & {:.4f} & - \\\\".format(df0["RMSE_BA"].mean(), 0.15))
+print("No estimate & - & {:.4f} & - & {:.4f} & - \\\\".format(df0["RMSE_BA"].mean(),df0["MSSIM_BA"].mean()))
 for basis in df0["Basis"].unique():
     mean16 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 16)][["RMSE_RA", "RMSE_IA", "MSSIM_RA", "MSSIM_IA"]].mean()
     mean64 = df0.loc[(df0["Basis"] == basis) & (df0["N_Coeffs"] == 64)][["RMSE_RA", "RMSE_IA", "MSSIM_RA", "MSSIM_IA"]].mean()
