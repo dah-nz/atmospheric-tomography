@@ -88,12 +88,13 @@ airy_psf = psf.psf(mask)
 airy_max = np.amax(airy_psf)
 airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
 
+now = datetime.now()
 run_time = now.strftime("%y%m%d_%H%H%S")
 
 def run(snr, i, B):
     now = datetime.now()
     time = now.strftime("%H:%M:%S")
-    print("{}: Running {} [{}], SNR={}".format(time, B.name, B.N, snr))
+    print(">>> {}: Starting {:16} [{}], SNR={}".format(time, B.name, B.N, snr))
     file_name = "results_{}_{}_SNR_{}_{}.data".format(run_time, B.N, snr, i)
     with open("results/{}".format(file_name), "w") as f:
         titles = [
@@ -124,14 +125,16 @@ def run(snr, i, B):
         for t in titles[1:]:
             f.write(",{}".format(t))
         f.write("\n")
-        tomo = tomography.Tomography(layers, B, D, r0, n_coeffs, aperture_size)
-        T = controller.TomographyController(tomo, n_coeffs)
+        tomo = tomography.Tomography(layers, B, D, r0, B.N, aperture_size)
+        T = controller.TomographyController(tomo, B.N)
+        tracker = 0
         for ps, screens in zip(ps_seeds, phase_screens):
             T.set_phase_screens(all_beacons, screens=screens)
             now = datetime.now()
             time = now.strftime("%H:%M:%S")
-            print("{}: Running {} [{}]: Tests for phase screen: {}".format(time, B.name, B.N, ps))
+            print("> {}: Running {:16} [{}]: Tests for phase screen: {}".format(time, B.name, B.N, ps))
             for test in tests:
+                tracker += 1
                 asterism = test[0]
                 T.set_asterism(asterism[1])
                 target = test[1]
@@ -181,7 +184,7 @@ def run(snr, i, B):
 
                 out = "{},{},{},{},{},{},{}".format(
                     B.name,                     # Basis
-                    n_coeffs,                   # N_Coeffs
+                    B.N,                        # N_Coeffs
                     snr,                        # SNR
                     ps[0],                      # L1_Seed
                     ps[1],                      # L2_Seed
@@ -209,13 +212,16 @@ def run(snr, i, B):
                     out += ",{:.4f}".format(t)
 
                 f.write(out+"\n")
-                print("{}: {} [{}]: {}".format(time, B.name, B.N, out))
+                if tracker % 10 == 0:
+                    now = datetime.now()
+                    time = now.strftime("%H:%M:%S")
+                    print("{}: {:16} [{}]: {}".format(time, B.name, B.N, out))
 
     now = datetime.now()
     time = now.strftime("%H:%M:%S")
-    print("{}: Completed {} [{}], SNR={}".format(time, B.name, B.N, snr))
+    print(">>> {}: Completed {:16} [{}], SNR={}".format(time, B.name, B.N, snr))
 
-with ThreadPoolExecutor(max_workers=12) as thread_pool:
+with ThreadPoolExecutor() as thread_pool:
     for n_coeffs in n_coeff_set:
         basis_functions = [
             ('z', zernike.Zernike(n_coeffs)),
