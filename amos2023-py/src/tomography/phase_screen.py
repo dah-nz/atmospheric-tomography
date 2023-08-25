@@ -141,11 +141,9 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
     # Specific coefficents to have correct RMSE for phase screens at 1000m (670px) and 8000m (3566px) for a cut-out of 256px
     # for target positions out to 100"
     if Ddim != max(size):
-        if max(size) == 670:
-            k = sigma / 3.5899
-        elif max(size) == 3566:
-            k = sigma / 0.9957
-        else:
+        if r0 == 0.05:
+            k = (sigma / 6.3816)
+        elif r0 == 0.07:
             k = 1
     else:
         k = 1

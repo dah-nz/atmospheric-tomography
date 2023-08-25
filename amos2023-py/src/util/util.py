@@ -117,11 +117,8 @@ def pip(polygon, point):
 #   sigma:          Std dev. of normally distributed random variable
 def get_sigma_from_SNR(phase_screen, SNR):
     snr = 10**(SNR/10)
-    # print(snr)
     mean_square = np.mean(np.square(phase_screen))
-    # print(mean_square)
     variance = mean_square / snr
-    # print(variance)
     return np.sqrt(variance)
 
 def cut_around_max(data, factor=4):
@@ -133,3 +130,10 @@ def cut_around_max(data, factor=4):
     y0 = max(0, yc - yd)
     y1 = min(data.shape[0], yc + yd)
     return data[x0:x1, y0:y1]
+
+def rmse(img_a, img_b, mask=None):
+    if mask is not None:
+        rms = np.sqrt(np.sum((mask * (img_a - img_b)) ** 2) / np.sum(mask))
+        return rms
+    else:
+        return np.sqrt(((img_a - img_b) ** 2).mean())

@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib import rc
@@ -120,6 +121,37 @@ g = sns.relplot(
 for ax in g.axes.flat:
     ax.set_xticks(range(0, 91, 30))
 
+
+# Plot Strehl Data
+strehl = lambda sigma: np.exp(-(sigma)**2)
+df_ra.loc[:, "Strehl"] = strehl(df_ra.loc[:, "RMSE_RA"]) # df_ra.loc[:, "Strehl_RB"]
+
+df_ia.loc[:, "Strehl"] = strehl(df_ia.loc[:, "RMSE_IA"]) # df_ia.loc[:, "Strehl_IB"]
+df_ia.loc[:, label_series] = ideal
+
+df_ba.loc[:, "Strehl"] = strehl(df_ba.loc[:, "RMSE_BA"]) # df_ba.loc[:, "Strehl_AB"]
+df_ba.loc[:, label_series] = baseline
+
+df = pd.concat([df_ra, df_ia, df_ba])
+df.rename(columns={"N_Coeffs": label_coeffs}, inplace=True)
+
+g = sns.relplot(
+    data=df, kind="line",
+    x="Target_Gamma", y="Strehl", col="Basis",
+    hue=label_series, style=label_coeffs,
+    errorbar=None, palette=color_dict,
+    hue_order=hue_order, col_order=col_order,
+    col_wrap=3
+)
+
+(g.set_axis_labels('Target Angle (")', 'Strehl Ratio')
+    .set(ylim=(None, None), xlim=(0, None))
+    .set_titles("{col_name}")
+    .tight_layout(w_pad=0.4)
+)
+
+for ax in g.axes.flat:
+    ax.set_xticks(range(0, 91, 30))
 
 # Plot Strehl Data
 df_ra.loc[:, "Strehl"] = df_ra.loc[:, "Strehl_RB"]
