@@ -73,9 +73,13 @@ mask = util.circle(aperture_size/2, aperture_size)
 
 ps_seeds = list(zip(range(ps_seed,ps_seed+n_phase_screens), range(ps_seed+n_phase_screens,ps_seed+(2*n_phase_screens))))
 phase_screens = []
+
+T = tomography.Tomography(layers, zernike.Zernike(16), D, r0, 16, aperture_size)
+_, layer_sizes = T.get_layer_shapes(all_beacons)
+
 for s0, s1 in ps_seeds:
-    scr0 = phase_screen.kolmogorov((670, 670), D, r0, aperture_size, s0)
-    scr1 = phase_screen.kolmogorov((3566, 3566), D, r0, aperture_size, s1)
+    scr0 = phase_screen.kolmogorov(layer_sizes[0], D, r0, aperture_size, s0)
+    scr1 = phase_screen.kolmogorov(layer_sizes[1], D, r0, aperture_size, s1)
     phase_screens.append((scr0, scr1))
     print("Phase screens {} and {} generated".format(s0, s1))
 
@@ -84,11 +88,13 @@ airy_psf = psf.psf(mask)
 airy_max = np.amax(airy_psf)
 airy_fwhm = psf.fwhm(airy_psf, wavelength, f_number)
 
+run_time = now.strftime("%y%m%d_%H%H%S")
+
 def run(snr, i, B):
     now = datetime.now()
     time = now.strftime("%H:%M:%S")
     print("{}: Running {} [{}], SNR={}".format(time, B.name, B.N, snr))
-    file_name = "results_230824c_{}_SNR_{}_{}.data".format(B.N, snr, i)
+    file_name = "results_{}_{}_SNR_{}_{}.data".format(run_time, B.N, snr, i)
     with open("results/{}".format(file_name), "w") as f:
         titles = [
             "Basis",
@@ -112,6 +118,7 @@ def run(snr, i, B):
             "Strehl_AB",
             "MSSIM_RA",
             "MSSIM_IA",
+            "MSSIM_BA"
         ]
         f.write(titles[0])
         for t in titles[1:]:
@@ -123,7 +130,7 @@ def run(snr, i, B):
             T.set_phase_screens(all_beacons, screens=screens)
             now = datetime.now()
             time = now.strftime("%H:%M:%S")
-            print("{}: Running {} [{}]: Tests for phase screens: {}".format(time, B.name, B.N, ps))
+            print("{}: Running {} [{}]: Tests for phase screen: {}".format(time, B.name, B.N, ps))
             for test in tests:
                 asterism = test[0]
                 T.set_asterism(asterism[1])
@@ -144,9 +151,9 @@ def run(snr, i, B):
                 masked_ideal = mask * (T.actual_screen_from_coeffs - np.mean(T.actual_screen_from_coeffs))
 
                 # Calculate RMSE error for reconstruction, ideal and baseline to the ground truth
-                rmse_ra = np.sqrt(mean_squared_error(masked_actual, masked_recon))
-                rmse_ia = np.sqrt(mean_squared_error(masked_actual, masked_ideal))
-                rmse_ba = np.sqrt(mean_squared_error(masked_actual, zeros))
+                rmse_ra = util.rmse(masked_actual, masked_recon, mask=mask)
+                rmse_ia = util.rmse(masked_actual, masked_ideal, mask=mask)
+                rmse_ba = util.rmse(masked_actual, zeros, mask=mask)
                 
                 # Find difference (residuals) between reconstruction and ideal from ground truth
                 residuals_ra = masked_recon - masked_actual
@@ -168,8 +175,9 @@ def run(snr, i, B):
                 strehl_ab = np.amax(psf_ba) / airy_max
 
                 # Calculate the MSSIM for the PSFs to each other.
-                mssim_rb = structural_similarity(masked_recon, masked_actual)
-                mssim_ib = structural_similarity(masked_ideal, masked_actual)
+                mssim_ra = structural_similarity(masked_recon, masked_actual)
+                mssim_ia = structural_similarity(masked_ideal, masked_actual)
+                mssim_ba = structural_similarity(zeros, masked_actual)
 
                 out = "{},{},{},{},{},{},{}".format(
                     B.name,                     # Basis
@@ -194,18 +202,20 @@ def run(snr, i, B):
                     strehl_rb,                  # Strehl_RB
                     strehl_ib,                  # Strehl_IB
                     strehl_ab,                  # Strehl_AB
-                    mssim_rb,                   # MSSIM_RB
-                    mssim_ib,                   # MSSIM_IB
+                    mssim_ra,                   # MSSIM_RA
+                    mssim_ia,                   # MSSIM_IA
+                    mssim_ba,                   # MSSIM_BA
                     ]:
                     out += ",{:.4f}".format(t)
 
                 f.write(out+"\n")
+                print("{}: {} [{}]: {}".format(time, B.name, B.N, out))
+
     now = datetime.now()
     time = now.strftime("%H:%M:%S")
     print("{}: Completed {} [{}], SNR={}".format(time, B.name, B.N, snr))
 
-
-with ThreadPoolExecutor(max_workers=6) as thread_pool:
+with ThreadPoolExecutor(max_workers=12) as thread_pool:
     for n_coeffs in n_coeff_set:
         basis_functions = [
             ('z', zernike.Zernike(n_coeffs)),
