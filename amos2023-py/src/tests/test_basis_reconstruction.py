@@ -39,7 +39,7 @@ for B in bfuncs:
     T.set_asterism(beacons)
     T.set_target(target)
     T.set_phase_screens(seeds=[102, 113])
-
+    T.set_noise(1)
 
     calculated_coeffs = T.run()
 

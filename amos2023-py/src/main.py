@@ -17,14 +17,16 @@ import constellations
 # BASIC PARAMETERS
 aperture_size = 256             # number of pixels at telescope aperture
 D =             0.6             # telescope diameter (m)
-r0 =            0.05            # Fried parameter (poor seeing = 5cm, Excellent = 20cm) (m)
+r0 =            0.1             # Fried parameter (poor seeing = 5cm, Excellent = 20cm) (m)
 layers =        [1000, 8000]    # layer altitudes (m)
 f_number =      6.5             # focal number for telescope
 wavelength =    600e-9          # wavelength of light (m)
 
 # TEST SETTINGS
 n_coeff_set = [16, 64]
-noise_SNR = [0] # [0, 3, 10, 20, 30]
+
+noise_SNR = [0.1, 0.3, 0.6] 
+# noise_SNR = [1, 3, 6, 10, 13, 20]
 
 ps_seed = 4000
 n_phase_screens = 25
@@ -33,25 +35,27 @@ n_phase_screens = 25
 all_beacons = []
 # Set up tests
 guidestar_sets = {}
-for i, (n, g) in enumerate([(1, 0), (3, 15), (3, 30), (6, 60)]):
+for i, (n, g) in enumerate([(3, 15)]):
+# for i, (n, g) in enumerate([(1, 0), (3, 15), (3, 30), (6, 60)]):
     guidestars = [beacon.Beacon(t, g, gamma_arcseconds=True) for t in np.linspace(i, (2*np.pi)+i, n, endpoint=False)]
     all_beacons += guidestars
     guidestar_sets["{}_{}".format(n, g)] = guidestars
 
-cons = constellations.get_natural()
+# cons = constellations.get_natural()
 
-for i, con in enumerate(cons):
-    guidestars = [beacon.Beacon(t, g) for t, g in con]
-    guidestar_sets["5_Asym"] = guidestars
-    all_beacons += guidestars
+# for i, con in enumerate(cons):
+#     guidestars = [beacon.Beacon(t, g) for t, g in con]
+#     guidestar_sets["5_Asym"] = guidestars
+#     all_beacons += guidestars
 
 # (angle start, angle end, number of angle steps, number of targets per angle)
-target_settings = [(5, 30, 6, 8), (40, 100, 7, 6)] # Standard, no noise.
-# target_settings = [(5, 30, 6, 3), (40, 90, 6, 3)] # Noise.
+# target_settings = [(5, 30, 6, 8), (40, 100, 7, 6)] # Standard, no noise.
+target_settings = [(15, 30, 2, 8)] #, (40, 60, 3, 6)] # Noise.
 targets = {}
 # line through origin
 targets[(0, 0)] = beacon.Beacon(0, 0, gamma_arcseconds=True)
 all_beacons.append(targets[(0,0)])
+all_beacons.append(beacon.Beacon(0, 100, gamma_arcseconds=True))
 
 for gS, gE, gN, sN in target_settings:
     for t in np.linspace(0, 2*np.pi, sN, endpoint=False):    # theta angle (acw from horizon)
@@ -70,16 +74,16 @@ for asterism in guidestar_sets.items():
 mask = util.circle(aperture_size/2, aperture_size)
 
 ps_seeds = list(zip(range(ps_seed,ps_seed+n_phase_screens), range(ps_seed+n_phase_screens,ps_seed+(2*n_phase_screens))))
-phase_screens = []
+# phase_screens = []
 
-T = tomography.Tomography(layers, zernike.Zernike(16), D, r0, 16, aperture_size)
-_, layer_sizes = T.get_layer_shapes(all_beacons)
+# T = tomography.Tomography(layers, zernike.Zernike(16), D, r0, 16, aperture_size)
+# _, layer_sizes = T.get_layer_shapes(all_beacons)
 
-for s0, s1 in ps_seeds:
-    scr0 = phase_screen.kolmogorov(layer_sizes[0], D, r0, aperture_size, s0)
-    scr1 = phase_screen.kolmogorov(layer_sizes[1], D, r0, aperture_size, s1)
-    phase_screens.append((scr0, scr1))
-    print("Phase screens {} and {} generated".format(s0, s1))
+# for s0, s1 in ps_seeds:
+#     scr0 = phase_screen.kolmogorov(layer_sizes[0], D, r0, aperture_size, s0)
+#     scr1 = phase_screen.kolmogorov(layer_sizes[1], D, r0, aperture_size, s1)
+#     phase_screens.append((scr0, scr1))
+#     print("Phase screens {} and {} generated".format(s0, s1))
 
 zeros = np.zeros_like(mask)
 airy_psf = psf.psf(mask)
@@ -126,8 +130,8 @@ def run(snr, i, B):
         tomo = tomography.Tomography(layers, B, D, r0, B.N, aperture_size)
         T = controller.TomographyController(tomo, B.N)
         tracker = 0
-        for ps, screens in zip(ps_seeds, phase_screens):
-            T.set_phase_screens(all_beacons, screens=screens)
+        for ps in ps_seeds:
+            T.set_phase_screens(all_beacons, seeds=ps)
             now = datetime.now()
             time = now.strftime("%H:%M:%S")
             print("> {}: Running {:16} [{}]: Tests for phase screen: {}".format(time, B.name, B.N, ps))
@@ -139,8 +143,9 @@ def run(snr, i, B):
                 T.set_target(target[1])
                 
                 if snr != 0:
-                    sigma = util.get_sigma_from_SNR(T.screens[0], snr)
-                    T.set_noise(sigma)
+                    # sigma = util.get_sigma_from_SNR(T.screens[0], snr)
+                    sigma = 0
+                    T.set_noise(snr)
                 else:
                     sigma = 0
 
@@ -166,9 +171,9 @@ def run(snr, i, B):
                 psf_ba = psf.psf(masked_actual)
                 
                 # Calculate the FWHM for the reconstruction and ideal PSFs
-                fwhm_ra = psf.fwhm(psf_ra)
-                fwhm_ia = psf.fwhm(psf_ia)
-                fwhm_ba = psf.fwhm(psf_ba)
+                fwhm_ra = 0 #psf.fwhm(psf_ra)
+                fwhm_ia = 0 #psf.fwhm(psf_ia)
+                fwhm_ba = 0 #psf.fwhm(psf_ba)
 
                 # Calculate the strehl ratios between the two residual PSFs, and each of those to the ideal Airy response
                 strehl_rb = np.amax(psf_ra) / airy_max
@@ -230,6 +235,7 @@ with ThreadPoolExecutor() as thread_pool:
             ]
         for snr in noise_SNR:
             for i, B in basis_functions:
+                # run(snr, i, B)
                 thread_pool.submit(run, snr, i, B)
 
 print(">>> COMPLETE <<<")

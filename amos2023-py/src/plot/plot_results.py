@@ -16,14 +16,14 @@ df_ia = data.load()
 sns.set_theme(context="poster", style="whitegrid", font="serif", rc={"lines.linewidth": 1.25}) #, font_scale=2)
 # sns.set_style("whitegrid")
 
-label_coeffs = "N Coefficients"
-label_series = "Asterism"
+label_coeffs = "Number of Modes:"
+label_series = "Asterism:"
 
 ast1_0 = 'Single star'
 ast3_15 = '3 stars, 15" radius'
 ast3_30 = '3 stars, 30" radius'
 ast6_60 = '6 stars, 60" radius'
-ast5_Asym = '5 stars asymmetric'
+ast5_Asym = '5 stars, asymmetric'
 ideal = "Best estimate"
 baseline = "Ground truth"
 
@@ -69,8 +69,10 @@ g = sns.relplot(
     hue=label_series, style=label_coeffs,
     errorbar=None, palette=color_dict,
     hue_order=hue_order, col_order=col_order,
-    col_wrap=3
+    col_wrap=3,  facet_kws=dict(legend_out=False)
 )
+
+sns.move_legend(g, "upper left", bbox_to_anchor=(.71, .52), frameon=True)
 
 (g.set_axis_labels('Target Angle (")', 'RMSE (radians)')
     .set_titles("{col_name}")
@@ -81,6 +83,8 @@ g = sns.relplot(
 for ax in g.axes.flat:
     ax.set_xticks(range(0, 91, 30))
 
+plt.show()
+quit()
 
 # Plot FWHM data
 telescope_diameter  = 0.6    # m
@@ -108,8 +112,10 @@ g = sns.relplot(
     hue=label_series, style=label_coeffs,
     errorbar=None, palette=color_dict,
     hue_order=hue_order, col_order=col_order,
-    col_wrap=3
+    col_wrap=3,  facet_kws=dict(legend_out=False)
 )
+
+sns.move_legend(g, "upper left", bbox_to_anchor=(.72, .5), frameon=False)
 
 (g.set_axis_labels('Target Angle (")', 'FWHM (")')
     .set(ylim=(None, None), xlim=(0, None))
@@ -171,8 +177,10 @@ g = sns.relplot(
     hue=label_series, style=label_coeffs,
     errorbar=None, palette=color_dict,
     hue_order=hue_order, col_order=col_order,
-    col_wrap=3
+    col_wrap=3,  facet_kws=dict(legend_out=False)
 )
+
+sns.move_legend(g, "upper left", bbox_to_anchor=(.72, .5), frameon=False)
 
 (g.set_axis_labels('Target Angle (")', 'Strehl Ratio')
     .set(ylim=(None, None), xlim=(0, None))
@@ -202,8 +210,10 @@ g = sns.relplot(
     hue=label_series, style=label_coeffs,
     errorbar=None, palette=color_dict,
     hue_order=hue_order[:-1], col_order=col_order,
-    col_wrap=3
+    col_wrap=3,  facet_kws=dict(legend_out=False)
 )
+
+sns.move_legend(g, "upper left", bbox_to_anchor=(.72, .5), frameon=False)
 
 (g.set_axis_labels('Target Angle (")', 'MSSIM')
     .set(ylim=(None, None), xlim=(0, None))

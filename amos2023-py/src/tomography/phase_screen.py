@@ -142,10 +142,30 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
     # for target positions out to 100"
     k = 1
     if Ddim != max(size):
-        if max(size) == 3566:
-            k = (sigma / 0.8825) / np.sqrt(2)
-        elif max(size) == 670:
-            k = (sigma / 3.1908) / np.sqrt(2)
+        if r0 == 0.05:
+            if max(size) == 3566:
+                k = (sigma / 0.8825) / np.sqrt(2)
+            elif max(size) == 670:
+                k = (sigma / 3.1908) / np.sqrt(2)
+        elif r0 == 0.07:
+            if max(size) == 3566:
+                k = (sigma / 0.6667) / np.sqrt(2)
+            elif max(size) == 670:
+                k = (sigma / 2.4106) / np.sqrt(2)
+        elif r0 == 0.1:
+            if max(size) == 2679:
+                k = (sigma / 1.7911) / np.sqrt(2)
+            elif max(size) == 14263:
+                k = (sigma / 0.4955) / np.sqrt(2)
+            elif max(size) == 3566:
+                k = (sigma / 0.4953) / np.sqrt(2)
+            elif max(size) == 670:
+                k = (sigma / 1.7908) / np.sqrt(2)
+        elif r0 == 0.2:
+            if max(size) == 3566:
+                k = (sigma / 0.2780) / np.sqrt(2)
+            elif max(size) == 670:
+                k = (sigma / 1.0050) / np.sqrt(2)
     
     return screen * k
 

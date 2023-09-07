@@ -1,20 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.metrics import mean_squared_error
+import scipy.stats as stats
 
 from tomography import phase_screen, beacon
 from util import util
 
-p0 = 256
-p1 = 670
-p2 = 3566
+p0 = 2048
+p1 = 2679
+p2 = 14263
 
 a0 = np.zeros((p0, p0))
 a1 = np.zeros((p1, p1))
 a2 = np.zeros((p2, p2))
 
 D = 0.6
-r0 = 0.05
+r0 = 0.1
 
 variance = 1.0299*(D/r0)**(5/3)
 sigma = np.sqrt(variance)
@@ -36,13 +37,18 @@ msesumb = []
 
 ps_seed = 4000
 n_phase_screens = 25
-ps_seeds = list(zip(range(ps_seed,ps_seed+n_phase_screens), range(ps_seed+n_phase_screens,ps_seed+(2*n_phase_screens))))
-phase_screens = []
-for s0, s1 in ps_seeds:
-    scr0 = phase_screen.kolmogorov((p1, p1), D, r0, p0, s0)
-    scr1 = phase_screen.kolmogorov((p2, p2), D, r0, p0, s1)
-    phase_screens.append((scr0, scr1))
-    print("Phase screens {} and {} generated".format(s0, s1))
+groups = 1
+ps_seeds = []
+for i in range(groups):
+    ps_seeds = ps_seeds + list(zip( range(ps_seed+(2*i*n_phase_screens),                    ps_seed+(2*i*n_phase_screens) + n_phase_screens),
+                                    range(ps_seed+(2*i*n_phase_screens) + n_phase_screens,  ps_seed+(2*i*n_phase_screens) + (2 * n_phase_screens))))
+
+# phase_screens = []
+# for s0, s1 in ps_seeds:
+#     scr0 = phase_screen.kolmogorov((p1, p1), D, r0, p0, s0)
+#     scr1 = phase_screen.kolmogorov((p2, p2), D, r0, p0, s1)
+#     phase_screens.append((scr0, scr1))
+#     print("Phase screens {} and {} generated".format(s0, s1))
 
 mask = np.array(util.circle(p0/2, p0))
 
@@ -60,7 +66,10 @@ for t in np.linspace(0, 2*np.pi, 6, endpoint=False):    # theta angle (acw from 
         target = beacon.Beacon(t + g, g, gamma_arcseconds=True)
         targets[(t + g, g)] = target
 
-for s0, s1 in phase_screens:
+for sd0, sd1 in ps_seeds:
+    s0 = phase_screen.kolmogorov((p1, p1), D, r0, p0, sd0)
+    s1 = phase_screen.kolmogorov((p2, p2), D, r0, p0, sd1)
+    print("Phase screens {} and {} generated".format(sd0, sd1))
     mse0.append(util.rmse(s0, a1))
     mse1.append(util.rmse(s1, a2))
     mse0a.append(util.rmse(s0, a1, mask=util.circle(p1/2, p1)))
@@ -94,15 +103,9 @@ print("DONE:0:{:7.4f}[{:7.4f}],1:{:7.4f}[{:7.4f}],2:{:7.4f}[{:7.4f}],3:{:7.4f}[{
             np.mean(mse3), np.mean(mse3a),
             np.mean(msesum), np.mean(msesuma), np.mean(msesumb)))
 
-plt.figure()
-plt.imshow(s0)
-plt.figure()
-plt.imshow(s1cut)
-plt.figure()
-plt.imshow(s1)
-plt.figure()
-plt.imshow(s2cut)
-plt.show()
+tt = stats.ttest_1samp(msesum, sigma)
+print(tt)
+print(tt.confidence_interval(0.95))
 
 # from basis import zernike
 

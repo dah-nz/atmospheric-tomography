@@ -10,7 +10,7 @@ import constellations
 wavelength = 600e-9
 r_0 = 0.05
 
-rc('font',**{'family':'serif'})
+rc('font',**{'family':'serif', 'size': 14})
 rc('text', usetex=True)
 
 # SET UP GUIDE STARS
@@ -64,7 +64,7 @@ print(targets)
 x = [g * np.sin(t) for t, g in targets] 
 y = [g * np.cos(t) for t, g in targets]
 
-ax.scatter(x, y, label='Target Positions', c="#3C5233", s=20, marker='+', alpha=0.75, zorder=3.5)
+ax.scatter(x, y, label='Target Positions', c="#3C5233", s=40, marker='+', alpha=0.75, zorder=3.5)
 
 util.plotcirc(ax, (0, 0), 15, '--', color=clrs[0], alpha=0.2)
 util.plotcirc(ax, (0, 0), 30, '--', color=clrs[1], alpha=0.2)
@@ -94,6 +94,6 @@ ax.set_ylabel("Angle (arcseconds)")
 ax.set_xticks(np.arange(-90, 91, 30))
 ax.set_yticks(np.arange(-90, 91, 30))
 ax.axis("equal")
-ax.legend(loc='lower left', bbox_to_anchor=(0.85, 0.745), framealpha=1.0)
+ax.legend(loc='lower left', bbox_to_anchor=(0.77, 0.74), framealpha=1.0)
 
 plt.show()
