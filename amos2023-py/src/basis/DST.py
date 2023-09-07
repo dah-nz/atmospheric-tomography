@@ -14,11 +14,11 @@ class DST(Basis):
     out(grid, order)    Return nth-order Discrete Sine Transform on a grid
     """
     def __init__(self, max_coeffs):
+        super().__init__(max_coeffs, "DST")
         c = int(np.sqrt(max_coeffs))
         if c * c < max_coeffs:
             c += 1
-        super().__init__(c, "DST")
-        self.max_coeffs = max_coeffs
+        self.C = c
     @lru_cache(maxsize=64)
     def out(self, size, order):
         """
@@ -31,7 +31,7 @@ class DST(Basis):
         order:
             discrete sine coefficient order
         """
-        c = np.zeros((self.N * self.N,))
+        c = np.zeros((self.C * self.C,))
         c[order] = 1
         return self.compose(size, c)
 
@@ -90,12 +90,12 @@ class DST(Basis):
         phase:
             Phase screen created from set of basis functions and coefficients       
         """
-        c = np.zeros((self.N * self.N))
+        c = np.zeros((self.C * self.C))
         c0 = coefficients.flatten()
-        c[:self.max_coeffs] = c0[:self.max_coeffs]
-        c.resize((self.N, self.N))
+        c[:self.N] = c0[:self.N]
+        c.resize((self.C, self.C))
         c1 = np.zeros(size)
-        c1[:self.N, :self.N] = c
+        c1[:self.C, :self.C] = c
         return idstn(c1, norm='ortho')
 
     def decompose(self, screen):
@@ -115,6 +115,6 @@ class DST(Basis):
 
         """
         d = dstn(screen, norm='ortho')
-        a = d[:self.N, :self.N]
+        a = d[:self.C, :self.C]
         a = a.flatten()
-        return a[:self.max_coeffs]
+        return a[:self.N]

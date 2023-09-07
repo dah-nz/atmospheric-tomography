@@ -15,7 +15,8 @@ def palette(titles=None):
         "#0091AD",
         "#BD93BD",
         "#52AA5E",
-        "#DE6E4B"
+        "#DE6E4B",
+        "#F4F4F9"
     ]
     if titles is not None:
         return dict(zip(titles, colour_list))

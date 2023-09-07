@@ -5,6 +5,7 @@ from tomography import phase_screen
 import scipy.optimize as opt
 import scipy.ndimage as sci
 import hcipy
+from util import util
 
 class TomographyController():
     """
@@ -20,7 +21,6 @@ class TomographyController():
         self.N = n_coeffs
         self.aperture_grid = np.zeros((self.T.aperture_size, self.T.aperture_size))
         self.noise = False
-        self.noisy_screens = None
         self.screen_gain = screen_gain
 
     def set_target(self, target):
@@ -64,10 +64,11 @@ class TomographyController():
         """
 
         d, layer_size = self.T.get_layer_shapes(beacons)
-        print(d)
+
+        print(layer_size)
 
         self.noise = False
-        self.noisy_screens = []
+        self.snr = 0
         if screens is not None:
             self.screens = screens
         else:
@@ -75,14 +76,9 @@ class TomographyController():
                 self.screens = [phase_screen.kolmogorov(sz, self.T.D, self.T.r0, self.T.aperture_size, seed) / self.screen_gain for sz, seed in zip(layer_size, seeds)]
             else:
                 self.screens = [phase_screen.get(sz, self.T.D, self.T.r0, self.T.aperture_size) / self.screen_gain for sz in layer_size]
-        print(np.shape(self.screens[0]))
 
-    def set_noise(self, sigma):
-        rng = np.random.default_rng()
-        self.noisy_screens = []
-        for s in self.screens:
-            noisy = rng.normal(0.0, sigma, s.shape)
-            self.noisy_screens.append(noisy + s)
+    def set_noise(self, snr):
+        self.snr = snr
         self.noise = True
 
     def step(self, dt):
@@ -105,14 +101,14 @@ class TomographyController():
         """
         self.start_time = time.perf_counter()
 
-        if self.noise:
-            set_up = zip(self.T.altitudes, self.noisy_screens, self.T.metapupil_diameters)
-        else:
-            set_up = zip(self.T.altitudes, self.screens, self.T.metapupil_diameters)
-        set_up = list(set_up)
+        set_up = list(zip(self.T.altitudes, self.screens, self.T.metapupil_diameters))
 
         self.beacon_cut_outs = [b.cut_out(self.T.D, a, s, m) for a, s, m in set_up for b in self.asterism]
         self.beacon_coeffs_raw = np.array([self.T.basis.decompose(b) for b in self.beacon_cut_outs])
+
+        if self.noise:
+            sigma = util.get_sigma_from_SNR(self.beacon_coeffs_raw, self.snr)
+            self.beacon_coeffs_raw = self.beacon_coeffs_raw + np.random.normal(0.0, sigma, self.beacon_coeffs_raw.shape)
 
         b_shifted = np.reshape(self.beacon_coeffs_raw, (len(set_up), len(self.asterism), -1))
         self.beacon_coeffs_sum = np.sum(b_shifted, 0)
@@ -128,10 +124,7 @@ class TomographyController():
         # set_up = zip(self.T.altitudes, self.screens, self.T.metapupil_diameters)
 
         self.actual_screen = np.sum([self.target.cut_out(self.T.D, a, s, md) for a, s, md in set_up], 0)
-        if self.noise:
-            self.noiseless_screen = np.sum([self.target.cut_out(self.T.D, a, s, md) for s, (a, _, md) in zip(self.screens, set_up)], 0)
-        else:
-            self.noiseless_screen = self.actual_screen
+        self.noiseless_screen = self.actual_screen
         self.actual_coeffs = self.T.basis.decompose(self.actual_screen)
         self.actual_screen_from_coeffs = self.T.basis.compose(np.shape(self.actual_screen), self.actual_coeffs)
 

@@ -13,13 +13,13 @@ import constellations
 
 from skimage.metrics import structural_similarity, mean_squared_error
 
-rc('font',**{'family':'serif'})
+rc('font',**{'family':'serif'}) #, 'size': 11})
 rc('text', usetex=True)
 
 beacon_angle = 15           # arcseconds
-aperture_size = 256         # pixels
+aperture_size = 256        # pixels
 telescope_diameter = 0.6    # m
-r_0 = 0.05                  # m
+r_0 = 0.10                  # m
 
 # generate asterism
 beacons = [beacon.Beacon(t, beacon_angle, gamma_arcseconds=True) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
@@ -66,9 +66,10 @@ for B in bfuncs:
     print("{}".format(B.name))
     tomo = tomography.Tomography(layers, B, telescope_diameter, r_0, n_coeffs, aperture_size)
     T = controller.TomographyController(tomo, n_coeffs)
-    T.set_phase_screens(all_beacons, seeds=[4003, 4028])
+    T.set_phase_screens(all_beacons, seeds=[4010, 4035])
     T.set_asterism(beacons)
     T.set_target(target)
+    # T.set_noise(1)
 
     calculated_coeffs = T.run()
 
@@ -78,9 +79,9 @@ for B in bfuncs:
     masked_ideal = mask * (T.actual_screen_from_coeffs - np.mean(T.actual_screen_from_coeffs))
 
     # Calculate RMSE error for reconstruction, ideal and baseline to the ground truth
-    rmse_ra = np.sqrt(mean_squared_error(masked_actual, masked_recon))
-    rmse_ia = np.sqrt(mean_squared_error(masked_actual, masked_ideal))
-    rmse_ba = np.sqrt(mean_squared_error(masked_actual, zeros))
+    rmse_ra = util.rmse(masked_actual, masked_recon, mask=mask)
+    rmse_ia = util.rmse(masked_actual, masked_ideal, mask=mask)
+    rmse_ba = util.rmse(masked_actual, zeros, mask=mask)
     
     # Find difference (residuals) between reconstruction and ideal from ground truth
     residuals_ra = masked_recon - masked_actual
@@ -106,9 +107,9 @@ for B in bfuncs:
     mssim_ib = structural_similarity(masked_ideal, masked_actual)
     mssim_ab = structural_similarity(masked_actual, zeros)
 
-    print("RMSE_RA:   {}".format(mean_squared_error(masked_recon, masked_actual)))
-    print("RMSE_IA:   {}".format(mean_squared_error(masked_ideal, masked_actual)))
-    print("RMSE_BA:   {}".format(mean_squared_error(np.zeros_like(masked_actual), masked_actual)))
+    print("RMSE_RA:   {}".format(rmse_ra))
+    print("RMSE_IA:   {}".format(rmse_ia))
+    print("RMSE_BA:   {}".format(rmse_ba))
 
     print("FWHM_RA:   {}".format(fwhm_ra)) # * resolution))
     print("FWHM_IA:   {}".format(fwhm_ia)) # * resolution))
@@ -129,18 +130,19 @@ for B in bfuncs:
     psfs.append(psf_ia)
     recon_psfs.append(psf_ra)
 
-fig, axs = plt.subplots(1, 1)
+dpi = 100
+fig, axs = plt.subplots(1, 1, dpi=dpi)
 grid = T.T._getGrid(4 * n_coeffs)
 axs.scatter(grid[:, 0], grid[:, 1])
 
-fig1, axs1 = plt.subplots(2, 3)
-fig1.set_size_inches(10, 7)
+fig1, axs1 = plt.subplots(2, 3, dpi=dpi)
+fig1.set_size_inches(10, 8)
 
-fig2, axs2 = plt.subplots(2, 3)
-fig2.set_size_inches(10, 7)
+fig2, axs2 = plt.subplots(2, 3, dpi=dpi)
+fig2.set_size_inches(10, 8)
 
-fig3, axs3 = plt.subplots(2, 5)
-fig3.set_size_inches(10, 6)
+fig3, axs3 = plt.subplots(2, 5, dpi=dpi)
+fig3.set_size_inches(10, 7)
 
 mx.sort(reverse=True)
 mn.sort(reverse=True)
@@ -187,7 +189,7 @@ for i in range(0, len(bfuncs)):
     axs2[x, y].set_title(bfuncs[i].name)
     ims2.append(axs2[x, y].imshow(np.log10(psfs[i] / airy_max), vmin=-5, extent=extent, cmap=cmap1))
 
-    axs3[0, i].set_title("{}\nIdeal".format(bfuncs[i].name))
+    axs3[0, i].set_title("{}\nBest Estimate".format(bfuncs[i].name))
     axs3[1, i].set_title("Reconstruction")
     ims3.append(axs3[0, i].imshow(np.log10(psfs[i] / airy_max), vmin=-5, extent=extent, cmap=cmap1))
     ims3.append(axs3[1, i].imshow(np.log10(recon_psfs[i] / airy_max), vmin=-5, extent=extent, cmap=cmap1))
@@ -230,7 +232,6 @@ cbar_ax3 = fig3.add_axes([0.25, 0.10, 0.5, 0.02])
 fig3.colorbar(ims3[0], cax=cbar_ax3, label=r"Intensity ($\mathrm{log}_{10}(\frac{\mathrm{PSF}(u, v)}{\mathrm{max}(\mathrm{PSF_{airy}}(u, v))})$)",
 orientation="horizontal")
 
-
 fig, axs = plt.subplots(1, 2)
 fig.set_size_inches(9, 5)
 axs[0].imshow(T.screens[0], cmap=cmap0)
@@ -263,7 +264,8 @@ for gs in beacons:
     axs[1].plot(x, y, 'w')
 
 offset_targets = [beacon.Beacon(135 * np.pi/180, t, gamma_arcseconds=True) for t in [30, 60, 90]]
-target_colours = ['#0C2340C0', '#0C2340A0', '#0C234080']
+
+target_colours = colours.palette()[3:]
 for tp, c in zip(offset_targets, target_colours):
     a0 = tp.position(1000)
     x, y = getCircle(aperture_size/2, 50, centre=(335+(256/0.6)*a0[0], 335+(256/0.6)*a0[1]))
@@ -316,5 +318,9 @@ if False:
                 out += ",{:.4f}".format(structural_similarity(masked_actual, zeros))
                 f.write(out + "\n")
                 print(out)
+
+# fig1.savefig("./img/phase_screens.pdf", format='pdf')
+# fig2.savefig("./img/psfs.pdf", format='pdf')
+# fig3.savefig("./img/psfs_recon.pdf", format='pdf')
 
 plt.show()
