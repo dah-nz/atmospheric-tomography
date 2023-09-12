@@ -1,4 +1,4 @@
-import tests.test_phase_screen
+# import tests.test_phase_screen
 
 # import tests.test_beacon
 
@@ -27,3 +27,5 @@ import tests.test_phase_screen
 # import tests.test_psf
 
 # import tests.test_snr
+
+import tests.test_phase_screen_class

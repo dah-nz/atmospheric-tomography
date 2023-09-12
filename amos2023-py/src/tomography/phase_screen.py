@@ -2,9 +2,7 @@ from functools import lru_cache
 
 import numpy as np
 import scipy.io as sio
-# from scipy.signal import convolve2d
-# from scipy.ndimage.filters import convolve
-# from scipy.signal import fftconvolve
+import h5py
 import cv2
 
 import random
@@ -17,79 +15,141 @@ import os
 
 _phase_data_cache = None
 
-def get(size, D, r0, aperture_size, seed=None):
-    if seed is None:
-        seed = random.random()
-    return kolmogorov(size, D, r0, aperture_size, type=np.float64, seed=seed)
+rng_min = 0
+rng_max = 65536
 
-class Kolmogorov():
-    """ 
-    A class for generating Kolmogorov turbulence phase screens
-    Does caching of precomputed phase screens to reduce time for future calculations
-
-    Methods 
-    -------
-    get(seed=None)
-        Retrieve a phase screen for a certain seed - None returns a random Kolmogorov phase screen
-    """
-    def __init__(self, size, D, r0, type=np.float64):
+class PhaseScreen():
+    def __init__(self, size, D, r0):
         """
+        Phase screen generator.
+                
         Parameters
         ----------
-        size : Tuple
-            Determines the size of resultant phase screens
-        D_r0:  float
-            D/r0 value, determines severity of turbulence in output phase screens#
+            size:   2D tuple containing size of phase screens (pixels)
+            D:      Telescope diamter (m)
+            r0:     Fried parameter (m)
         """
-        self._size = size
-        self._D = D
-        self._r0 = r0
-        self.type = type
+        self.f = h5py.File("phasescreens.hdf5", 'a', libver='latest')
+        self.rng = np.random.default_rng()
+        self.k = 1
 
-        grid_rows = size[0]
-        grid_cols = size[1]
+        self.D = D
+        self.r0 = r0
+        self.size = size
 
-        self.grid = hcipy.make_pupil_grid(self._size, D)
-        self.Cn2 = hcipy.Cn_squared_from_fried_parameter(r0)
+    def _at(self):
+        return "{}_{}_{}".format(self.D, self.r0, self.size)
 
-    def get(self, dDim, seed=None):
+    def generate(self, seeds):
         """
-        Get a Kolmogorov phase screen of size determined by initialised grid size
+        Generate a number of phase screens.
+                
+        Parameters
+        ----------
+            seeds:          int or list of ints
+                            int = number of screens to generate with random seeds
+                            list of ints = seeds for generating specific phase screens
+        """
+        if isinstance(seeds, int):
+            seeds = self.rng.integers(rng_min, rng_max, size=seeds)
+
+        for seed in seeds:
+            self._get_raw(seed)
+
+    def _get_raw(self, seed=None):
+        """
+        Retrieve a single phase screen.
+        Loads if it has been generated prior, else generates
+        Does no scaling, only raw phase screens are saved to file.
+        """
+        if seed is None:
+            seed = self.rng.randint(rng_min, rng_max)
+
+        self.f.require_group(self._at())
+
+        try:
+            print("Retrieving phase screen: {}, {}".format(self._at(), seed))
+            screen = self.f[self._at()][str(seed)]
+        except KeyError:
+            print("Generating phase screen: {}, {}".format(self._at(), seed))
+            screen = kolmogorov(self.size, self.D, self.r0, seed)
+            self.f[self._at()].create_dataset(str(seed), data=screen)
+            self.f.flush()
+
+        return screen
+
+    def get(self, seed=None):
+        """
+        Retrieve a single phase screen
+        Scales the phase screen by scaling factor to get correct variance.
+        """
+        return self._get_raw(seed) * self.k
+
+    def find_scaling(self, cut_out_size):
+        """
+        Estimates the scaling factor used for a set cut out size.
+        This scaling factor brings a set of phase screens to the correct sigma, as specified in Noll (1975)
 
         Parameters
         ----------
-        seed: int = None
-            Seed for phase screen randomisation - None results in a random screen that is not cached.
+            cut_out_size:   Shape (x, y) of cut out (pixels)
+        
+        Output
+        ----------
+            k:              Scaling factor that scales phase screen variance to have the correct sigma
+        """
+
+        self._exp_sigma = self._expected_sigma()
+        self._est_sigma = self._estimated_sigma(cut_out_size)
+
+        self.k = self._exp_sigma / self._est_sigma
+        return self.k
+
+    def _expected_sigma(self):
+        """
+        Calculates the expected standard deviaton/sigma of all phase screens when corrected for piston only, based on the table in Noll (1975)
+        This is the root mean square residual error of a zero mean phase screen
 
         Output
-        ------
-        phase screen with Kolomgorov turbulence characteristics
+        ----------
+            sigma (rads)
         """
-        # screen = None
-        # if seed is not None:
-        #     screen = self.__cache.check(seed)
+        return np.sqrt(1.0299*(self.D/self.r0)**(5/3))
 
-        # if screen is None:
-        #     screen = self.__kolmogorov(seed)
+    def _estimated_sigma(self, cut_out_size, N=20):
+        """
+        Estimates the standard deviaton/sigma of a set of phase screens
+        This takes into account the cut outs of phase screens due to the telescope aperture projection (finite outer scale)
+        This is the root mean square residual error of a zero mean phase screen
 
-        # if seed is not None:
-        #     self.__cache.add(seed, screen)
+        Output
+        ----------
+            sigma (rads)
+        """
+        size = min(cut_out_size)
+        mask = np.array(util.circle(size/2, size))
+        z = np.zeros_like(mask)
 
-        # wavelength = 600e-9
+        sigma = []
 
-        # return self.__get_hcipy_screen(self._size, wavelength, seed)
+        screens = self.f[self._at()].values()
 
-        return kolmogorov(self._size, self._D, self._r0, dDim, seed)
+        for screen in screens:
+            x_max = screen.shape[0] - size
+            y_max = screen.shape[1] - size
 
-    # @lru_cache(maxsize=None)
-    # def __get_hcipy_screen(self, size, wavelength, seed):
-    #     layer = hcipy.atmosphere.FiniteAtmosphericLayer(self.grid, self.Cn2, seed=seed)
-    #     phase = layer.phase_for(wavelength)
-    #     phase = np.array(phase.shaped)
-    #     return phase - np.mean(phase)
+            for _ in range(N):
+                x0 = self.rng.integers(0, x_max)
+                y0 = self.rng.integers(0, y_max)
+                sigma.append(util.rmse(screen[x0:x0+size, y0:y0+size], z, mask=mask))
 
-# @lru_cache(maxsize=64)
-def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
+        return np.mean(sigma)
+    
+    def __del__(self):
+        self.f.close()
+
+
+def kolmogorov(size, D, r0, seed, type=np.float64):
     """
     Simulation of a phase screen with Kolmogorov Statistics.
     Starts from an exact 15 x 15 phase screen.
@@ -100,7 +160,6 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
     size        Pixel size for resultant phase screen
     D           Telescope diameter (m)
     r0          Fried Parameter (m)
-    Ddim        Pixel size of aperture footprint on phase screen
     seed        Seed for screen generation
     
     Outputs
@@ -110,14 +169,13 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
 
     calculated_size = 15
     n_increases = 0
-    grid_shape = size
-    while calculated_size < max(grid_shape):
+    while calculated_size < max(size):
         calculated_size = 2 * calculated_size - 11
         n_increases += 1
     
     full_screen = generate_phase_screen(n_increases, seed)
     
-    chopped_screen = full_screen[:grid_shape[0], :grid_shape[1]]
+    chopped_screen = full_screen[:size[0], :size[1]]
 
     # Rescale screen for appropriate D_r0 after cropping
     size_chopped = max(np.shape(chopped_screen))
@@ -125,51 +183,13 @@ def kolmogorov(size, D, r0, Ddim, seed, type=np.float64):
     scale = ((size_full - 1) / (size_chopped - 1)) ** (5/6)
     scaled_screen = chopped_screen * scale
 
-    # Scale screen to specified D_r0
-    # return sio.loadmat("phase.mat", struct_as_record=False)['phase']
-    
-    # Account for different D/r0 for taking cut-outs from larger phase screens
-
-
     screen = scaled_screen * ((D/r0) ** (5/6))
-
     screen = np.array(screen, dtype=type)
     # REMOVE DC OFFSET
     screen -= np.average(screen)
-
-    sigma = np.sqrt(1.0299*(D/r0)**(5/3))
-    # Specific coefficents to have correct RMSE for phase screens at 1000m (670px) and 8000m (3566px) for a cut-out of 256px
-    # for target positions out to 100"
-    k = 1
-    if Ddim != max(size):
-        if r0 == 0.05:
-            if max(size) == 3566:
-                k = (sigma / 0.8825) / np.sqrt(2)
-            elif max(size) == 670:
-                k = (sigma / 3.1908) / np.sqrt(2)
-        elif r0 == 0.07:
-            if max(size) == 3566:
-                k = (sigma / 0.6667) / np.sqrt(2)
-            elif max(size) == 670:
-                k = (sigma / 2.4106) / np.sqrt(2)
-        elif r0 == 0.1:
-            if max(size) == 2679:
-                k = (sigma / 1.7911) / np.sqrt(2)
-            elif max(size) == 14263:
-                k = (sigma / 0.4955) / np.sqrt(2)
-            elif max(size) == 3566:
-                k = (sigma / 0.4953) / np.sqrt(2)
-            elif max(size) == 670:
-                k = (sigma / 1.7908) / np.sqrt(2)
-        elif r0 == 0.2:
-            if max(size) == 3566:
-                k = (sigma / 0.2780) / np.sqrt(2)
-            elif max(size) == 670:
-                k = (sigma / 1.0050) / np.sqrt(2)
     
-    return screen * k
+    return screen
 
-# @lru_cache(maxsize=128)
 def generate_phase_screen(n_increases, seed=None):
     """
     Generates a phase screen with Kolmogorov statistics.

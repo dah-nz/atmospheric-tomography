@@ -10,7 +10,7 @@ from skimage.metrics import structural_similarity, mean_squared_error
 from basis import DCT, DST, zernike, wavelet
 from tomography import tomography, beacon, controller, psf, phase_screen
 from util import util
-import constellations
+from parameters import constellations
 
 
 
