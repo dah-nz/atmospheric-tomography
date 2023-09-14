@@ -12,8 +12,6 @@ from tomography import tomography, beacon, controller, psf, phase_screen
 from util import util
 from parameters import constellations
 
-
-
 # BASIC PARAMETERS
 aperture_size = 256             # number of pixels at telescope aperture
 D =             0.6             # telescope diameter (m)

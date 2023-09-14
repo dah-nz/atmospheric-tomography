@@ -137,3 +137,49 @@ def rmse(img_a, img_b, mask=None):
         return rms
     else:
         return np.sqrt(((img_a - img_b) ** 2).mean())
+
+    
+def get_coeffs_for_asterism(asterism, basis, layer_screens, layer_altitudes, D, metapupil_diameters):
+    coeffs = np.array([get_coeffs_for_cutout(b, basis, layer_screens, layer_altitudes, D, metapupil_diameters) for b in asterism])
+    return coeffs
+
+def get_coeffs_for_cutout(beacon, basis, layer_screens, layer_altitudes, D, metapupil_diameters):
+    cut_outs = [beacon.cut_out(D, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, metapupil_diameters)]
+    coeffs = np.array([basis.decompose(c) for c in cut_outs], dtype=np.float32)
+    return np.sum(coeffs, 0)
+
+def get_metapupil_diameters(altitudes, beacons, diameter):
+    """
+    Calculate diameters of metapupil at each predefined layer altitude 
+
+    Parameters
+    ----------
+    altitudes:
+        Layer altitudes (m)
+    beacons:
+        Gamma angles of beacons, angle from main optical axis (radians)
+    diameter:
+        Telescope diameter (m)
+
+    Return
+    ------
+    diameters:
+        metapupil diameters at each altitude
+    """
+
+    d = []
+    for a in altitudes:
+        r_outer = 0                 # outer radius of metapupil
+        for b in beacons:
+            rA = a * np.tan(b.gamma)      # distance of guide star centre from azimuth
+            if rA > r_outer:
+                r_outer = rA                        
+        r_outer += (diameter / 2)   # Calculate extent of footprint projected onto layer (diameter is of telescope aperture)
+        d.append(r_outer * 2)
+    return d
+
+def get_layer_shapes(altitudes, beacons, diameter, aperture_size):
+    metapupil_diameters = get_metapupil_diameters(altitudes, beacons, diameter)
+    layer_pixels = [int(d/diameter * aperture_size + 0.5) for d in metapupil_diameters]
+    layer_grids = [(px, px) for px in layer_pixels]
+    return metapupil_diameters, layer_grids

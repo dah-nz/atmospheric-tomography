@@ -80,7 +80,7 @@ class Beacon():
         x, y = self.position(altitude)
 
         # Convert location to pixel position
-        screen_dim = max(np.shape(screen))
+        screen_dim = max(screen.shape)
         cut_out_dim = int(screen_dim * (diameter / screen_size) + 0.5)
         pix_x = int((x * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
         pix_y = int((y * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
@@ -109,3 +109,29 @@ class Beacon():
         """
         self.theta = self._theta0
         self.gamma = self._gamma0
+    
+def get_asterism(N, shape, scale, rng=None):
+    if not rng:
+        rng = np.random.default_rng()
+    
+    base_theta = rng.uniform(0, 2*np.pi)
+
+    theta = rng.normal(base_theta, (2*np.pi)/(N*N), size=(N,))
+    for i in range(N):
+        theta[i] += i * (2*np.pi / N)
+
+    gamma = rng.gamma(shape, scale, size=(N,))
+    while any(gamma > 60):
+        gamma = rng.gamma(shape, scale, size=(N,))
+    
+    return [Beacon(t, g, gamma_arcseconds=True) for t, g in zip(theta, gamma)]
+
+def get_target(shape, scale, rng=None):
+    if not rng:
+        rng = np.random.default_rng()
+
+    gamma = rng.gamma(shape, scale)
+    while gamma > 60:
+        gamma = rng.gamma(shape, scale)
+
+    return Beacon(rng.uniform(0, 2*np.pi), gamma, gamma_arcseconds=True)

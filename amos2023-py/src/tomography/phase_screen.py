@@ -18,7 +18,7 @@ _phase_data_cache = None
 rng_min = 0
 rng_max = 65536
 
-class PhaseScreen():
+class PhaseScreenGenerator():
     def __init__(self, size, D, r0):
         """
         Phase screen generator.
@@ -40,7 +40,7 @@ class PhaseScreen():
     def _at(self):
         return "{}_{}_{}".format(self.D, self.r0, self.size)
 
-    def generate(self, seeds):
+    def generate(self, seeds, cut_out=None):
         """
         Generate a number of phase screens.
                 
@@ -49,12 +49,17 @@ class PhaseScreen():
             seeds:          int or list of ints
                             int = number of screens to generate with random seeds
                             list of ints = seeds for generating specific phase screens
+            cut_out:        size of cut out to be used
+                            calculates the scaling factor if not none
         """
         if isinstance(seeds, int):
             seeds = self.rng.integers(rng_min, rng_max, size=seeds)
 
         for seed in seeds:
             self._get_raw(seed)
+
+        if cut_out is not None:
+            self.find_scaling(cut_out)
 
     def _get_raw(self, seed=None):
         """
@@ -68,12 +73,12 @@ class PhaseScreen():
         self.f.require_group(self._at())
 
         try:
-            print("Retrieving phase screen: {}, {}".format(self._at(), seed))
+            # print("Retrieving phase screen: {}, {}".format(self._at(), seed))
             screen = self.f[self._at()][str(seed)]
         except KeyError:
             print("Generating phase screen: {}, {}".format(self._at(), seed))
             screen = kolmogorov(self.size, self.D, self.r0, seed)
-            self.f[self._at()].create_dataset(str(seed), data=screen)
+            self.f[self._at()].create_dataset(str(seed), data=np.float16(screen))
             self.f.flush()
 
         return screen
@@ -83,7 +88,7 @@ class PhaseScreen():
         Retrieve a single phase screen
         Scales the phase screen by scaling factor to get correct variance.
         """
-        return self._get_raw(seed) * self.k
+        return np.float32(self._get_raw(seed)) * self.k
 
     def find_scaling(self, cut_out_size):
         """
@@ -132,24 +137,32 @@ class PhaseScreen():
 
         sigma = []
 
-        screens = self.f[self._at()].values()
+        screens = self.f[self._at()].keys()
 
-        for screen in screens:
+        for key in screens:
+            screen = np.float32(self.f[self._at()][key])
             x_max = screen.shape[0] - size
             y_max = screen.shape[1] - size
 
             for _ in range(N):
-                x0 = self.rng.integers(0, x_max)
-                y0 = self.rng.integers(0, y_max)
+                if x_max > 0:
+                    x0 = self.rng.integers(0, x_max)
+                else:
+                    x0 = 0
+                
+                if y_max > 0:
+                    y0 = self.rng.integers(0, y_max)
+                else:
+                    y0 = 0
                 sigma.append(util.rmse(screen[x0:x0+size, y0:y0+size], z, mask=mask))
 
         return np.mean(sigma)
     
-    def __del__(self):
-        self.f.close()
+    # def __del__(self):
+    #     self.f.close()
 
 
-def kolmogorov(size, D, r0, seed, type=np.float64):
+def kolmogorov(size, D, r0, seed):
     """
     Simulation of a phase screen with Kolmogorov Statistics.
     Starts from an exact 15 x 15 phase screen.
@@ -184,7 +197,7 @@ def kolmogorov(size, D, r0, seed, type=np.float64):
     scaled_screen = chopped_screen * scale
 
     screen = scaled_screen * ((D/r0) ** (5/6))
-    screen = np.array(screen, dtype=type)
+    screen = np.array(screen, dtype=np.float32)
     # REMOVE DC OFFSET
     screen -= np.average(screen)
     
@@ -221,26 +234,26 @@ def generate_phase_screen(n_increases, seed=None):
         data = sio.loadmat(phase_file)
         _phase_data_cache = data
 
-    d = np.array(data['d'])
-    u = np.array(data['u'])
+    d = np.array(data['d'], dtype=np.float32)
+    u = np.array(data['u'], dtype=np.float32)
 
     residual = 0.08441735664383 * (3 ** (5/3))
 
-    inter1 = [[-0.00166566566045, 0, -0.03407545836221, 0, -0.03407545836221, 0, -0.00166566566045],
+    inter1 = np.array([[-0.00166566566045, 0, -0.03407545836221, 0, -0.03407545836221, 0, -0.00166566566045],
             [ 0,                0,  0,                0,  0,                0,  0               ],
             [-0.03407545836221, 0,  0.31981657662220, 0,  0.31981657662220, 0, -0.03407545836221],
             [ 0,                0,  0,                1,  0,                0,  0               ],
             [-0.03407545836221, 0,  0.31981657662220, 0,  0.31981657662220, 0, -0.03407545836221],
             [ 0,                0,  0,                0,  0,                0,  0               ],
-            [-0.00166566566045, 0, -0.03407545836221, 0, -0.03407545836221, 0, -0.00166566566045]]
+            [-0.00166566566045, 0, -0.03407545836221, 0, -0.03407545836221, 0, -0.00166566566045]], dtype=np.float32)
 
-    inter2 = [[ 0,                0,                0,               -0.00166566566045, 0,                0,                0               ],
+    inter2 = np.array([[ 0,                0,                0,               -0.00166566566045, 0,                0,                0               ],
             [ 0,                0,               -0.03407545836221, 0,               -0.03407545836221, 0,                0               ],
             [ 0,               -0.03407545836221, 0,                0.31981657662220, 0,               -0.03407545836221, 0               ],
             [-0.00166566566045, 0,                0.31981657662220, 1,                0.31981657662220, 0,               -0.00166566566045],
             [ 0,               -0.03407545836221, 0,                0.31981657662220, 0,               -0.03407545836221, 0               ],
             [ 0,                0,               -0.03407545836221, 0,               -0.03407545836221, 0,                0               ],
-            [ 0,                0,                0,               -0.00166566566045, 0,                0,                0               ]]
+            [ 0,                0,                0,               -0.00166566566045, 0,                0,                0               ]], dtype=np.float32)
 
     eigd = np.sqrt(np.diag(d))
     N = len(eigd)
@@ -257,24 +270,24 @@ def generate_phase_screen(n_increases, seed=None):
         [r0, c0] = np.shape(phase)
         r1 = 2*r0
         c1 = 2*c0
-        filled = np.zeros((r1, c1), dtype=np.cfloat)
+        filled = np.zeros((r1, c1), dtype=np.float32)
         filled[:r1:2, :c1:2] = phase
         # convolved = cconv2d(filled, inter1, 1/r0)
         # convolved = convolve(filled, inter1, mode='constant')
         # convolved = convolve2d(filled, inter1, mode='same')
         # convolved = fftconvolve(filled, inter1, mode='same')
-        convolved = np.float64(cv2.filter2D(np.float32(filled), ddepth=-1, kernel=np.float32(inter1)))
+        convolved = cv2.filter2D(filled, ddepth=-1, kernel=inter1)
         convolved = convolved[:r1, :c1]
 
         # Add random residuals
-        mask = np.zeros((r1, c1))
+        mask = np.zeros((r1, c1), dtype=np.float32)
         mask[1:r1:2, 1:c1:2] = np.ones((r0, c0))
 
         inter1_result = convolved + mask * np.sqrt(residual*(r_hat ** (5/3))) * rng.normal(size=(r1, c1))
 
         # Do second interpolation
-        mask1a = np.zeros((r1, c1))
-        mask1b = np.zeros((r1, c1))
+        mask1a = np.zeros((r1, c1), dtype=np.float32)
+        mask1b = np.zeros((r1, c1), dtype=np.float32)
 
         mask1a[:r1:2, 1:c1:2] = np.ones((r0, c0))
         mask1b[1:r1:2, :c1:2] = np.ones((r0, c0))
@@ -285,7 +298,7 @@ def generate_phase_screen(n_increases, seed=None):
         # convolved2 = convolve(inter1_result, inter2, mode='constant')
         # convolved2 = convolve2d(inter1_result, inter2, mode='same')
         # convolved2 = fftconvolve(inter1_result, inter2, mode='same')
-        convolved2 = np.float64(cv2.filter2D(np.float32(inter1_result), ddepth=-1, kernel=np.float32(inter2)))
+        convolved2 = cv2.filter2D(inter1_result, ddepth=-1, kernel=inter2)
         convolved2 = convolved2[:r1, :c1]
 
         r_hat /= np.sqrt(2)
@@ -302,5 +315,5 @@ def generate_phase_screen(n_increases, seed=None):
     if size_phase > 1:
         scale = (total_points / (size_phase - 1)) ** (5/6)
         phase *= scale
-    
+
     return phase

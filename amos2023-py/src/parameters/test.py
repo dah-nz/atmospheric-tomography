@@ -4,6 +4,8 @@ import numpy as np
 from parameters import constellations
 from util import util
 
+from basis import DCT, zernike, DST, wavelet
+
 def configure(file):
     """
         Configure a json settings file for tomography tests
@@ -23,20 +25,21 @@ def configure(file):
 
     settings["wavelength"]          = 589   # nm
 
-    settings["D"]                   = 0.6   # m (telescope diameter)
+    settings["D"]                   = 0.6   # telescope diameter (m)
     settings["f_number"]            = 6.5   # telescope focal number
 
-    settings["number_coefficients"] = [16, 64]                                  # number of basis function coefficients
-    settings["noise"]               = [0.1, 0.3, 0.6, 1, 3, 6, 10, 13, 20, 0]   # signal-to-noise ratio (dB)
+    settings["number_coefficients"] = [16]                                  # number of basis function coefficients
+    # settings["noise"]               = [0.1, 0.3, 0.6, 1, 3, 6, 10, 13, 20, 0]   # signal-to-noise ratio (dB)
+    settings["noise"]               = [0]
 
-    settings["ps_base"]             = 4000  # Base seed value for phase screens
-    settings["ps_number"]           = 25    # Number of phase screens at each layer
+    # settings["ps_base"]             = 4000  # Base seed value for phase screens
+    settings["phase_screen_number"] = 50    # Number of phase screens to generate
 
-    settings["tomography"]          = ["LSQ"]
-    settings["basis"]               = ["Zernike", "DCT", "DST", "Wavelets (Haar)", "Wavelets (db2)"]
+    # settings["tomography"]          = ["LSQ"]
+    settings["basis"]               = ["Zernike", "DCT"] #, "DST", "Wavelets (Haar)", "Wavelets (db2)"]
 
-    settings["guidestars"]          = [(1, 0), (3, 15), (3, 30), (6, 60), (5, "Asym")]
-    settings["targets"]             = [(5, 30, 6, 8), (40, 100, 7, 5)]
+    # settings["guidestars"]          = [(1, 0), (3, 15), (3, 30), (6, 60), (5, "Asym")]
+    # settings["targets"]             = [(5, 30, 6, 8), (40, 100, 7, 5)]
 
     with open(file, "w") as f:
         json.dump(settings, f, indent=4)
@@ -60,6 +63,20 @@ def load(file):
     with open(file, "r") as f:
         settings = json.load(f)
 
+    b = settings["basis"].lower()
+    n = settings["n_coeffs"]
+        
+    if b == "dct":
+        basis = DCT.DCT(n)
+    elif b == "dst":
+        basis = DCT.DCT(n)
+    elif b == "zernike":
+        basis = zernike.Zernike(n)
+    elif "haar" in b:
+        basis = wavelet.wavelet(n, wavelets="haar")
+    elif "db2" in b:
+        basis = wavelet.wavelet(n, wavelets="db2")
 
+    settings["basis"] = basis
     
     return settings
