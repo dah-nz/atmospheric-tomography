@@ -140,13 +140,20 @@ def rmse(img_a, img_b, mask=None):
 
     
 def get_coeffs_for_asterism(asterism, basis, layer_screens, layer_altitudes, D, metapupil_diameters):
-    coeffs = np.array([get_coeffs_for_cutout(b, basis, layer_screens, layer_altitudes, D, metapupil_diameters) for b in asterism])
+    try:
+        coeffs = np.array([get_coeffs_for_cutout(b, basis, layer_screens, layer_altitudes, D, metapupil_diameters) for b in asterism])
+    except AttributeError:
+        coeffs = [np.array([get_coeffs_for_cutout(b, basis, layer_screens, layer_altitudes, D, metapupil_diameters) for b in a]) for a in asterism]
     return coeffs
 
 def get_coeffs_for_cutout(beacon, basis, layer_screens, layer_altitudes, D, metapupil_diameters):
     cut_outs = [beacon.cut_out(D, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, metapupil_diameters)]
     coeffs = np.array([basis.decompose(c) for c in cut_outs], dtype=np.float32)
     return np.sum(coeffs, 0)
+
+def get_cutout(beacon, basis, layer_screens, layer_altitudes, D, metapupil_diameters):
+    cut_outs = [beacon.cut_out(D, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, metapupil_diameters)]
+    return np.sum(cut_outs, 0)
 
 def get_metapupil_diameters(altitudes, beacons, diameter):
     """

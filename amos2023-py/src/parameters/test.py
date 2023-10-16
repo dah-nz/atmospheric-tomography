@@ -6,7 +6,9 @@ from util import util
 
 from basis import DCT, zernike, DST, wavelet
 
-def configure(file):
+directory = "./src/parameters/"
+
+def configure(file="settings.json"):
     """
         Configure a json settings file for tomography tests
 
@@ -41,10 +43,10 @@ def configure(file):
     # settings["guidestars"]          = [(1, 0), (3, 15), (3, 30), (6, 60), (5, "Asym")]
     # settings["targets"]             = [(5, 30, 6, 8), (40, 100, 7, 5)]
 
-    with open(file, "w") as f:
+    with open(directory + file, "w") as f:
         json.dump(settings, f, indent=4)
     
-def load(file):
+def load(file="settings.json"):
     """
         Load test configuration from a file
 
@@ -60,7 +62,7 @@ def load(file):
         settings:
             Dictionary of all parameters required for a simulation
         """
-    with open(file, "r") as f:
+    with open(directory + file, "r") as f:
         settings = json.load(f)
 
     b = settings["basis"].lower()

@@ -68,7 +68,7 @@ class PhaseScreenGenerator():
         Does no scaling, only raw phase screens are saved to file.
         """
         if seed is None:
-            seed = self.rng.randint(rng_min, rng_max)
+            seed = self.rng.integers(rng_min, rng_max)
 
         self.f.require_group(self._at())
 

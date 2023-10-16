@@ -14,7 +14,7 @@ class Tomography():
     run:
         runs tomographic algorithm using beacon coefficients, and positions of guide beacons and target
     """
-    def __init__(self, layers, basis, diameter, r0, n_modes, aperture_size=256):
+    def __init__(self, layers, basis, diameter, n_modes, aperture_size=256):
         """
         Parameters
         ----------
@@ -36,7 +36,6 @@ class Tomography():
         self.n_modes = n_modes
         self.D = diameter
         self.aperture_size = aperture_size
-        self.r0 = r0
 
     def step(self, dt):
         """

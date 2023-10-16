@@ -22,9 +22,11 @@
     "epochs": 1,
     "training_size": 2048,
     "testing_size": 128,
+    "star_magnitude": 12,
+    "limiting_angle": 0.1,
 
     "n_coeffs": 16,
     "basis": "DCT",
 
-    "model_file": "model_starmap_dct.pth"
+    "model_file": "./src/parameters/model_starmap_dct.pth"
 }
