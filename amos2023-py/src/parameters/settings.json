@@ -17,16 +17,14 @@
     "noise": [
         0
     ],
-    "n_phase_screens": 50,
+    "n_phase_screens": 10,
     "asterism_size": 3,
-    "asterism_shape": 7.5,
-    "asterism_scale": 2,
-    "target_shape": 5,
-    "target_scale": 1,
     "epochs": 1,
-    "training_size": 65536,
-    "testing_size": 2048,
+    "training_size": 2048,
+    "testing_size": 128,
 
     "n_coeffs": 16,
-    "basis": "DCT"
+    "basis": "DCT",
+
+    "model_file": "model_starmap_dct.pth"
 }

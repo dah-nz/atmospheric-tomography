@@ -1,8 +1,48 @@
 import numpy as np
+import scipy as sci
+import csv
+from astropy.coordinates import SkyCoord, ICRS, GCRS
+from astropy import units as u
 
-def point_on_sphere(n=1):
+class StarMap():
+    default_data_dir = "data/starmaps"
+    default_data_files = ["nM0_M7.csv", "nM7_M9.csv", "nM9_M11.csv", "nM11_M12.csv"]
+    def __init__(self, mag=None, data_dir=None, data_files=None):
+        self.rng = np.random.default_rng()
+        self.load(data_dir=data_dir, data_files=data_files)
+        self.build_map(mag)
+    def load(self, data_dir=None, data_files=None):
+        self.data = []
+        if data_dir is None:
+            data_dir = self.default_data_dir
+        if data_files is None:
+            data_files = self.default_data_files
+
+        for data_file in data_files:
+            with open(data_dir + "/" + data_file, 'r') as f:
+                for line in csv.reader(f):
+                    self.data.append([np.float64(x) for x in line])
+    def build_map(self, mag=None):
+        ra = []
+        dec = []
+        for s in self.data:
+            if not mag or s[4] < mag:
+                ra.append(s[0] + self.rng.normal(scale=s[1]/(1000 * 60 * 60)))
+                dec.append(s[2] + self.rng.normal(scale=s[3]/(1000 * 60 * 60)))
+        stars = SkyCoord(ra, dec, unit=u.deg, frame=ICRS)
+        stars = stars.transform_to(GCRS)
+        ra = np.reshape(stars.ra.deg, (-1, 1))
+        dec = np.reshape(stars.dec.deg, (-1, 1))
+        self.stars = np.concatenate((ra, dec), axis=1)
+        self.tree = sci.spatial.KDTree(self.stars)
+    def closest(self, p, n):
+        distances, indices = self.tree.query(p, n)
+        return self.stars[indices], distances
+    
+
+def random_direction(n=1, dim=3):
     rng = np.random.default_rng()
-    vec = rng.normal(size=(3, n))
+    vec = rng.normal(size=(dim, n))
     vec = vec / np.linalg.norm(vec, axis=0)
     return vec
 
@@ -22,7 +62,7 @@ def to_ra_dec(vec, non_negative_ra=False):
 def main():
     import matplotlib.pyplot as plt
 
-    uniform_points = point_on_sphere(10000)
+    uniform_points = random_direction(1000)
 
     x = uniform_points[0, :]
     y = uniform_points[1, :]
@@ -39,6 +79,11 @@ def main():
     fig = plt.figure()
     ax = fig.add_subplot()
     ax.scatter(ra, dec, marker='.')
+
+    p = random_direction(100, 2)
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    ax.scatter(p[0, :], p[1, :], marker='.')
 
     plt.show()
 

@@ -7,20 +7,15 @@ from astropy import units as u
 
 from astro import astro
 
-
-points = astro.point_on_sphere(100)
-
-data_file = "data/starmaps/M0_M7.csv"
-
 rng = np.random.default_rng()
 
 stars = []
 
-for data_file in ["M0_M7.csv", "M7_M9.csv", "M9_M11.csv", "M11_M12.csv"]:
+for data_file in ["nM0_M7.csv", "nM7_M9.csv", "nM9_M11.csv", "nM11_M12.csv"]:
     # stars = []
     with open("data/starmaps/" + data_file, 'r') as f:
         for line in csv.reader(f):
-            stars.append(line[1:6])
+            stars.append(line)
     
     # with open("data/starmaps/n" + data_file, 'w', newline='') as f:
         # w = csv.writer(f, delimiter=',')
@@ -39,20 +34,19 @@ def build_map(data):
     p = p.transform_to(GCRS)
     return p
 
-stars = build_map(stars)
-ra = np.reshape(stars.ra.deg, (-1, 1))
-dec = np.reshape(stars.dec.deg, (-1, 1))
-stars = np.concatenate((ra, dec), axis=1)
-    
-tree = sci.spatial.KDTree(stars)
-p = astro.point_on_sphere(10000)
+p = astro.random_direction(10000)
 p = astro.to_ra_dec(p, non_negative_ra=True).T
+k = 3
 
-k = 10
-d, i = tree.query(p, k)
+for mag in [10, 11, 12]:
+    starmap = astro.StarMap(mag=mag)
+    d, i = starmap.tree.query(p, k)
 
-plt.figure()
-for i in range(k):
-    plt.hist(d[:, i], bins=200, density=True, cumulative=True, histtype="step", label="{}th closest".format(i+1))
-plt.legend()
+    plt.figure()
+    plt.title("Star distance CDF for magnitude <= {}".format(mag))
+    for i in range(k):
+        plt.hist(d[:, i] * 60 * 60, bins=200, density=True, cumulative=True, histtype="step", label="Star {}".format(i+1))
+    plt.legend()
+    plt.ylabel("Density")
+    plt.xlabel("Angular Distance (arcsec)")
 plt.show()
