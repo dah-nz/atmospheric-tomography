@@ -131,7 +131,8 @@ def get_tomography(screens, asterism, target, basis, altitudes, D, metapupil_dia
     
     return data, output
 
-class LinNN():
+class MLNN():
+    # Class for running a Multi-layer neural network
     def __init__(self, model_file):
         self.device = ml.initialise()
         model = TomographicNetwork().to(self.device)

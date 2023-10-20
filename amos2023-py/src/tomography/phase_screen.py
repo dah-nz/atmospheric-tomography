@@ -12,6 +12,7 @@ import hcipy
 from util import util
 
 import os
+import warnings
 
 _phase_data_cache = None
 
@@ -185,6 +186,8 @@ def kolmogorov(size, D, r0, seed):
     while calculated_size < max(size):
         calculated_size = 2 * calculated_size - 11
         n_increases += 1
+
+    # print(f"n_increases: {n_increases}")
     
     full_screen = generate_phase_screen(n_increases, seed)
     
@@ -317,3 +320,118 @@ def generate_phase_screen(n_increases, seed=None):
         phase *= scale
 
     return phase
+
+class vonKarmen():
+    """
+        Simulation of a phase screen with Von Karmen statistics, adding subharmonics to augment tip-tilt modes
+        
+        Based on functions written in aotools: ft_sh_phase_screen and ft_phase_screen
+        (Schmidt 2010)
+        
+        Parameters
+        ----------
+        N           Number of pixels in resultant phase screen (N x N)
+        D           Screen size (m)
+        r0          Fried Parameter (m)
+        L0          Outer scale (m)
+        l0          Inner scale (m)
+
+        init precomputes meshgrids and other values that are constant between different generations
+        """
+    def __init__(self, N, D, r0, L0=np.Infinity, l0=0):
+        self.update(N, D, r0, L0, l0)
+    def update(self, N, D, r0, L0=np.Infinity, l0=0):
+        self.D = D
+        self.N = N
+        self.r0 = r0
+        self.L0 = L0
+        self.l0 = l0
+
+        self.rng = np.random.default_rng()
+
+        oversize = 0
+        self.oversize = oversize
+        
+        delta = D / N
+        # pre-compute distance fields
+        del_f = 1./(N * delta)
+        arange = np.arange(-int(N/2. * (1+oversize)), int(N/2 * (1+oversize)))
+
+        coords = arange * delta
+        x, y = np.meshgrid(coords, coords)
+        self.x, self.y = x, y
+
+        fx = arange * del_f
+        fx, fy = np.meshgrid(fx, fx)
+
+        f = np.sqrt(fx ** 2 + fy ** 2)
+
+        #precompute inner and outer scale frequencies
+        fm = 5.92 / l0 / (2 * np.pi) if l0 != 0 else 0
+        fm_term = np.exp(-1*((f / fm) ** 2)) if l0 != 0 else 1.
+        f0 = 1. / L0 if L0 != np.Infinity else 0
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore") # Aware of divide by zero here - the next line addresses it
+            psd_phi = (0.023 * r0 ** (-5./3.) * fm_term) / (((f ** 2) + (f0 ** 2)) ** (11./6.))
+        psd_phi[int(N/2 * (1+oversize)), int(N/2 * (1+oversize))] = 0
+        self.psd = np.sqrt(psd_phi) * del_f
+
+        self.sh = []
+
+        for p in range(1, 4):
+            del_f = 1 / ((3**p) * D)
+            fx = np.arange(-1, 2) * del_f
+
+            fx, fy = np.meshgrid(fx, fx)
+            f = np.sqrt(fx**2 + fy**2)
+
+            fm_term = np.exp(-1*((f / fm) ** 2)) if l0 != 0 else 1.
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore") # Aware of divide by zero here - the next line addresses it
+                psd_phi = (0.023 * r0 ** (-5./3.) * fm_term) / (((f ** 2) + (f0 ** 2)) ** (11./6.))
+            psd_phi[1, 1] = 0
+
+            self.sh.append((p, np.sqrt(psd_phi) * del_f, fx, fy))
+        
+
+
+    def ft(self, seed=None):
+        if seed is not None:
+            self.rng = np.random.default_rng(seed=seed)
+
+        N = int(self.N * (1 + self.oversize))
+
+        cn = np.array(self.rng.normal(size=(N, N)) + 1j * self.rng.normal(size=(N, N))) * self.psd
+
+        g = np.fft.ifftshift( np.fft.ifft2( np.fft.fftshift(cn) ) ) * (self.N ** 2)
+        return g.real[:self.N, :self.N]
+
+
+    def von_karmen(self, seed=None):
+        
+        phs_hi = self.ft(seed=seed)
+
+        # initialize low-freq screen
+        phs_lo = np.zeros(phs_hi.shape)
+
+        for p, sh_phi, fx, fy in self.sh:
+
+            # random draws of Fourier coefficients
+            cn = ( (self.rng.normal(size=(3,3))
+                + 1j*self.rng.normal(size=(3,3)) )
+                            * sh_phi )
+            SH = np.zeros(phs_lo.shape, dtype="complex")
+            # loop over frequencies on this grid
+            for i in range(0,3):
+                for j in range(0,3):
+                    SH += cn[i,j] * np.exp(1j*2*np.pi*(fx[i,j]*self.x+fy[i,j]*self.y))
+
+            phs_lo = phs_lo + SH
+            # accumulate subharmonics
+
+        phs_lo = phs_lo.real - phs_lo.real.mean()
+
+        phs = phs_hi + phs_lo[:self.N, :self.N]
+
+        return phs

@@ -6,7 +6,7 @@ from astropy import units as u
 
 class StarMap():
     default_data_dir = "data/starmaps"
-    default_data_files = ["nM0_M7.csv", "nM7_M9.csv", "nM9_M11.csv", "nM11_M12.csv"]
+    default_data_files = ["_M9.csv", "M9_M11.csv", "M11_M12.csv", "M12_M13.csv", "M13_M14.csv"]
     def __init__(self, mag=None, data_dir=None, data_files=None):
         self.rng = np.random.default_rng()
         self.load(data_dir=data_dir, data_files=data_files)
@@ -34,7 +34,9 @@ class StarMap():
         ra = np.reshape(stars.ra.deg, (-1, 1))
         dec = np.reshape(stars.dec.deg, (-1, 1))
         self.stars = np.concatenate((ra, dec), axis=1)
+        print("Building KD Tree of stars")
         self.tree = sci.spatial.KDTree(self.stars)
+        print("Star KD Tree complete")
     def closest(self, p, n):
         distances, indices = self.tree.query(p, n)
         return self.stars[indices], distances

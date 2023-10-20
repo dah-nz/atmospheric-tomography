@@ -30,4 +30,6 @@
 
 # import tests.test_phase_screen_class
 
-import tests.test_guide_star_positions
+# import tests.test_guide_star_positions
+
+import tests.test_ps_fft

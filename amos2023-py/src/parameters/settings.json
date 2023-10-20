@@ -17,10 +17,10 @@
     "noise": [
         0
     ],
-    "n_phase_screens": 10,
+    "n_phase_screens": 30,
     "asterism_size": 3,
     "epochs": 1,
-    "training_size": 2048,
+    "training_size": 4096,
     "testing_size": 128,
     "star_magnitude": 12,
     "limiting_angle": 0.1,

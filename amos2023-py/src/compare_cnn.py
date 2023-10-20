@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-from tomography.tomo_linearNN import TomographyData, LinNN
+from tomography.tomo_MLNN import TomographyData, MLNN
 from tomography.tomo_LSQ import LSQ
 
 from parameters import test
@@ -18,7 +18,7 @@ test_data = TomographyData(train=False, starmap=starmap, output_ps=True)
 
 mask = util.circle(t["aperture_size"]/2, t["aperture_size"])
 
-nn = LinNN(t["model_file"])
+nn = MLNN(t["model_file"])
 lsq = LSQ()
 
 print("RMSE            Time")

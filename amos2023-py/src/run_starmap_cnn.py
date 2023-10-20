@@ -11,11 +11,10 @@ from tomography import beacon, phase_screen
 from astro import astro
 
 save_dir = "./src/parameters/"
-settings_file = "settings.json"
 model_file = "model_starmap_dct.pth"
 train = True
 
-t = test.load(save_dir + settings_file)
+t = test.load()
 
 device = ml.initialise()
 
@@ -133,7 +132,7 @@ print(model)
 loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-05)
 
-starmap = astro.StarMap(mag=12)
+starmap = astro.StarMap(mag=14)
 
 train_data = TomographyData(t, starmap=starmap)
 test_data = TomographyData(t, test=True, starmap=starmap)
