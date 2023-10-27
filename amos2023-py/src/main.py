@@ -10,7 +10,12 @@ from skimage.metrics import structural_similarity, mean_squared_error
 from basis import DCT, DST, zernike, wavelet
 from tomography import tomography, beacon, controller, psf, phase_screen
 from util import util
-from parameters import constellations
+
+
+from parameters import test
+
+p = test.load()
+
 
 # BASIC PARAMETERS
 aperture_size = 256             # number of pixels at telescope aperture

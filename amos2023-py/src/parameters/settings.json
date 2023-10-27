@@ -1,29 +1,19 @@
 {
     "aperture_size": 256,
-    "layer_altitudes": [
-        0,
-        5000,
-        10000
+    "location": [
+        "43d59m12.0sS",
+        "170d27m54.0sE",
+        1029
     ],
-    "layer_conditions": [
-        5.06,
-        38.95,
-        20.15
-    ],
-    "total_r0": 4.69,
     "wavelength": 589,
     "D": 1.8,
     "f_number": 6.5,
-    "noise": [
-        0
-    ],
-    "n_phase_screens": 10,
+    "star_magnitude": 14,
     "asterism_size": 3,
+    
     "epochs": 1,
     "training_size": 2048,
     "testing_size": 128,
-    "star_magnitude": 12,
-    "limiting_angle": 0.1,
 
     "n_coeffs": 16,
     "basis": "DCT",
