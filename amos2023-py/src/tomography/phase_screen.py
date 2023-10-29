@@ -124,7 +124,7 @@ class PhaseScreenGenerator():
 
     def _estimated_sigma(self, cut_out_size, N=20):
         """
-        Estimates the standard deviaton/sigma of a set of phase screens
+        Estimates the standard deviation/sigma of a set of phase screens
         This takes into account the cut outs of phase screens due to the telescope aperture projection (finite outer scale)
         This is the root mean square residual error of a zero mean phase screen
 
