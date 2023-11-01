@@ -2,11 +2,13 @@ import numpy as np
 from hcipy import atmosphere
 import hcipy
 
-MAX_LAYERS = 21
+from util import util
+
+MAX_LAYERS = 20
 MIN_LAYERS = 2
 
-WIND_SPEED_MU = 0
-WIND_SPEED_SIGMA = 5
+WIND_SPEED_SHAPE = 1.25
+WIND_SPEED_SCALE = 5
 
 MIN_ALTITUDE = 0
 MAX_ALTITUDE = 15000
@@ -16,28 +18,38 @@ CN2_SHAPE = 4
 CN2_SCALE = 0.25
 
 class Atmosphere():
-    def __init__(self, wavelength=589e-9, zenith_angle=0, seed=None):
+    def __init__(self, telescope, wavelength=589e-9, seed=None):
         self.rng = np.random.default_rng(seed=seed)
         self.wavelength = wavelength
         self.height_profile = np.linspace(MIN_ALTITUDE, MAX_ALTITUDE, HEIGHT_PROFILE_SIZE)
-        self.reset(zenith_angle)
-
-    def reset(self, zenith_angle):
         self.cn2_profile = get_Cn_squared(self.height_profile) * self.rng.gamma(CN2_SHAPE, CN2_SCALE, size=HEIGHT_PROFILE_SIZE)
-        self.n = self.rng.integers(MIN_LAYERS, MAX_LAYERS)
+        self.reset(telescope)
+
+    def reset(self, telescope):
+        self.n = self.rng.integers(MIN_LAYERS, MAX_LAYERS, endpoint=True)
         self.layer_heights = np.sort(self.rng.integers(MIN_ALTITUDE, MAX_ALTITUDE, size=self.n))
+
+        zenith_angle = (np.pi / 2) - telescope.orientation.alt.rad
+
         self.layer_r0 = get_r0(self.cn2_profile, self.height_profile, self.wavelength, zenith_angle, self.layer_heights)
-        self.windspeeds = self.rng.normal(WIND_SPEED_MU, WIND_SPEED_SIGMA, size=self.n)
+        self.layer_wind_speeds = self.rng.gamma(WIND_SPEED_SHAPE, WIND_SPEED_SCALE, size=self.n)
+        self.layer_wind_directions = self.rng.uniform(0, 2*np.pi, size=self.n)
+        self.layer_velocity = util.pol2cart(self.layer_wind_speeds, self.layer_wind_directions)
 
         pupil_grid = hcipy.make_pupil_grid(256, 1)
         layers = []
-        for h, v, r0 in zip(self.layer_heights, self.windspeeds, self.layer_r0):
+        for h, w, r0 in zip(self.layer_heights, self.layer_velocity, self.layer_r0):
             cn2 = atmosphere.Cn_squared_from_fried_parameter(r0, self.wavelength)
+            vt = telescope.velocity_at(h)
+            vl = np.array(w)
+            v = vt + vl
             print(cn2)
             l = atmosphere.InfiniteAtmosphericLayer(pupil_grid, cn2, L0=100, velocity=v, height=h)
             layers.append(l)
         
         self.atmosphere = atmosphere.MultiLayerAtmosphere(layers)
+
+    def update(self, )
         
     
 def get_Cn_squared(height_profile):

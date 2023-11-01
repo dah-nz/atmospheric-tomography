@@ -9,7 +9,7 @@ def azimuth2cart(altitude, theta, phi):
 def pol2cart(rho, phi):
     x = rho * np.cos(phi)
     y = rho * np.sin(phi)
-    return(x, y)
+    return (x, y)
 
 def cart2pol(x, y):
     rho = np.sqrt(x**2 + y**2)
