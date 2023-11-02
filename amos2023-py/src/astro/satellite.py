@@ -9,7 +9,10 @@ class Satellite():
 
     def at(self, t, obsloc=None):
         e, p, v = self.__data.sgp4(t.jd1, t.jd2)
-        print(e, p, v)
+
+        if e != 0:
+            print(e)
+            quit()
 
         p = CartesianRepresentation(p * u.km)
         v = CartesianDifferential(v * u.km/u.s)
@@ -24,7 +27,6 @@ class Satellite():
             topo_itrs_repr = topo_itrs_p.with_differentials(itrs_geo_v)
             itrs_topo = ITRS(topo_itrs_repr, obstime=t, location=obsloc)
             self.aa = itrs_topo.transform_to(AltAz(obstime=t, location=obsloc))
-            print(self.aa)
         else:
             self.aa = None
         

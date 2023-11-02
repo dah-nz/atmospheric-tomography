@@ -1,10 +1,8 @@
 import numpy as np
 
 from astropy.coordinates import AltAz, EarthLocation
-from sgp4.api import Satrec
 
 from astropy.time import Time
-from astropy.coordinates import TEME, CartesianDifferential, CartesianRepresentation
 import astropy.units as u
 
 S = "1 00694U 63047A   23304.40691225  .00002024  00000+0  24893-3 0  9996"
@@ -17,40 +15,20 @@ class Telescope():
         self.f = self.f_number * self.D # focal length(m)
         self.location = EarthLocation(lat=location[0], lon=location[1], height=location[2])
 
-    def point_at(self, target, time):
+    def set_target(self, target, time):
         # Set alt, az for pointing at target
         self.time = time
-        self.orientation = target.transform_to(AltAz(obstime=time, location=self.location))
-
-    def track_target(self, target, time):
-        self.time = time
         self.target = target.at(time, self.location)
-        self.point_at(self.target.aa, time)
-
-    def airmass(self):
-        return self.orientation.secz
-
-    def velocity_at(self, altitude):
-        h = altitude
-        alt = self.orientation.alt.rad
-        az = self.orientation.az.rad
-        delv_alt = -h * np.tan(alt) ** (-2) * np.cos(alt) ** -2 * np.array((np.cos(az), np.sin(az)))
-        delv_az = np.array((-np.sin(az), np.cos(az))) / np.tan(alt)
-
-        delv_alt = delv_alt * u.m / u.rad
-        delv_az = delv_az * u.m / u.rad
-
-        delaz_t = self.target.aa.pm_az_cosalt.to(u.rad / u.s)
-
-        delalt_t = self.target.aa.pm_alt.to(u.rad / u.s)
-
-        print(delaz_t, delalt_t)
-        
-        return delv_alt * delalt_t + delv_az * delaz_t
+        self.orientation = self.target.aa
+        if self.orientation.alt < 1 * u.deg:
+            print("Warning: Below Horizon")
 
     def step(self, dt):
-        pass
-
+        self.time = self.time + dt
+        self.target = self.target.at(self.time, self.location)
+        self.orientation = self.target.aa
+        if self.orientation.alt < 1 * u.deg:
+            print("Warning: Below Horizon")
 
 if __name__ == "__main__":
     from satellite import Satellite
@@ -63,7 +41,11 @@ if __name__ == "__main__":
 
     t = Time(tm)
 
-    telescope.track_target(st, t)
+    telescope.set_target(st, t)
 
-    print(telescope.velocity_at(1000))
+    print(telescope.orientation)
+
+    telescope.step(1*u.s)
+
+    print(telescope.orientation)
 
