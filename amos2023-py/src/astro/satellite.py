@@ -1,14 +1,10 @@
 import datetime as dt
 
-from sgp4.api import Satrec
-
 from astropy.coordinates import TEME, CartesianDifferential, CartesianRepresentation, ITRS, AltAz
-from astropy import units as u
+import astropy.units as u
+import astropy.time as aTime
 
-from skyfield.api import load
-
-import numpy as np
-
+from skyfield.api import load, EarthSatellite
 
 DEFAULT_CATALOG_URL = 'http://celestrak.org/NORAD/elements/visual.txt'
 
@@ -16,7 +12,10 @@ def get_satellite_catalog(url=None):
     """ Retrieve catalog of skyfield satellite objects from url """
     if url == None:
         url = DEFAULT_CATALOG_URL
-    return load.tle_file(url) 
+    satellites = load.tle_file(url)
+    for s in satellites:
+        s.__class__ = Satellite
+    return satellites[:5]
 
 def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat_horizon=0, sun_horizon=0, url=None, eph=None):
     """ Get a list of visible satellites, with times they are in sunlight.
@@ -61,7 +60,6 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
         print(satellite)
         diff = satellite - pos
 
-        times = []
         vis_times = []
 
         for ti, event in zip(t, events):
@@ -98,39 +96,34 @@ def find_visible_times_between(t0, t1, pos, eph):
     return []
 
     
-class Satellite():
-    def __init__(self, tle):
-        self.__data = Satrec.twoline2rv(tle[0], tle[1])
+class Satellite(EarthSatellite):
+    def altaz_from(self, location, t):
+        p, v, m = self._position_and_velocity_TEME_km(t)
 
-    def at(self, t, obsloc=None):
-        e, p, v = self.__data.sgp4(t.jd1, t.jd2)
-
-        if e != 0:
-            print(e)
-            quit()
+        if m != None:
+            raise RuntimeError(m)
 
         p = CartesianRepresentation(p * u.km)
         v = CartesianDifferential(v * u.km/u.s)
 
-        self.TEME = TEME(p.with_differentials(v), obstime=t)
+        t = aTime.Time(t.astimezone(dt.timezone.utc))
 
-        if obsloc is not None:
-            itrs_geo = self.TEME.transform_to(ITRS(obstime=t))
-            itrs_geo_p = itrs_geo.cartesian.without_differentials()
-            itrs_geo_v = itrs_geo.cartesian.differentials['s']
-            topo_itrs_p = itrs_geo_p - obsloc.get_itrs(t).cartesian
-            topo_itrs_repr = topo_itrs_p.with_differentials(itrs_geo_v)
-            itrs_topo = ITRS(topo_itrs_repr, obstime=t, location=obsloc)
-            self.aa = itrs_topo.transform_to(AltAz(obstime=t, location=obsloc))
-        else:
-            self.aa = None
+        teme = TEME(p.with_differentials(v), obstime=t)
+
+        itrs_geo = teme.transform_to(ITRS(obstime=t))
+        itrs_geo_p = itrs_geo.cartesian.without_differentials()
+        itrs_geo_v = itrs_geo.cartesian.differentials['s']
+        topo_itrs_p = itrs_geo_p - location.get_itrs(t).cartesian
+        topo_itrs_repr = topo_itrs_p.with_differentials(itrs_geo_v)
+        itrs_topo = ITRS(topo_itrs_repr, obstime=t, location=location)
+        self.aa = itrs_topo.transform_to(AltAz(obstime=t, location=location))
         
-        return self
+        return self.aa
 
 
 if __name__ == "__main__":
     import telescope
     t = telescope.Telescope(1.0, 6.5, telescope.UC_MT_JOHN_OBS)
-    vis_sats = find_visible_satellites(t.location)
+    vis_sats = find_visible_satellites(t.location, sat_horizon=15)
     for k in vis_sats:
-        print(k)
+        print(k, k[0].altaz_from(t.location, k[1][0]))
