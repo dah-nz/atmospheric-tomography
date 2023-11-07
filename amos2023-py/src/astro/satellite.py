@@ -7,6 +7,8 @@ from astropy import units as u
 
 from skyfield.api import load
 
+import numpy as np
+
 
 DEFAULT_CATALOG_URL = 'http://celestrak.org/NORAD/elements/visual.txt'
 
@@ -36,8 +38,8 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
     ts = load.timescale()
     if time == None:
         time = dt.datetime.now(tz=dt.timezone.utc)
-    t0 = ts.from_datetime(t)
-    t1 = ts.from_datetime(t + dt.timedelta(hours=tdelta))
+    t0 = ts.from_datetime(time)
+    t1 = ts.from_datetime(time + dt.timedelta(hours=tdelta))
 
     # Load satellites from URL
     if satellites == None:
@@ -50,7 +52,7 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
 
     event_names = ['Rise above horizon', 'Culminate', 'Set below horizon']
 
-    pos = location.wgs84_latlon()
+    pos = location.wgs84_latlon
 
     visible_satellites = []
 
@@ -60,22 +62,42 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
         diff = satellite - pos
 
         times = []
+        vis_times = []
 
         for ti, event in zip(t, events):
-            l = diff.at(ti)
-            s = location.get_sun_altitude(eph, ti)
+            s = location.get_sun_altitude(eph, ti)  # sun position at time
 
-            name = event_names[event]
             if s < sun_horizon:   # sun under the horizon
-                if name == 'Culminate':
-                    name += ' at {}'.format(l.altaz()[0])
-                tn = ti.utc_datetime()
-                print("{}: {} ({})".format(
-                    tn.strftime('%Y %b %d %H:%M:%S'),
-                    name,
-                    'sunlit' if l.is_sunlit(eph) else 'dark'
-                ))
+                if event == 0:   # rising
+                    ts = ti
+                if event == 2:   # setting
+                    te = ti
+                    vis_times = vis_times + find_visible_times_between(ts, te, diff, eph)
 
+        if len(vis_times) > 0:
+            visible_satellites += [(satellite, vt) for vt in vis_times]
+            
+    return visible_satellites
+
+def find_visible_times_between(t0, t1, pos, eph):
+    times = []
+    t = t0
+    while t1 - t > 0:
+        times.append(t)
+        t += dt.timedelta(seconds=1)
+    sunlit = [pos.at(t).is_sunlit(eph) for t in times]
+    if any(sunlit):
+        t = []
+        ts = times[0]
+        for t0, t1, s0, s1 in zip([0] + times, times + [0], [False] + sunlit, sunlit + [False]):
+            if not s0 and s1:
+                ts = t1
+            elif s0 and not s1:
+                t.append((ts, t0))
+        return t
+    return []
+
+    
 class Satellite():
     def __init__(self, tle):
         self.__data = Satrec.twoline2rv(tle[0], tle[1])
@@ -109,4 +131,6 @@ class Satellite():
 if __name__ == "__main__":
     import telescope
     t = telescope.Telescope(1.0, 6.5, telescope.UC_MT_JOHN_OBS)
-    find_visible_satellites(t)
+    vis_sats = find_visible_satellites(t.location)
+    for k in vis_sats:
+        print(k)

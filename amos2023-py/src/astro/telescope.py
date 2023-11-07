@@ -13,13 +13,14 @@ T = "2 00694  30.3548 302.5566 0571508  91.4412 275.1692 14.06129713 10173"
 UC_MT_JOHN_OBS = ["43d59m12.0sS", "170d27m54.0sE", 1029]
 
 class Location(EarthLocation):
-    def __init__ (self, lat, lon, height):
-        super().__init__(lat=lat, lon=lon, height=height)
+    def __init__ (self, *args, **kwargs):
+        super().__new__(EarthLocation, *args, **kwargs)
 
-        h =     float(super().height / (1 * u.m))     # this needs to be dimensionless for skyfield
-        lats =  float(super().lat.deg)
-        lons =  float(super().lon.deg)
+        h =     float(self.height / (1 * u.m))     # this needs to be dimensionless for skyfield
+        lats =  float(self.lat.deg)
+        lons =  float(self.lon.deg)
         self.wgs84_latlon = wgs84.latlon(lats, lons, h)
+        
     def get_sun_altitude(self, eph, t):
         return (self.wgs84_latlon + eph['earth']).at(t).observe(eph['sun']).apparent().altaz()[0].degrees
 
