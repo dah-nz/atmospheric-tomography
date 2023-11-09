@@ -42,24 +42,28 @@ fig, ax = plt.subplots()
 im1 = hcipy.imshow_field(atm.atmosphere.phase_for(atm.wavelength), ax=ax, vmin=-100, vmax=100)
 step = 0.0
 
-def update(frame):
-    dt = (1/15) * u.s
-    tele.step(dt)
-    atm.step(dt, tele)
+fps = 24
+gif_time = 5
 
-    print("Altitude: {}".format(tele.orientation.alt))
-    
-    ph = atm.atmosphere.phase_for(atm.wavelength).shaped
-    ph = ph - np.average(ph)
-    co = atm.atmosphere.layers[0].output_grid.separated_coords
-    im1.set_data(*co, ph)
+def update(frame):
+    dt = (1/fps) * u.s
+    tele.step(dt)
+    alt = tele.orientation.alt
+    if alt > 1 * u.deg:
+        print("Altitude: {}".format(alt))
+        atm.step(dt, tele)
+        ph = atm.atmosphere.phase_for(atm.wavelength).shaped
+        ph = ph - np.average(ph)
+        co = atm.atmosphere.layers[0].output_grid.separated_coords
+        im1.set_data(*co, ph)
+
     return im1,
 
-anim = animation.FuncAnimation(fig, update, blit=True, cache_frame_data=False, frames=60)
+anim = animation.FuncAnimation(fig, update, blit=True, cache_frame_data=False, frames=fps*gif_time)
 
-writer = animation.PillowWriter(fps=15,
+writer = animation.PillowWriter(fps=fps,
                                 metadata=dict(artist='Me'),
-                                bitrate=4800)
+                                bitrate=48000)
 anim.save('multilayer.gif', writer=writer)
 
 plt.show()
