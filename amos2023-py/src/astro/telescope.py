@@ -34,24 +34,20 @@ class Telescope():
     def set_target(self, target, time):
         # Set alt, az for pointing at target
         self.time = time
-        self.target = target.at(time, self.location)
-        self.orientation = self.target.aa
-        if self.orientation.alt < 1 * u.deg:
-            print("Warning: Below Horizon")
+
+        self.target = target #.at(self.location, time)
+        self.orientation = self.target.altaz_from(self.location, time)
 
     def step(self, dt):
         self.time = self.time + dt
-        self.target = self.target.at(self.time, self.location)
-        self.orientation = self.target.aa
-        if self.orientation.alt < 1 * u.deg:
-            print("Warning: Below Horizon")
+        # self.target = self.target.altaz_from(self.location, self.time)
+        self.orientation = self.target.altaz_from(self.location, self.time)
 
 if __name__ == "__main__":
     from satellite import Satellite
     telescope = Telescope(1, 6.5, UC_MT_JOHN_OBS)
 
-    TLE = (S, T)
-    st = Satellite(TLE)
+    st = Satellite(S, T)
 
     tm = '2023-10-31 01:02:03'
 

@@ -4,7 +4,7 @@ from astropy.coordinates import TEME, CartesianDifferential, CartesianRepresenta
 import astropy.units as u
 import astropy.time as aTime
 
-from skyfield.api import load, EarthSatellite
+from skyfield.api import load, EarthSatellite, utc
 
 DEFAULT_CATALOG_URL = 'http://celestrak.org/NORAD/elements/visual.txt'
 
@@ -98,6 +98,11 @@ def find_visible_times_between(t0, t1, pos, eph):
     
 class Satellite(EarthSatellite):
     def altaz_from(self, location, t):
+        if type(t) == aTime.core.Time:
+            ts = load.timescale()
+            time = t.datetime
+            time = time.replace(tzinfo=utc)
+            t = ts.from_datetime(time)
         p, v, m = self._position_and_velocity_TEME_km(t)
 
         if m != None:
@@ -119,6 +124,7 @@ class Satellite(EarthSatellite):
         self.aa = itrs_topo.transform_to(AltAz(obstime=t, location=location))
         
         return self.aa
+
 
 
 if __name__ == "__main__":
