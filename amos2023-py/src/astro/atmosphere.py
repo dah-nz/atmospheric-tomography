@@ -1,11 +1,16 @@
 import numpy as np
+from math import atan
 from hcipy import atmosphere
 import hcipy
 import astropy.units as u
 
 from util import util
 
-MAX_LAYERS = 20
+BASE_SIZE = 256
+BASE_GRID_SCALAR = 4
+OUTER_SCALE = 30 # m
+
+MAX_LAYERS = 5
 MIN_LAYERS = 2
 
 WIND_SPEED_SHAPE = 1.25
@@ -38,11 +43,11 @@ class Atmosphere():
         self.layer_wind_directions = self.rng.uniform(0, 2*np.pi, size=self.n)
         self.layer_velocity = np.array(util.pol2cart(self.layer_wind_speeds, self.layer_wind_directions)).T
 
-        pupil_grid = hcipy.make_pupil_grid(256, 1)
+        pupil_grid = hcipy.make_pupil_grid(BASE_GRID_SCALAR * BASE_SIZE, BASE_GRID_SCALAR * telescope.D)
         layers = []
         for h, v, r0 in zip(self.layer_heights, self.layer_velocity, self.layer_r0):
             cn2 = atmosphere.Cn_squared_from_fried_parameter(r0, self.wavelength)
-            l = atmosphere.InfiniteAtmosphericLayer(pupil_grid, cn2, L0=100, velocity=v, height=h)
+            l = atmosphere.InfiniteAtmosphericLayer(pupil_grid, cn2, L0=OUTER_SCALE, velocity=v, height=h)
             layers.append(l)
         
         self.atmosphere = atmosphere.MultiLayerAtmosphere(layers)
@@ -75,6 +80,29 @@ class Atmosphere():
         c_t = np.float64(((self.atmosphere.t * u.s) + dt) / u.s)
 
         self.atmosphere.evolve_until(c_t)
+    
+    def cut_out(self, telescope, beacon, distance=0):
+        phase = np.zeros((BASE_SIZE, BASE_SIZE), dtype=np.float64)
+        pupil_grid = hcipy.make_pupil_grid(BASE_SIZE, telescope.D)
+        for layer, z, r0 in zip(self.atmosphere.layers, self.layer_heights, self.layer_r0):
+            max_angle = atan(((BASE_GRID_SCALAR / 2) * telescope.D) / z) * (180 / np.pi)
+            if distance > max_angle:
+                cn2 = atmosphere.Cn_squared_from_fried_parameter(r0, self.wavelength)
+                l = atmosphere.FiniteAtmosphericLayer(pupil_grid, cn2, L0=OUTER_SCALE, height=z)
+                phase += l.phase_for(self.wavelength)
+            else:
+                l = layer.phase_for(self.wavelength)
+                l = np.reshape(l, (BASE_GRID_SCALAR * BASE_SIZE, -1))
+                x = BASE_SIZE * (((z * np.tan(beacon.az.rad - telescope.orientation.az.rad)) / telescope.D) + (BASE_GRID_SCALAR / 2))
+                y = BASE_SIZE * (((z * np.tan(beacon.alt.rad - telescope.orientation.alt.rad)) / telescope.D) + (BASE_GRID_SCALAR / 2))
+                x0 = int(x - (BASE_SIZE / 2) + 0.5)
+                x1 = int(x + (BASE_SIZE / 2) + 0.5)
+                y0 = int(y - (BASE_SIZE / 2) + 0.5)
+                y1 = int(y + (BASE_SIZE / 2) + 0.5)
+                cut = l[x0:x1, y0:y1]
+                phase = phase + cut
+        return phase
+
         
     
 def get_Cn_squared(height_profile):

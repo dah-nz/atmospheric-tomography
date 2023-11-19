@@ -36,12 +36,15 @@ class Telescope():
         self.time = time
 
         self.target = target #.at(self.location, time)
-        self.orientation = self.target.altaz_from(self.location, time)
+        self.orientation = self.target_altaz()
 
     def step(self, dt):
         self.time = self.time + dt
         # self.target = self.target.altaz_from(self.location, self.time)
-        self.orientation = self.target.altaz_from(self.location, self.time)
+        self.orientation = self.target_altaz()
+
+    def target_altaz(self):
+        return self.target.altaz_from(self.location, self.time)
 
 if __name__ == "__main__":
     from satellite import Satellite

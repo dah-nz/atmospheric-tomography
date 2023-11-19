@@ -139,11 +139,11 @@ class MLNN():
         model.load_state_dict(torch.load(model_file))
         model.eval()
         self.model = model
-    def run(self, beacons, coeffs):
+    def run(self, beacons, coeffs, target):
         data = []
         for a in beacons:
-            data.append(a.theta)
-            data.append(a.gamma)
+            data.append(a.alt.rad)
+            data.append(a.az.rad)
         
         data = np.array(np.append(data, coeffs.flatten()), dtype=np.float32)
         X = torch.from_numpy(data).unsqueeze(0)

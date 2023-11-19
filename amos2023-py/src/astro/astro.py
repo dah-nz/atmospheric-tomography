@@ -1,16 +1,16 @@
 import numpy as np
 import scipy as sci
 import csv
-from astropy.coordinates import SkyCoord, ICRS, GCRS
+from astropy.coordinates import SkyCoord, ICRS, GCRS, AltAz
 from astropy import units as u
 
 class StarMap():
     default_data_dir = "data/starmaps"
     default_data_files = ["_M9.csv", "M9_M11.csv", "M11_M12.csv", "M12_M13.csv", "M13_M14.csv"]
-    def __init__(self, mag=None, data_dir=None, data_files=None):
+    def __init__(self, mag=None, data_dir=None, data_files=None, location=None, time=None):
         self.rng = np.random.default_rng()
         self.load(data_dir=data_dir, data_files=data_files)
-        self.build_map(mag)
+        self.build_map(mag, location, time)
     def load(self, data_dir=None, data_files=None):
         self.data = []
         if data_dir is None:
@@ -22,7 +22,7 @@ class StarMap():
             with open(data_dir + "/" + data_file, 'r') as f:
                 for line in csv.reader(f):
                     self.data.append([np.float64(x) for x in line])
-    def build_map(self, mag=None):
+    def build_map(self, mag, location, time):
         ra = []
         dec = []
         for s in self.data:
@@ -31,13 +31,22 @@ class StarMap():
                 dec.append(s[2] + self.rng.normal(scale=s[3]/(1000 * 60 * 60)))
         stars = SkyCoord(ra, dec, unit=u.deg, frame=ICRS)
         stars = stars.transform_to(GCRS)
-        ra = np.reshape(stars.ra.deg, (-1, 1))
-        dec = np.reshape(stars.dec.deg, (-1, 1))
+        if time is not None and location is not None:
+
+            stars = stars.transform_to(AltAz(obstime=time, location=location))
+            ra = np.reshape(stars.az.deg, (-1, 1))
+            dec = np.reshape(stars.alt.deg, (-1, 1))
+            print("Using Alt/Az starmap")
+        else:
+            ra = np.reshape(stars.ra.deg, (-1, 1))
+            dec = np.reshape(stars.dec.deg, (-1, 1))
+            print("Using ra/dec starmap")
         self.stars = np.concatenate((ra, dec), axis=1)
         print("Building KD Tree of stars")
         self.tree = sci.spatial.KDTree(self.stars)
         print("Star KD Tree complete")
     def closest(self, p, n):
+        p = np.array([p.az.deg, p.alt.deg])
         distances, indices = self.tree.query(p, n)
         return self.stars[indices], distances
     
