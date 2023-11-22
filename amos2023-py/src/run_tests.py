@@ -34,4 +34,6 @@
 
 # import tests.test_ps_fft
 
-import tests.test_atmosphere
+# import tests.test_atmosphere
+
+import tests.test_psd
