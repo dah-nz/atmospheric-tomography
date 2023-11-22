@@ -11,12 +11,11 @@ import pstats
 pr = cProfile.Profile()
 pr.enable()
 
-fps = 144
+fps = 24
 gif_time = 5
 frames = fps * gif_time
 
 n_pixels = 256
-phase_length = n_pixels + frames
 
 wl = 589e-9
 r0 = 0.1 # meters
@@ -24,25 +23,10 @@ L0 = 35 # meters
 l0 = 0.01 # meters
 D = 1. # meters
 j = complex(0, 1)
-f_g = 100
-
 
 rng = np.random.default_rng()
-# g = hcipy.field.make_pupil_grid(n_pixels, D)
-# cn_squared = hcipy.atmosphere.Cn_squared_from_fried_parameter(r0, wl)
-# v = rng.gamma(3, 2)
-# layer = hcipy.atmosphere.InfiniteAtmosphericLayer(g, Cn_squared=cn_squared, L0=L0, velocity=v)
-# v = layer.velocity
 
-fig, axs = plt.subplots(1, 3)
-# p = layer.phase_for(wl)
-# im1 = hcipy.imshow_field(p, ax=axs[0], vmin=-10, vmax=10)
-
-# psd = hcipy.atmosphere.power_spectral_density_von_karman(r0, L0)
-# psd = psd(g)
-# im1 = hcipy.imshow_field(psd, ax=axs[0])
-# psd_sum = np.zeros((n_pixels,), dtype=np.complex128)
-# n = 0
+fig, axs = plt.subplots(1, 2)
 
 delta = D / n_pixels
 # pre-compute distance fields
@@ -66,41 +50,47 @@ def get_initial_spectrum(k):
     b = rng.normal(size=k.shape)
     return 1/np.sqrt(2) * (a + j * b) * np.sqrt(psd)
 
+def grow_spectrum(h, v, dt):
+    d = (v / delta) * dt # convert to pixels from meters/second
+    print(d)
+    x, y = h.shape
+    print("h:{}".format(h.shape))
+    h0 = np.zeros((int(x + 2 * abs(d[0])), int(y + 2 * abs(d[1]))), dtype=np.complex128)
+    print("h0:{}".format(h0.shape))
+    x0, y0 = h0.shape
+    
+    h0[int((x0 - x)/2):int((x0 + x)/2), 
+       int((y0 - y)/2):int((y0 + y)/2)] = h
+    p_hat = np.fft.ifft2(np.fft.fftshift(h0))
+    p1 = p_hat[int((x0 - x)/2 + d[0]):int((x0 + x)/2 + d[0]),
+               int((y0 - y)/2 + d[1]):int((y0 + y)/2 + d[1])]
+    print("p1:{}".format(p1.shape))
+    return p1, np.fft.fftshift(np.fft.fft2(p1))
+
 h_hat = get_initial_spectrum(k)
-t = 0.
-h_t = h_hat * np.exp(j * 0 * np.sqrt(k))
 
-f = np.fft.ifft2(np.fft.fftshift(h_t))
-im1 = axs[0].imshow(np.abs(f))
+v = rng.normal(scale=0.1, size=(2,))
+print(v)
 
-f = np.fft.fftshift(np.fft.fft2(f))
-im2 = axs[1].imshow(np.abs(f))
+p, h = grow_spectrum(h_hat, v, 0)
 
-im3 = axs[2].imshow(np.abs(h_hat))
+im1 = axs[0].imshow(np.abs(h))
+im2 = axs[1].imshow(np.abs(p))
 
 t0 = time.process_time()
 
 def update(frame):
-    global h_hat, k, t0, f_g
+    global p, h, v, t0
 
     t1 = time.process_time()
 
-    h_t = h_hat * np.exp(j * t1 * np.sqrt(k))
-
-    f = np.fft.ifft2(np.fft.fftshift(h_t))
-    im1.set_array(np.abs(f))
-
-    f = np.fft.fftshift(np.fft.fft2(f))
-    im2.set_array(np.abs(f))
-
-    h1 = get_initial_spectrum(k)
-    tg = (t1 - t0) / f_g
-    h_hat = (1 - tg) * h_hat + tg * h1
+    p, h = grow_spectrum(h, v, (t1 - t0))
     t0 = t1
+    
+    im1.set_array(np.abs(h))
+    im2.set_array(np.abs(p))
 
-    im3.set_array(np.abs(h_hat))
-
-    return im1, im2, im3
+    return im1, im2
 
 anim = animation.FuncAnimation(fig, update, blit=True, cache_frame_data=False, frames=frames)
 
