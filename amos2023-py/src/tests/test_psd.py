@@ -35,12 +35,12 @@ fig, axs = plt.subplots(1, 3)
 delta = D / n_pixels
 # pre-compute distance fields
 del_f = 1./(n_pixels * delta)
-arange = np.linspace(-int(n_pixels/2), int(n_pixels/2), n_pixels)
+arange = np.linspace(-D/2, D/2, n_pixels)
 
 coords = arange * delta
 x, y = np.meshgrid(coords, coords)
 
-fx = arange * del_f
+fx = arange # * del_f
 fx, fy = np.meshgrid(fx, fx)
 
 k = np.sqrt(fx ** 2 + fy ** 2)
