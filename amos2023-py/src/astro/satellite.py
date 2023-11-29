@@ -15,7 +15,7 @@ def get_satellite_catalog(url=None):
     satellites = load.tle_file(url)
     for s in satellites:
         s.__class__ = Satellite
-    return satellites[:5]
+    return satellites
 
 def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat_horizon=0, sun_horizon=0, url=None, eph=None):
     """ Get a list of visible satellites, with times they are in sunlight.
