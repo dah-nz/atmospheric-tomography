@@ -8,16 +8,16 @@ from skyfield.api import load, EarthSatellite, utc
 
 DEFAULT_CATALOG_URL = 'http://celestrak.org/NORAD/elements/visual.txt'
 
-def get_satellite_catalog(url=None):
+def get_satellite_catalog(url=None, reload=False):
     """ Retrieve catalog of skyfield satellite objects from url """
     if url == None:
         url = DEFAULT_CATALOG_URL
-    satellites = load.tle_file(url)
+    satellites = load.tle_file(url, reload=reload)
     for s in satellites:
         s.__class__ = Satellite
     return satellites
 
-def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat_horizon=0, sun_horizon=0, url=None, eph=None):
+def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat_horizon=0, sun_horizon=0, url=None, eph=None, reload=False):
     """ Get a list of visible satellites, with times they are in sunlight.
     Checks for sun and moon position, so no satellite passes during the day are returns, nor are satellites that are transitting the moon
 
@@ -42,7 +42,7 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
 
     # Load satellites from URL
     if satellites == None:
-        satellites = get_satellite_catalog(url)
+        satellites = get_satellite_catalog(url, reload)
     print('Loaded', len(satellites), 'satellites')
 
     # Load planet and sun ephemeris data
@@ -61,16 +61,18 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
         diff = satellite - pos
 
         vis_times = []
+        t_rise = t[0]
+        t_set = t[0]
 
         for ti, event in zip(t, events):
             s = location.get_sun_altitude(eph, ti)  # sun position at time
 
             if s < sun_horizon:   # sun under the horizon
                 if event == 0:   # rising
-                    ts = ti
+                    t_rise = ti
                 if event == 2:   # setting
-                    te = ti
-                    vis_times = vis_times + find_visible_times_between(ts, te, diff, eph)
+                    t_set = ti
+                    vis_times = vis_times + find_visible_times_between(t_rise, t_set, diff, eph)
 
         if len(vis_times) > 0:
             visible_satellites += [(satellite, vt) for vt in vis_times]
