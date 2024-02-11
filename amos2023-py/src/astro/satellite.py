@@ -6,18 +6,21 @@ import astropy.time as aTime
 
 from skyfield.api import load, EarthSatellite, utc
 
-DEFAULT_CATALOG_URL = 'http://celestrak.org/NORAD/elements/visual.txt'
+import random
 
-def get_satellite_catalog(url=None, reload=False):
+DEFAULT_CATALOG_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'
+
+def get_satellite_catalog(url=None, reload=False, k=100):
     """ Retrieve catalog of skyfield satellite objects from url """
     if url == None:
         url = DEFAULT_CATALOG_URL
     satellites = load.tle_file(url, reload=reload)
+    satellites = random.sample(satellites, k)
     for s in satellites:
         s.__class__ = Satellite
     return satellites
 
-def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat_horizon=0, sun_horizon=0, url=None, eph=None, reload=False):
+def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat_horizon=0, sun_horizon=0, url=None, eph=None, reload=False, number=100):
     """ Get a list of visible satellites, with times they are in sunlight.
     Checks for sun and moon position, so no satellite passes during the day are returns, nor are satellites that are transitting the moon
 
@@ -42,7 +45,7 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
 
     # Load satellites from URL
     if satellites == None:
-        satellites = get_satellite_catalog(url, reload)
+        satellites = get_satellite_catalog(url, reload, k=number)
     print('Loaded', len(satellites), 'satellites')
 
     # Load planet and sun ephemeris data
@@ -57,25 +60,27 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
 
     for satellite in satellites:
         t, events = satellite.find_events(pos, t0, t1, altitude_degrees=sat_horizon)
-        print(satellite)
-        diff = satellite - pos
 
-        vis_times = []
-        t_rise = t[0]
-        t_set = t[0]
+        if len(events) > 0:
+            print(satellite)
+            diff = satellite - pos
 
-        for ti, event in zip(t, events):
-            s = location.get_sun_altitude(eph, ti)  # sun position at time
+            vis_times = []
+            t_rise = t[0]
+            t_set = t[0]
 
-            if s < sun_horizon:   # sun under the horizon
-                if event == 0:   # rising
-                    t_rise = ti
-                if event == 2:   # setting
-                    t_set = ti
-                    vis_times = vis_times + find_visible_times_between(t_rise, t_set, diff, eph)
+            for ti, event in zip(t, events):
+                s = location.get_sun_altitude(eph, ti)  # sun position at time
 
-        if len(vis_times) > 0:
-            visible_satellites += [(satellite, vt) for vt in vis_times]
+                if s < sun_horizon:   # sun under the horizon
+                    if event == 0:   # rising
+                        t_rise = ti
+                    if event == 2:   # setting
+                        t_set = ti
+                        vis_times = vis_times + find_visible_times_between(t_rise, t_set, diff, eph)
+
+            if len(vis_times) > 0:
+                visible_satellites += [(satellite, vt) for vt in vis_times]
             
     return visible_satellites
 
