@@ -4,28 +4,32 @@ import csv
 from astropy.coordinates import SkyCoord, ICRS, GCRS, AltAz
 from astropy import units as u
 
-class StarMap():
+class StarData():
     default_data_dir = "data/starmaps"
     default_data_files = ["_M9.csv", "M9_M11.csv", "M11_M12.csv", "M12_M13.csv", "M13_M14.csv"]
-    def __init__(self, mag=None, data_dir=None, data_files=None, location=None, time=None):
-        self.rng = np.random.default_rng()
+    def __init__(self, data_dir=None, data_files=None):
         self.load(data_dir=data_dir, data_files=data_files)
-        self.build_map(mag, location, time)
     def load(self, data_dir=None, data_files=None):
         self.data = []
         if data_dir is None:
             data_dir = self.default_data_dir
         if data_files is None:
             data_files = self.default_data_files
-
         for data_file in data_files:
             with open(data_dir + "/" + data_file, 'r') as f:
+                print(f"Reading {data_file}")
                 for line in csv.reader(f):
                     self.data.append([np.float64(x) for x in line])
+
+class StarMap():
+    def __init__(self, stars, mag=None, location=None, time=None):
+        self.rng = np.random.default_rng()
+        self.stars = stars
+        self.build_map(mag, location, time)
     def build_map(self, mag, location, time):
         ra = []
         dec = []
-        for s in self.data:
+        for s in self.stars.data:
             if not mag or s[4] < mag:
                 ra.append(s[0] + self.rng.normal(scale=s[1]/(1000 * 60 * 60)))
                 dec.append(s[2] + self.rng.normal(scale=s[3]/(1000 * 60 * 60)))
@@ -45,6 +49,7 @@ class StarMap():
         print("Building KD Tree of stars")
         self.tree = sci.spatial.KDTree(self.stars)
         print("Star KD Tree complete")
+        return
     def closest(self, p, n):
         p = np.array([p.az.deg, p.alt.deg])
         distances, indices = self.tree.query(p, n)

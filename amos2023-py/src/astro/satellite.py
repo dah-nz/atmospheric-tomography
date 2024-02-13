@@ -5,6 +5,8 @@ import astropy.units as u
 import astropy.time as aTime
 
 from skyfield.api import load, EarthSatellite, utc
+import sgp4
+from sgp4 import exporter
 
 import random
 
@@ -18,6 +20,7 @@ def get_satellite_catalog(url=None, reload=False, k=100):
     satellites = random.sample(satellites, k)
     for s in satellites:
         s.__class__ = Satellite
+        s.picklable = False
     return satellites
 
 def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat_horizon=0, sun_horizon=0, url=None, eph=None, reload=False, number=100):
@@ -46,7 +49,7 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
     # Load satellites from URL
     if satellites == None:
         satellites = get_satellite_catalog(url, reload, k=number)
-    print('Loaded', len(satellites), 'satellites')
+        print('Loaded', len(satellites), 'satellites')
 
     # Load planet and sun ephemeris data
     if eph == None:
@@ -57,6 +60,8 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
     pos = location.wgs84_latlon
 
     visible_satellites = []
+
+    # print(t0, t1)
 
     for satellite in satellites:
         t, events = satellite.find_events(pos, t0, t1, altitude_degrees=sat_horizon)
@@ -131,8 +136,8 @@ class Satellite(EarthSatellite):
         self.aa = itrs_topo.transform_to(AltAz(obstime=t, location=location))
         
         return self.aa
-
-
+    def get_tle(self):
+        return exporter.export_tle(self.model)
 
 if __name__ == "__main__":
     import telescope
