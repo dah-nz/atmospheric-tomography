@@ -2,10 +2,20 @@ import numpy as np
 import joblib
 import matplotlib.pyplot as plt
 
-with open("data.pak", 'rb') as f:
-    distances = joblib.load(f)
+min_mag = 6
+max_mag = 14
+asterism_size = 3
 
-angles = np.linspace(10, 200, 50, endpoint=True)
+distances = {}
+for m in range(min_mag, max_mag + 1):
+    for n in range(asterism_size):
+        filename = f"data/satellites/data_{m}_{n+1}.pak"
+        with open(filename, 'rb') as f:
+            print(f"Opening file '{filename}'")
+            data = joblib.load(f)
+        distances[(m, n+1)] = data
+
+angles = np.linspace(10, 1000, 200, endpoint=True)
 
 percentages = {}
 counts = {}

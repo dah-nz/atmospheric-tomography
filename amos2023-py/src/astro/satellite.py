@@ -67,7 +67,6 @@ def find_visible_satellites(location, satellites=None, time=None, tdelta=24, sat
         t, events = satellite.find_events(pos, t0, t1, altitude_degrees=sat_horizon)
 
         if len(events) > 0:
-            print(satellite)
             diff = satellite - pos
 
             vis_times = []

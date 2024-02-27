@@ -44,3 +44,5 @@ packages/
 *.data
 *.zip
 *.csv
+*.pkl
+*.pak
