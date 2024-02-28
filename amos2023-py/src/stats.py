@@ -6,15 +6,6 @@ min_mag = 6
 max_mag = 14
 asterism_size = 3
 
-distances = {}
-for m in range(min_mag, max_mag + 1):
-    for n in range(asterism_size):
-        filename = f"data/satellites/data_{m}_{n+1}.pak"
-        with open(filename, 'rb') as f:
-            print(f"Opening file '{filename}'")
-            data = joblib.load(f)
-        distances[(m, n+1)] = data
-
 angles = np.linspace(10, 1000, 200, endpoint=True)
 
 percentages = {}
@@ -23,40 +14,33 @@ counts = {}
 magnitudes = set()
 stars = set()
 
-for k, v in distances.items():
-    n = len(v)
-    print(k, n)
-    percentages[k] = []
-    counts[k] = {}
-    magnitudes.add(k[0])
-    stars.add(k[1])
-    for angle in angles:
-        percentages[k].append((np.count_nonzero(np.array(v) <= angle) / n) * 100)
-    
-        # n0 = None
-        # counts[k][angle] = []
-        # count = 0
-        # for n1 in np.array(v) <= angle:
-        #     if n1 == n0:
-        #         count += 1
-        #     elif n0 != None: # and n != n0
-        #         counts[k][angle].append(count)
-        #         count = 0
-        #     n0 = n1
+average_distance = {n+1: [] for n in range(asterism_size)}
+percentile_10th = {n+1: [] for n in range(asterism_size)}
+percentile_1st = {n+1: [] for n in range(asterism_size)}
+
+for m in range(min_mag, max_mag + 1):
+    for n in range(asterism_size):
+        filename = f"data/satellites/data_{m}_{n+1}.pak"
+        with open(filename, 'rb') as f:
+            print(f"Opening file '{filename}'")
+            data = joblib.load(f)
+
+        print((m, n+1), len(data))
+        percentages[(m, n+1)] = []
+        counts[(m, n+1)] = {}
+        magnitudes.add(m)
+        stars.add(n+1)
+        for angle in angles:
+            percentages[(m, n+1)].append((np.count_nonzero(np.array(data) <= angle) / len(data)) * 100)
+
+        average_distance[n+1].append(np.average(data))
+        percentile_10th[n+1].append(np.percentile(data, q=10))
+        percentile_1st[n+1].append(np.percentile(data, q=1))
 
 fig, axs = plt.subplots(1, 2)
 
 magnitudes = sorted(list(magnitudes))
 stars = sorted(list(stars))
-
-average_distance = {}
-percentile_10th = {}
-percentile_1st = {}
-
-for s in stars:
-    average_distance[s] = [np.average(distances[(m, s)]) for m in magnitudes]
-    percentile_10th[s] = [np.percentile(distances[(m, s)], q=10) for m in magnitudes]
-    percentile_1st[s] = [np.percentile(distances[(m, s)], q=1) for m in magnitudes]
 
 for m in magnitudes:
     axs[0].plot(angles, percentages[(m, 3)], label=f'Mag: {m}')
