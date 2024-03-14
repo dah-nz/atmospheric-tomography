@@ -34,6 +34,11 @@ def build_map(data):
     p = p.transform_to(GCRS)
     return p
 
+def get_star(magnitude, limiting_angle=0):
+    
+
+
+
 p = astro.random_direction(10000)
 p = astro.to_ra_dec(p, non_negative_ra=True).T
 k = 3
