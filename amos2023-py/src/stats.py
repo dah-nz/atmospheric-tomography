@@ -75,12 +75,12 @@ if __name__ == "__main__":
     initial_distributions = ['betaprime', 'f', 'lognorm', 'ncf', 'gumbel_r', 'johnsonsu', 'nct', 'burr', 'fisk', 'mielke', 'invgamma', 'burr12', 'jf_skew_t', 'johnsonsb', 'genhyperbolic', 'exponorm', 'alpha', 'moyal', 'norminvgauss']
 
     data = load_star_data(mag=14)
-    models = build_models(data, distributions=initial_distributions, n=1000, timeout=60, Nbest=10)
+    models = build_models(data, distributions=initial_distributions, n=500, timeout=120, Nbest=10)
     model_list = set()
     for _, v in models.items():
         model_list.update(v.keys())
     print(list(model_list))
-    models = build_models(data, distributions=list(model_list), n=10000, timeout=120, Nbest=1)
+    models = build_models(data, distributions=list(model_list), n=5000, timeout=120, Nbest=1)
     print(models)
     for k, v in models.items():
         print(f'> {k} <> {v}')
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     model_rsv = [build_distribution_func(k1, v1) for v in models.values() for k1, v1 in v.items()]
 
     consolidated = []
-    n = 2000
+    n = 500
     fig, axs = plt.subplots(2, len(model_rsv) - 1)
     for i in range(len(model_rsv) - 1):
         d = model_rsv[i](n)
@@ -99,13 +99,25 @@ if __name__ == "__main__":
     d0 = model_rsv[-1](3*n)
     d1 = data[1] + data[2] + data[3]
     sample = np.random.choice(d1, size=3*n)
-    axs[1, 1].hist(d0, 200)
+    axs[1, 1].hist(d0, 20)
     axs[1, 1].set_title("Consolidated Model")
-    axs[1, 2].hist(consolidated, 200)
+    axs[1, 2].hist(consolidated, 20)
     axs[1, 2].set_title("Individual Models")
-    axs[1, 0].hist(sample, 200)
+    axs[1, 0].hist(sample, 20)
     axs[1, 0].set_title("Actual Data")
 
+    print("\n SINGLE STAR MODELS")
+    print("Comparison between closest model, and closest data")
+    print(scipy.stats.kstest(model_rsv[0](n), np.random.choice(data[1], size=n)))
+
+    print("Comparison between middle model, and middle data")
+    print(scipy.stats.kstest(model_rsv[1](n), np.random.choice(data[2], size=n)))
+
+    print("Comparison between farthest model, and farthest data")
+    print(scipy.stats.kstest(model_rsv[2](n), np.random.choice(data[3], size=n)))
+
+    
+    print("\nDATA COMPARISONS")
     print("Comparison between single model, and multiple models")
     print(scipy.stats.kstest(d0, consolidated))
 
@@ -114,5 +126,51 @@ if __name__ == "__main__":
 
     print("Comparison between actual data and single model")
     print(scipy.stats.kstest(sample, d0))
+
+    print("Comparison between actual data and itself (for sanity checking)")
+    print(scipy.stats.kstest(np.random.choice(d1, size=n), np.random.choice(d1, size=n)))
+
+    closest = []
+    middle = []
+    farthest = []
+
+    generated = np.concatenate([model_rsv[0](n), model_rsv[1](n), model_rsv[2](n)])
+    generated = np.reshape(generated, (-1, 3))
+    sorted = np.sort(generated, axis=-1)
+    closest = sorted[:, 0]
+    middle = sorted[:, 1]
+    farthest = sorted[:, 2]
+
+    print("\nSINGLE MODELS")
+    print("Comparison between closest model, and generated closest")
+    print(scipy.stats.kstest(model_rsv[0](n), closest))
+
+    print("Comparison between middle model and generated middle")
+    print(scipy.stats.kstest(model_rsv[1](n), middle))
+
+    print("Comparison between farthest model and generated farthest")
+    print(scipy.stats.kstest(model_rsv[2](n), farthest))
+
+    generated = model_rsv[-1](3*n)
+    generated = np.reshape(generated, (-1, 3))
+    sorted = np.sort(generated)
+    closest = sorted[:, 0]
+    middle = sorted[:, 1]
+    farthest = sorted[:, 2]
+
+    print("\nCONSOLIDATED MODELS:")
+    
+    print("Comparison between closest model, and consolidated generated closest")
+    print(scipy.stats.kstest(model_rsv[0](n), closest))
+
+    print("Comparison between middle model and consolidated generated middle")
+    print(scipy.stats.kstest(model_rsv[1](n), middle))
+
+    print("Comparison between farthest model and consolidated generated farthest")
+    print(scipy.stats.kstest(model_rsv[2](n), farthest))
+
+    print("Comparison between generated model and generated model (for sanity checking)")
+    print(scipy.stats.kstest(model_rsv[-1](n), model_rsv[-1](n)))
+
 
     plt.show()
