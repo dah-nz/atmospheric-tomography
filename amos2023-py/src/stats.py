@@ -32,36 +32,26 @@ class FitterN(Fitter):
         return distros
 
 
-def load_star_data(mag, n_stars=3):
+def load_star_data(mag, n_stars=3, n=None):
     data = {}
 
     for star in range(1, n_stars + 1):
         filename = f'data/satellites/data_{mag}_{star}.pak'
         with open(filename, 'rb') as f:
             print(f'Opening file "{filename}"')
-            # data[star] = joblib.load(f)
-            data[star] = np.random.choice(joblib.load(f), size = 1000)
+            if n is None:
+                data[star] = np.array(joblib.load(f))
+            else:
+                data[star] = np.array(np.random.choice(joblib.load(f), size=n))
     
     return data
 
-def build_models(data, distributions=None, n=500, timeout=60, Nbest=10):
-    models = {}
-    consol = []
+def build_models(data, distributions=None, n=500, timeout=60, Nbest=10, method="sumsquare_error"):
 
-    for k, v in data.items():
-        sample = np.random.choice(v, size=n)
-        f = FitterN(sample, distributions=distributions, timeout=timeout)
-        f.fit()
-        s = f.get_bestN(Nbest=Nbest)
-
-        models[k] = s
-        consol += list(sample)
-    
+    sample = np.random.choice(data, size=n)
     f = FitterN(sample, distributions=distributions, timeout=timeout)
     f.fit()
-    s = f.get_bestN(Nbest=Nbest)
-
-    models['consol'] = s
+    models = f.get_bestN(Nbest=Nbest, method=method)
 
     return models
 
@@ -74,103 +64,136 @@ def build_distribution_func(name, params):
 if __name__ == "__main__":
     initial_distributions = ['betaprime', 'f', 'lognorm', 'ncf', 'gumbel_r', 'johnsonsu', 'nct', 'burr', 'fisk', 'mielke', 'invgamma', 'burr12', 'jf_skew_t', 'johnsonsb', 'genhyperbolic', 'exponorm', 'alpha', 'moyal', 'norminvgauss']
 
-    data = load_star_data(mag=14)
-    models = build_models(data, distributions=initial_distributions, n=500, timeout=120, Nbest=10)
-    model_list = set()
-    for _, v in models.items():
-        model_list.update(v.keys())
-    print(list(model_list))
-    models = build_models(data, distributions=list(model_list), n=5000, timeout=120, Nbest=1)
+    # 1) Find distribution for closest stars
+    data = load_star_data(mag=14, n_stars=1)
+
+    for k, v in data.items():
+        print(f"{k}: {len(v)}")
+    quit()
+
+    models = build_models(data[1], distributions=initial_distributions, n=5000, timeout=120, Nbest=10)
+
+    model_list = list(models.keys())
+    models = build_models(data[1], distributions=model_list, n=50000, timeout=120, Nbest=1, method="ks_statistic")
     print(models)
     for k, v in models.items():
         print(f'> {k} <> {v}')
-        print(v.items())
-    model_rsv = [build_distribution_func(k1, v1) for v in models.values() for k1, v1 in v.items()]
 
-    consolidated = []
-    n = 500
-    fig, axs = plt.subplots(2, len(model_rsv) - 1)
-    for i in range(len(model_rsv) - 1):
-        d = model_rsv[i](n)
-        axs[0, i].hist(d, 200)
-        consolidated = np.concatenate((consolidated, d))
-        axs[0, i].set_title(f"Plot for model {i+1}")
+    model = [getattr(scipy.stats, name)(**params) for name, params in models.items()]
+    m = model[0]
 
-    d0 = model_rsv[-1](3*n)
-    d1 = data[1] + data[2] + data[3]
-    sample = np.random.choice(d1, size=3*n)
-    axs[1, 1].hist(d0, 20)
-    axs[1, 1].set_title("Consolidated Model")
-    axs[1, 2].hist(consolidated, 20)
-    axs[1, 2].set_title("Individual Models")
-    axs[1, 0].hist(sample, 20)
-    axs[1, 0].set_title("Actual Data")
+    n = 1000
 
-    print("\n SINGLE STAR MODELS")
+    measured_data = np.random.choice(data[1], size=n)
+    model_data = m.rvs(n)
+
+    fig, axs = plt.subplots(1, 2)
+    x = np.linspace(m.ppf(0.01), m.ppf(0.99), 100)
+
+    axs[0].hist(measured_data, 100, density=True)
+    axs[0].plot(x, m.pdf(x), alpha=0.5)
+    axs[0].set_title(f"Measured Data")
+
+    axs[1].hist(model_data, 100, density=True)
+    axs[1].plot(x, m.pdf(x), alpha=0.5)
+    axs[1].set_title(f"Model Output")
+
     print("Comparison between closest model, and closest data")
-    print(scipy.stats.kstest(model_rsv[0](n), np.random.choice(data[1], size=n)))
+    print(scipy.stats.kstest(model_data, measured_data))
 
-    print("Comparison between middle model, and middle data")
-    print(scipy.stats.kstest(model_rsv[1](n), np.random.choice(data[2], size=n)))
+    # 2) Find distribution for next closest stars given a closest star
+    for k, v in data.items():
+        data[k] = np.sort(v)
 
-    print("Comparison between farthest model, and farthest data")
-    print(scipy.stats.kstest(model_rsv[2](n), np.random.choice(data[3], size=n)))
+    conditional = {}
+    conditional[2] = {}
+    conditional[3] = {}
 
-    
-    print("\nDATA COMPARISONS")
-    print("Comparison between single model, and multiple models")
-    print(scipy.stats.kstest(d0, consolidated))
+    for i in range(2, 4):
 
-    print("Comparison between actual data and multiple models")
-    print(scipy.stats.kstest(sample, consolidated))
+        p = np.arange(data[i - 1][0], data[i - 1][-1], step=1)
 
-    print("Comparison between actual data and single model")
-    print(scipy.stats.kstest(sample, d0))
+        dist = [getattr(scipy.stats, name) for name, _ in models.items()]
+        d = dist[0]
 
-    print("Comparison between actual data and itself (for sanity checking)")
-    print(scipy.stats.kstest(np.random.choice(d1, size=n), np.random.choice(d1, size=n)))
+        print(len(p))
+        n = 5000
 
-    closest = []
-    middle = []
-    farthest = []
+        for value in p:
+            data_subset = data[i][data[1] >= value]
+            params = {}
+            if len(data_subset) > 0:
+                data_subset = np.random.choice(data_subset, size=n)
+                kde = d.fit(data_subset)
+                param_names = (d.shapes + ", loc, scale").split(", ") if d.shapes else ["loc", "scale"]
+                for d_key, d_val in zip(param_names, kde):
+                    params[d_key] = d_val
+            
+            conditional[i][value] = params
+            print(value)
 
-    generated = np.concatenate([model_rsv[0](n), model_rsv[1](n), model_rsv[2](n)])
-    generated = np.reshape(generated, (-1, 3))
-    sorted = np.sort(generated, axis=-1)
-    closest = sorted[:, 0]
-    middle = sorted[:, 1]
-    farthest = sorted[:, 2]
+    # 3) Compare distribution generated for model to the actual distribution of stars
+            
+    def get_three_stars(n):
+        first = m.rvs(n)
+        fkeys = np.arange(data[1][0], data[1][-1], step=1)
+        skeys = np.arange(data[2][0], data[2][-1], step=1)
+        stars = []
+        for f in first:
+            fa = fkeys[fkeys >= f]
+            while len(fa) == 0:
+                f = m.rvs()
+                fa = fkeys[fkeys >= f]
+            fk = np.amin(fa)
+            s = conditional[2][fk]
+            try:
+                s = d(**s).rvs()
+            except TypeError:
+                print(s)
+                quit()
+            sa = skeys[skeys >= s]
+            while len(sa) == 0:
+                s = m.rvs()
+                sa = skeys[skeys >= s]
+            sk = np.amin(sa)
+            t = conditional[3][sk]
+            try: 
+                t = d(**t).rvs()
+            except TypeError:
+                print(t)
+                quit()
+            stars += [f, s, t]
+        # stars = np.reshape(stars, (1, -1))
+        return stars
+        
+    n = 5000
+    modelled = get_three_stars(n)
+    consolid = np.concatenate([data[1], data[2], data[3]])
 
-    print("\nSINGLE MODELS")
-    print("Comparison between closest model, and generated closest")
-    print(scipy.stats.kstest(model_rsv[0](n), closest))
+    fig, axs = plt.subplots(1, 3)
 
-    print("Comparison between middle model and generated middle")
-    print(scipy.stats.kstest(model_rsv[1](n), middle))
+    con_models = build_models(consolid, distributions=initial_distributions, n=n, timeout=120, Nbest=1)
+    con_models = [getattr(scipy.stats, name)(**params) for name, params in con_models.items()]
+    c = con_models[0]
+    x = np.linspace(c.ppf(0.01), c.ppf(0.99), 100)
+    cm_data = c.rvs(n)
+    cd_data = np.random.choice(consolid, size=n)
+    sm_data = np.random.choice(modelled, size=n)
 
-    print("Comparison between farthest model and generated farthest")
-    print(scipy.stats.kstest(model_rsv[2](n), farthest))
+    axs[0].hist(cd_data, 100, density=True)
+    axs[0].plot(x, c.pdf(x), alpha=0.5)
+    axs[0].set_title(f"Measured Data")
 
-    generated = model_rsv[-1](3*n)
-    generated = np.reshape(generated, (-1, 3))
-    sorted = np.sort(generated)
-    closest = sorted[:, 0]
-    middle = sorted[:, 1]
-    farthest = sorted[:, 2]
+    axs[1].hist(cm_data, 100, density=True)
+    axs[1].plot(x, c.pdf(x), alpha=0.5)
+    axs[1].set_title(f"Model Output")
 
-    print("\nCONSOLIDATED MODELS:")
-    
-    print("Comparison between closest model, and consolidated generated closest")
-    print(scipy.stats.kstest(model_rsv[0](n), closest))
+    axs[2].hist(sm_data, 100, density=True)
+    axs[2].plot(x, c.pdf(x), alpha=0.5)
+    axs[2].set_title(f"Model Output from KDE")
 
-    print("Comparison between middle model and consolidated generated middle")
-    print(scipy.stats.kstest(model_rsv[1](n), middle))
-
-    print("Comparison between farthest model and consolidated generated farthest")
-    print(scipy.stats.kstest(model_rsv[2](n), farthest))
-
-    print("Comparison between generated model and generated model (for sanity checking)")
-    print(scipy.stats.kstest(model_rsv[-1](n), model_rsv[-1](n)))
-
+    print("Comparison between kde model, and measured data")
+    print(scipy.stats.kstest(sm_data, cd_data))
 
     plt.show()
+
