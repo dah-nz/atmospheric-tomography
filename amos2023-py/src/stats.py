@@ -65,135 +65,160 @@ if __name__ == "__main__":
     initial_distributions = ['betaprime', 'f', 'lognorm', 'ncf', 'gumbel_r', 'johnsonsu', 'nct', 'burr', 'fisk', 'mielke', 'invgamma', 'burr12', 'jf_skew_t', 'johnsonsb', 'genhyperbolic', 'exponorm', 'alpha', 'moyal', 'norminvgauss']
 
     # 1) Find distribution for closest stars
-    data = load_star_data(mag=14, n_stars=1)
+    data = load_star_data(mag=14, n_stars=3)
 
-    for k, v in data.items():
-        print(f"{k}: {len(v)}")
-    quit()
+    invalids = []
+    for i in range(len(data[1])):
+        a = data[1][i]
+        b = data[2][i]
+        c = data[3][i]
+        if a > b or b > c or a > c:
+            invalids.append(i)
+            print(f"[{i}]: {a},{b},{c}")
+    for k in [1, 2, 3]:
+        data[k] = np.delete(data[k], invalids)
 
-    models = build_models(data[1], distributions=initial_distributions, n=5000, timeout=120, Nbest=10)
+    n = 500
+    # 2) Direct Sampling
+    direct = list(zip(data[1], data[2], data[3]))
+    print(len(direct))
+    direct_sample = np.asarray([direct[i] for i in np.random.choice(len(direct), size=n)])
+    print(f"Direct sample size: {np.shape(direct_sample)}")
 
+    # 3) Rejection sampling
+    # Build models for each distance
+    rej_model = {}
+    for key in [1, 2, 3]:
+        models = build_models(data[key], distributions=initial_distributions, n=n, timeout=120, Nbest=5, method="ks_statistic")
+        model_list = list(models.keys())
+        models = build_models(data[key], distributions=model_list, n=10*n, timeout=120, Nbest=1, method="ks_statistic")
+        rej_model[key] = [getattr(scipy.stats, name)(**params) for name, params in models.items()][0]
+
+    # Take a sample, rejecting samples that do not match the criteria
+    rej_sample = []
+    while len(rej_sample) < n:
+        a = rej_model[1].rvs(1)
+        b = rej_model[2].rvs(1)
+        c = rej_model[3].rvs(1)
+        if a < b and b < c:
+            rej_sample.append((a, b, c))
+    rej_sample = np.reshape(np.asarray(rej_sample), (n, 3))
+    print(f"Rejection sample size: {np.shape(rej_sample)}")
+
+    # 4) Difference modelling
+    # build models, where the second and third closest are based on differences from the previous closest
+    dif_model = {}
+    dif_data = {1: data[1], 2: data[2] - data[1], 3: data[3] - data[2]}
+    for key in [1, 2, 3]:
+        models = build_models(data[key], distributions=initial_distributions, n=n, timeout=120, Nbest=5, method="ks_statistic")
+        model_list = list(models.keys())
+        models = build_models(data[key], distributions=model_list, n=10*n, timeout=120, Nbest=1, method="ks_statistic")
+        dif_model[key] = [getattr(scipy.stats, name)(**params) for name, params in models.items()][0]
+
+    # take a sample, adding second and third to the results
+    a = dif_model[1].rvs(n)
+    b = a + dif_model[2].rvs(n)
+    c = b + dif_model[3].rvs(n)
+    dif_sample = np.asarray(list(zip(a, b, c)))
+    print(f"Difference sample size: {np.shape(dif_sample)}")
+
+    # 5) Sum modelling
+    # Build model using sums of distances from the satellite
+    sum_data = np.sum([data[1], data[2], data[3]], axis=1)
+    models = build_models(sum_data, distributions=initial_distributions, n=n, timeout=120, Nbest=5, method="ks_statistic")
     model_list = list(models.keys())
-    models = build_models(data[1], distributions=model_list, n=50000, timeout=120, Nbest=1, method="ks_statistic")
-    print(models)
-    for k, v in models.items():
-        print(f'> {k} <> {v}')
+    models = build_models(sum_data, distributions=model_list, n=10*n, timeout=120, Nbest=1, method="ks_statistic")
+    sum_model = [getattr(scipy.stats, name)(**params) for name, params in models.items()][0]
 
-    model = [getattr(scipy.stats, name)(**params) for name, params in models.items()]
-    m = model[0]
+    # take samples, splitting into three
+    s = sum_model.rvs(n)
+    print(np.shape(s))
+    def split(v):
+        a = rej_model[1].rvs(1)
+        while a > v / 3:
+            a = rej_model[1].rvs(1)
+        b = np.random.uniform(a, (v - a)/2)
+        c = v - a - b
+        return tuple(sorted([a, b, c]))
+    sum_sample = np.reshape(np.asarray(list(map(split, s))), (n, 3))
+    print(f"Sum of squares sample size: {np.shape(sum_sample)}")
 
-    n = 1000
+    # 5b) Sum modelling (squares)
+    # Build model using sum of squares of distances from the satellite
+    ss_data = np.sum([data[1] ** 2, data[2] ** 2, data[3] ** 2], axis=1)
+    models = build_models(ss_data, distributions=initial_distributions, n=n, timeout=120, Nbest=5, method="ks_statistic")
+    model_list = list(models.keys())
+    models = build_models(ss_data, distributions=model_list, n=10*n, timeout=120, Nbest=1, method="ks_statistic")
+    ss_model = [getattr(scipy.stats, name)(**params) for name, params in models.items()][0]
 
-    measured_data = np.random.choice(data[1], size=n)
-    model_data = m.rvs(n)
+    # take samples, splitting into three, then taking the square root
+    s = ss_model.rvs(n)
+    print(np.shape(s))
+    def split_root(v):
+        a = rej_model[1].rvs(1) ** 2
+        while a > v/3:
+            a = rej_model[1].rvs(1) ** 2
+        b = np.random.uniform(a, (v - a)/2)
+        c = v - a - b
+        return tuple(sorted([a ** 0.5, b ** 0.5, c ** 0.5]))
+    ss_sample = np.reshape(np.asarray(list(map(split_root, s))), (n, 3))
+    print(f"Sum of squares sample size: {np.shape(ss_sample)}")
 
-    fig, axs = plt.subplots(1, 2)
-    x = np.linspace(m.ppf(0.01), m.ppf(0.99), 100)
+    fig, axs = plt.subplots(3, 5)
 
-    axs[0].hist(measured_data, 100, density=True)
-    axs[0].plot(x, m.pdf(x), alpha=0.5)
-    axs[0].set_title(f"Measured Data")
+    xmin = 0
+    xmax = 1250
 
-    axs[1].hist(model_data, 100, density=True)
-    axs[1].plot(x, m.pdf(x), alpha=0.5)
-    axs[1].set_title(f"Model Output")
+    for n, d in enumerate([direct_sample, rej_sample, dif_sample, sum_sample, ss_sample]):
+        axs[0, n].hist(d[:, 0], 100, density=True)
+        axs[1, n].hist(d[:, 1], 100, density=True)
+        axs[2, n].hist(d[:, 2], 100, density=True)
+        axs[0, n].set_xlim([xmin, xmax])
+        axs[1, n].set_xlim([xmin, xmax])
+        axs[2, n].set_xlim([xmin, xmax])
 
-    print("Comparison between closest model, and closest data")
-    print(scipy.stats.kstest(model_data, measured_data))
+    axs[0, 0].set_title("Raw Data")
+    axs[0, 1].set_title("Rejection Sampling")
+    axs[0, 2].set_title("Modelling Differences")
+    axs[0, 3].set_title("Modelling Sum")
+    axs[0, 4].set_title("Modelling Sum of Squares")
 
-    # 2) Find distribution for next closest stars given a closest star
-    for k, v in data.items():
-        data[k] = np.sort(v)
+    axs[0, 0].set_ylabel("Closest star")
+    axs[1, 0].set_ylabel("2nd closest star")
+    axs[2, 0].set_ylabel("3rd closest star")
 
-    conditional = {}
-    conditional[2] = {}
-    conditional[3] = {}
+    print("> > Comparison between raw data and rejection sampling")
+    r = scipy.stats.kstest(direct_sample[:, 0], rej_sample[:, 0])
+    print(f"> Closest: KS Test p-value = {r.pvalue}")
+    r = scipy.stats.kstest(direct_sample[:, 1], rej_sample[:, 1])
+    print(f"> Second closest: KS Test p-value = {r.pvalue}")
+    r = scipy.stats.kstest(direct_sample[:, 2], rej_sample[:, 2])
+    print(f"> Third closest: KS Test p-value = {r.pvalue}")
 
-    for i in range(2, 4):
+    print("> > Comparison between raw data and difference sampling")
+    r = scipy.stats.kstest(direct_sample[:, 0], dif_sample[:, 0])
+    print(f"> Closest: KS Test p-value = {r.pvalue}")
+    r = scipy.stats.kstest(direct_sample[:, 1], dif_sample[:, 1])
+    print(f"> Second closest: KS Test p-value = {r.pvalue}")
+    r = scipy.stats.kstest(direct_sample[:, 2], dif_sample[:, 2])
+    print(f"> Third closest: KS Test p-value = {r.pvalue}")
 
-        p = np.arange(data[i - 1][0], data[i - 1][-1], step=1)
+    print("> > Comparison between raw data and sum sampling")
+    r = scipy.stats.kstest(direct_sample[:, 0], sum_sample[:, 0])
+    print(f"> Closest: KS Test p-value = {r.pvalue}")
+    r = scipy.stats.kstest(direct_sample[:, 1], sum_sample[:, 1])
+    print(f"> Second closest: KS Test p-value = {r.pvalue}")
+    r = scipy.stats.kstest(direct_sample[:, 2], sum_sample[:, 2])
+    print(f"> Third closest: KS Test p-value = {r.pvalue}")
 
-        dist = [getattr(scipy.stats, name) for name, _ in models.items()]
-        d = dist[0]
+    print("> > Comparison between raw data and sum of squares sampling")
+    r = scipy.stats.kstest(direct_sample[:, 0], ss_sample[:, 0])
+    print(f"> Closest: KS Test p-value = {r.pvalue}")
+    r = scipy.stats.kstest(direct_sample[:, 1], ss_sample[:, 1])
+    print(f"> Second closest: KS Test p-value = {r.pvalue}")
+    r = scipy.stats.kstest(direct_sample[:, 2], ss_sample[:, 2])
+    print(f"> Third closest: KS Test p-value = {r.pvalue}")
 
-        print(len(p))
-        n = 5000
-
-        for value in p:
-            data_subset = data[i][data[1] >= value]
-            params = {}
-            if len(data_subset) > 0:
-                data_subset = np.random.choice(data_subset, size=n)
-                kde = d.fit(data_subset)
-                param_names = (d.shapes + ", loc, scale").split(", ") if d.shapes else ["loc", "scale"]
-                for d_key, d_val in zip(param_names, kde):
-                    params[d_key] = d_val
-            
-            conditional[i][value] = params
-            print(value)
-
-    # 3) Compare distribution generated for model to the actual distribution of stars
-            
-    def get_three_stars(n):
-        first = m.rvs(n)
-        fkeys = np.arange(data[1][0], data[1][-1], step=1)
-        skeys = np.arange(data[2][0], data[2][-1], step=1)
-        stars = []
-        for f in first:
-            fa = fkeys[fkeys >= f]
-            while len(fa) == 0:
-                f = m.rvs()
-                fa = fkeys[fkeys >= f]
-            fk = np.amin(fa)
-            s = conditional[2][fk]
-            try:
-                s = d(**s).rvs()
-            except TypeError:
-                print(s)
-                quit()
-            sa = skeys[skeys >= s]
-            while len(sa) == 0:
-                s = m.rvs()
-                sa = skeys[skeys >= s]
-            sk = np.amin(sa)
-            t = conditional[3][sk]
-            try: 
-                t = d(**t).rvs()
-            except TypeError:
-                print(t)
-                quit()
-            stars += [f, s, t]
-        # stars = np.reshape(stars, (1, -1))
-        return stars
-        
-    n = 5000
-    modelled = get_three_stars(n)
-    consolid = np.concatenate([data[1], data[2], data[3]])
-
-    fig, axs = plt.subplots(1, 3)
-
-    con_models = build_models(consolid, distributions=initial_distributions, n=n, timeout=120, Nbest=1)
-    con_models = [getattr(scipy.stats, name)(**params) for name, params in con_models.items()]
-    c = con_models[0]
-    x = np.linspace(c.ppf(0.01), c.ppf(0.99), 100)
-    cm_data = c.rvs(n)
-    cd_data = np.random.choice(consolid, size=n)
-    sm_data = np.random.choice(modelled, size=n)
-
-    axs[0].hist(cd_data, 100, density=True)
-    axs[0].plot(x, c.pdf(x), alpha=0.5)
-    axs[0].set_title(f"Measured Data")
-
-    axs[1].hist(cm_data, 100, density=True)
-    axs[1].plot(x, c.pdf(x), alpha=0.5)
-    axs[1].set_title(f"Model Output")
-
-    axs[2].hist(sm_data, 100, density=True)
-    axs[2].plot(x, c.pdf(x), alpha=0.5)
-    axs[2].set_title(f"Model Output from KDE")
-
-    print("Comparison between kde model, and measured data")
-    print(scipy.stats.kstest(sm_data, cd_data))
-
+    
     plt.show()
 
