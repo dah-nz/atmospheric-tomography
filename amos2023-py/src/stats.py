@@ -79,6 +79,7 @@ if __name__ == "__main__":
         data[k] = np.delete(data[k], invalids)
 
     n = 500
+    to = 360
     # 2) Direct Sampling
     direct = list(zip(data[1], data[2], data[3]))
     print(len(direct))
@@ -89,9 +90,9 @@ if __name__ == "__main__":
     # Build models for each distance
     rej_model = {}
     for key in [1, 2, 3]:
-        models = build_models(data[key], distributions=initial_distributions, n=n, timeout=120, Nbest=5, method="ks_statistic")
+        models = build_models(data[key], distributions=initial_distributions, n=n, timeout=to, Nbest=5, method="ks_statistic")
         model_list = list(models.keys())
-        models = build_models(data[key], distributions=model_list, n=10*n, timeout=120, Nbest=1, method="ks_statistic")
+        models = build_models(data[key], distributions=model_list, n=10*n, timeout=to, Nbest=1, method="ks_statistic")
         rej_model[key] = [getattr(scipy.stats, name)(**params) for name, params in models.items()][0]
 
     # Take a sample, rejecting samples that do not match the criteria
@@ -110,9 +111,9 @@ if __name__ == "__main__":
     dif_model = {}
     dif_data = {1: data[1], 2: data[2] - data[1], 3: data[3] - data[2]}
     for key in [1, 2, 3]:
-        models = build_models(data[key], distributions=initial_distributions, n=n, timeout=120, Nbest=5, method="ks_statistic")
+        models = build_models(data[key], distributions=initial_distributions, n=n, timeout=to, Nbest=5, method="ks_statistic")
         model_list = list(models.keys())
-        models = build_models(data[key], distributions=model_list, n=10*n, timeout=120, Nbest=1, method="ks_statistic")
+        models = build_models(data[key], distributions=model_list, n=10*n, timeout=to, Nbest=1, method="ks_statistic")
         dif_model[key] = [getattr(scipy.stats, name)(**params) for name, params in models.items()][0]
 
     # take a sample, adding second and third to the results
@@ -124,42 +125,52 @@ if __name__ == "__main__":
 
     # 5) Sum modelling
     # Build model using sums of distances from the satellite
-    sum_data = np.sum([data[1], data[2], data[3]], axis=1)
-    models = build_models(sum_data, distributions=initial_distributions, n=n, timeout=120, Nbest=5, method="ks_statistic")
+    sum_data = np.sum([data[1], data[2], data[3]], axis=0)
+    models = build_models(sum_data, distributions=initial_distributions, n=n, timeout=to, Nbest=5, method="ks_statistic")
     model_list = list(models.keys())
-    models = build_models(sum_data, distributions=model_list, n=10*n, timeout=120, Nbest=1, method="ks_statistic")
+    models = build_models(sum_data, distributions=model_list, n=10*n, timeout=to, Nbest=1, method="ks_statistic")
     sum_model = [getattr(scipy.stats, name)(**params) for name, params in models.items()][0]
 
     # take samples, splitting into three
     s = sum_model.rvs(n)
     print(np.shape(s))
     def split(v):
-        a = rej_model[1].rvs(1)
-        while a > v / 3:
-            a = rej_model[1].rvs(1)
-        b = np.random.uniform(a, (v - a)/2)
+        a = np.random.uniform(0, v)
+        b = np.random.uniform(0, v - a)
         c = v - a - b
+        while c <= 0:
+            a = np.random.uniform(0, v)
+            b = np.random.uniform(0, v - a)
+            c = v - a - b
         return tuple(sorted([a, b, c]))
     sum_sample = np.reshape(np.asarray(list(map(split, s))), (n, 3))
-    print(f"Sum of squares sample size: {np.shape(sum_sample)}")
+    print(f"Sum sample size: {np.shape(sum_sample)}")
 
     # 5b) Sum modelling (squares)
     # Build model using sum of squares of distances from the satellite
-    ss_data = np.sum([data[1] ** 2, data[2] ** 2, data[3] ** 2], axis=1)
-    models = build_models(ss_data, distributions=initial_distributions, n=n, timeout=120, Nbest=5, method="ks_statistic")
+    ss_data = np.sum([data[1] ** 2, data[2] ** 2, data[3] ** 2], axis=0)
+    models = build_models(ss_data, distributions=initial_distributions, n=n, timeout=to, Nbest=5, method="ks_statistic")
     model_list = list(models.keys())
-    models = build_models(ss_data, distributions=model_list, n=10*n, timeout=120, Nbest=1, method="ks_statistic")
+    models = build_models(ss_data, distributions=model_list, n=10*n, timeout=to, Nbest=1, method="ks_statistic")
     ss_model = [getattr(scipy.stats, name)(**params) for name, params in models.items()][0]
+    print(np.shape(ss_data))
 
     # take samples, splitting into three, then taking the square root
     s = ss_model.rvs(n)
     print(np.shape(s))
     def split_root(v):
-        a = rej_model[1].rvs(1) ** 2
-        while a > v/3:
-            a = rej_model[1].rvs(1) ** 2
-        b = np.random.uniform(a, (v - a)/2)
+        a = np.random.uniform(0, v)
+        b = np.random.uniform(0, v - a)
         c = v - a - b
+        i = 0
+        while c <= 0:
+            a = np.random.uniform(0, v)
+            b = np.random.uniform(0, v - a)
+            c = v - a - b
+            i += 1
+            if i > 100:
+                print(f'Split Failed: {v}')
+                quit()
         return tuple(sorted([a ** 0.5, b ** 0.5, c ** 0.5]))
     ss_sample = np.reshape(np.asarray(list(map(split_root, s))), (n, 3))
     print(f"Sum of squares sample size: {np.shape(ss_sample)}")
