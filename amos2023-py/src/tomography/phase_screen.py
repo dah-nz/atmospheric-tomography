@@ -27,7 +27,7 @@ class PhaseScreenGenerator():
         Parameters
         ----------
             size:   2D tuple containing size of phase screens (pixels)
-            D:      Telescope diamter (m)
+            D:      Telescope diameter (m)
             r0:     Fried parameter (m)
         """
         self.f = h5py.File("phasescreens.hdf5", 'a', libver='latest')
