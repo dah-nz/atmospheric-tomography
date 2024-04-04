@@ -188,5 +188,5 @@ def get_metapupil_diameters(altitudes, beacons, diameter):
 def get_layer_shapes(altitudes, beacons, diameter, aperture_size):
     metapupil_diameters = get_metapupil_diameters(altitudes, beacons, diameter)
     layer_pixels = [int(d/diameter * aperture_size + 0.5) for d in metapupil_diameters]
-    layer_grids = [(px, px) for px in layer_pixels]
-    return metapupil_diameters, layer_grids
+    # layer_grids = [(px, px) for px in layer_pixels]
+    return metapupil_diameters, layer_pixels

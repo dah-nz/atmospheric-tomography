@@ -1,5 +1,5 @@
 {
-    "aperture_size": 256,
+    "aperture_size": 64,
     "location": [
         "43d59m12.0sS",
         "170d27m54.0sE",
@@ -9,7 +9,17 @@
     "D": 1.8,
     "f_number": 6.5,
     "star_magnitude": 14,
-    "asterism_size": 3,
+    "limiting_angle": 120,
+    "layer_altitudes": [
+        1000,
+        5000,
+        10000
+    ],
+    "layer_conditions": [
+        5.06,
+        38.95,
+        20.15
+    ],
     
     "epochs": 1,
     "training_size": 2048,
@@ -18,5 +28,8 @@
     "n_coeffs": 16,
     "basis": "DCT",
 
-    "model_file": "./src/parameters/model_starmap_dct.pth"
+    "model_file_static_asterism": "./src/parameters/model_dct_sa.pth",
+    "model_file_dynamic_asterism": "./src/parameters/model_dct_da.pth",
+
+    "LReLU_grad": 0.01
 }

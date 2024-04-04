@@ -18,24 +18,24 @@ def load_asterism_data(mag, n=None, limit=0):
         c = data[2][i]
         if a > b or b > c or a > c:
             invalids.append(i)
-            print(f"[{i}]: {a},{b},{c}")
+            # print(f"[{i}]: {a},{b},{c}")
     for k in range(3):
         data[k] = np.delete(data[k], invalids)
 
-    data = np.reshape(np.concatenate(data, axis=0), (3, -1))
+    data = np.reshape(np.concatenate(data, axis=0), (3, -1)).T
 
     if limit > 0:
-        print(data.shape)
-        data = data[:, data[2, :] <= limit]
-        print(data.shape)
+        data = data[data[:, 2] <= limit, :]
 
     if n is not None:
-        l = data.shape[1]
-        print(l)
-        indices = np.random.choice(l, size=n)
-        data = data[:, indices]
-    
-    return data.T
+        data = sample(data, n)
+        
+    return data
+
+def sample(data, n):
+    l = data.shape[0]
+    indices = np.random.choice(l, size=n)
+    return data[indices, :] 
 
 if __name__ == "__main__":
     data = load_asterism_data(14, n=100, limit=60)

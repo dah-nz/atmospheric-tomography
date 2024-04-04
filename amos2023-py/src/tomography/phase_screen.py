@@ -56,11 +56,13 @@ class PhaseScreenGenerator():
         if isinstance(seeds, int):
             seeds = self.rng.integers(rng_min, rng_max, size=seeds)
 
-        for seed in seeds:
-            self._get_raw(seed)
+        for s in seeds:
+            self._get_raw(s)
 
         if cut_out is not None:
             self.find_scaling(cut_out)
+
+        return [self.get(s) for s in seeds]
 
     def _get_raw(self, seed=None):
         """
@@ -78,7 +80,7 @@ class PhaseScreenGenerator():
             screen = self.f[self._at()][str(seed)]
         except KeyError:
             print("Generating phase screen: {}, {}".format(self._at(), seed))
-            screen = kolmogorov(self.size, self.D, self.r0, seed)
+            screen = kolmogorov((self.size, self.size), self.D, self.r0, seed)
             self.f[self._at()].create_dataset(str(seed), data=np.float16(screen))
             self.f.flush()
 

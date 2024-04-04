@@ -31,7 +31,7 @@ class Beacon():
     reset()
         Reset beacon to initial position
     """
-    def __init__(self, theta, gamma, motion_path=None, gamma_arcseconds=False):
+    def __init__(self, theta, gamma, motion_path=None, gamma_arcseconds=True):
         self._theta0 = theta
         if gamma_arcseconds:
             self._gamma_arcsec = gamma
