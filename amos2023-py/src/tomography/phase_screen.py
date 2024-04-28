@@ -14,13 +14,11 @@ from util import util
 import os
 import warnings
 
-_phase_data_cache = None
-
 rng_min = 0
-rng_max = 65536
+rng_max = (2 ** 31) - 1
 
 class PhaseScreenGenerator():
-    def __init__(self, size, D, r0):
+    def __init__(self, size, D, r0, rng=None):
         """
         Phase screen generator.
                 
@@ -30,13 +28,17 @@ class PhaseScreenGenerator():
             D:      Telescope diameter (m)
             r0:     Fried parameter (m)
         """
-        self.f = h5py.File("phasescreens.hdf5", 'a', libver='latest')
-        self.rng = np.random.default_rng()
+
+        if rng:
+            self.rng = rng
+        else:
+            self.rng = np.random.default_rng()
         self.k = 1
 
         self.D = D
         self.r0 = r0
         self.size = size
+        # self.cache = {}
 
     def _at(self):
         return "{}_{}_{}".format(self.D, self.r0, self.size)
@@ -56,13 +58,12 @@ class PhaseScreenGenerator():
         if isinstance(seeds, int):
             seeds = self.rng.integers(rng_min, rng_max, size=seeds)
 
-        for s in seeds:
-            self._get_raw(s)
 
         if cut_out is not None:
-            self.find_scaling(cut_out)
+            screens = [self._get_raw(s) for s in seeds]
+            self.find_scaling(cut_out, screens)
 
-        return [self.get(s) for s in seeds]
+        return #[self.get(seed=s) for s in seeds]
 
     def _get_raw(self, seed=None):
         """
@@ -72,28 +73,28 @@ class PhaseScreenGenerator():
         """
         if seed is None:
             seed = self.rng.integers(rng_min, rng_max)
-
-        self.f.require_group(self._at())
-
-        try:
-            # print("Retrieving phase screen: {}, {}".format(self._at(), seed))
-            screen = self.f[self._at()][str(seed)]
-        except KeyError:
-            print("Generating phase screen: {}, {}".format(self._at(), seed))
-            screen = kolmogorov((self.size, self.size), self.D, self.r0, seed)
-            self.f[self._at()].create_dataset(str(seed), data=np.float16(screen))
-            self.f.flush()
+        # try:
+        #     screen = self.cache[seed]
+        # except KeyError:
+        #     print("Generating phase screen: {}, {}".format(self._at(), seed))
+        screen = kolmogorov((self.size, self.size), self.D, self.r0, seed)
+        # self.cache[seed] = screen
 
         return screen
 
-    def get(self, seed=None):
+    def get(self, seed=None, idx=None):
         """
         Retrieve a single phase screen
         Scales the phase screen by scaling factor to get correct variance.
         """
+        # if idx is not None:
+        #     try:
+        #         seed = list(self.cache.keys())[idx]
+        #     except IndexError:
+        #         seed = seed
         return np.float32(self._get_raw(seed)) * self.k
 
-    def find_scaling(self, cut_out_size):
+    def find_scaling(self, cut_out_size, screens):
         """
         Estimates the scaling factor used for a set cut out size.
         This scaling factor brings a set of phase screens to the correct sigma, as specified in Noll (1975)
@@ -108,7 +109,7 @@ class PhaseScreenGenerator():
         """
 
         self._exp_sigma = self._expected_sigma()
-        self._est_sigma = self._estimated_sigma(cut_out_size)
+        self._est_sigma = self._estimated_sigma(cut_out_size, screens)
 
         self.k = self._exp_sigma / self._est_sigma
         return self.k
@@ -124,7 +125,7 @@ class PhaseScreenGenerator():
         """
         return np.sqrt(1.0299*(self.D/self.r0)**(5/3))
 
-    def _estimated_sigma(self, cut_out_size, N=20):
+    def _estimated_sigma(self, cut_out_size, screens, N=20):
         """
         Estimates the standard deviation/sigma of a set of phase screens
         This takes into account the cut outs of phase screens due to the telescope aperture projection (finite outer scale)
@@ -140,10 +141,10 @@ class PhaseScreenGenerator():
 
         sigma = []
 
-        screens = self.f[self._at()].keys()
+        #  screens = self.cache.keys()
 
-        for key in screens:
-            screen = np.float32(self.f[self._at()][key])
+        for screen in screens:
+            # screen = self.cache[key]
             x_max = screen.shape[0] - size
             y_max = screen.shape[1] - size
 
@@ -160,9 +161,6 @@ class PhaseScreenGenerator():
                 sigma.append(util.rmse(screen[x0:x0+size, y0:y0+size], z, mask=mask))
 
         return np.mean(sigma)
-    
-    # def __del__(self):
-    #     self.f.close()
 
 
 def kolmogorov(size, D, r0, seed):

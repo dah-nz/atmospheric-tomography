@@ -31,8 +31,9 @@ class LSQ(tomography.Tomography):
         metapupil_d = self._metapupil_diameter(beacons, altitudes)
 
         def proj(beacon, altitude):
-            x = np.tan(beacon.az.rad) * altitude
-            y = np.tan(beacon.alt.rad) * altitude
+            x, y = azimuth2cart(altitude, beacon.theta, arcsec2rad(beacon.gamma))
+            # x = np.tan(beacon.az.rad) * altitude
+            # y = np.tan(beacon.alt.rad) * altitude
             d = metapupil_d[altitude]
             r = d/2
             P = self._projectionMatrix((x/r, y/r), d)

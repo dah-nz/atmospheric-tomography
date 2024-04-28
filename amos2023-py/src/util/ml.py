@@ -41,4 +41,5 @@ def test(dataloader, model, loss_fn):
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
     test_loss /= num_batches
-    print(f"Test Error: \n Avg loss: {test_loss:>8f} \n")
+    return test_loss
+    # print(f"Test Error: \n Avg loss: {test_loss:>8f} \n")

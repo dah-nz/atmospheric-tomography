@@ -5,13 +5,61 @@ from parameters import test
 from astro import data
 from util import util
 from tomography import beacon, phase_screen
-
-import ml
+from ml import ml
+from tomography import tomo_LSQ
+import torch
 
 def main():
-    save_dir = "./src/parameters/"
-    settings_file = "settings.json"
-    t = test.load(save_dir + settings_file)
+    seed1 = np.random.randint((2**31)-1)
+    seed2 = np.random.randint((2**31)-1)
+    model = ml.Model(seed=seed1)
+    model_sd = ml.Model(seed=seed2, static_train=True)
+    model_ss = ml.Model(seed=seed2, static_train=True, static_test=True)
+
+    model.train()
+    model.evaluate()
+
+    model_sd.train()
+    model_sd.evaluate()
+
+    model_ss.train()
+    model_ss.evaluate()
+
+    tomo = tomo_LSQ.LSQ(model.t["basis"], model.t["D"], model.t["n_coeffs"], model.t["aperture_size"])
+    tomo_results = []
+
+
+    target = beacon.Beacon(0, 0)
+    for n in range(model.t["epochs"]):
+        total_loss = 0
+        for X, y in model.test_dataloader:
+            X = X.numpy()
+            y = y.numpy()
+            for i in range(model.t["testing_batch"]):
+                data = X[i, :]
+                target_coeffs = y[i, :]
+                beacon_data = np.reshape(data[:6], (-1, 2))
+                beacon_coeffs = np.reshape(data[6:], (3, -1))
+                beacons = [beacon.Beacon(t, g) for t, g in beacon_data]
+                tomo_coeffs = tomo.run(beacons, target, np.ravel(beacon_coeffs), model.t['layer_altitudes'])
+                # print(tomo_coeffs)
+                # print(target_coeffs)
+                total_loss += model.loss_fn(torch.from_numpy(tomo_coeffs), torch.from_numpy(target_coeffs)).item()
+            break
+        tomo_results.append(total_loss / model.t["testing_batch"])
+
+    plt.figure()
+    plt.plot(model.results, label="Dynamic Model")
+    plt.plot(model_sd.results, label="Static Model (Dynamic Test)")
+    plt.plot(model_ss.results, label="Static Model")
+    plt.plot(tomo_results, label="LSQ Tomography")
+    plt.legend()
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss (MSE)")
+
+    plt.show()
+    return
+
     # Settings
     N = 100
     star_magnitude = 14

@@ -17,19 +17,21 @@
     ],
     "layer_conditions": [
         5.06,
-        38.95,
-        20.15
+        5.06,
+        5.06
     ],
     
-    "epochs": 1,
-    "training_size": 2048,
-    "testing_size": 128,
+    "epochs": 128,
+    "training_batch": 256,
+    "testing_batch": 32,
 
     "n_coeffs": 16,
-    "basis": "DCT",
+    "basis": "dct",
 
-    "model_file_static_asterism": "./src/parameters/model_dct_sa.pth",
-    "model_file_dynamic_asterism": "./src/parameters/model_dct_da.pth",
+    "model_file_static_asterism": "model_dct_s16b.pth",
+    "model_file_static_asterism_dynamic_test": "model_dct_sd16b.pth",
+    "model_file_dynamic_asterism": "model_dct_d16b.pth",
 
-    "LReLU_grad": 0.01
+    "LReLU_grad": 0.01,
+    "dropout_rate": 0.01
 }

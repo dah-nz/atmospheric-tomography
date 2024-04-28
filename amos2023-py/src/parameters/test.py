@@ -8,7 +8,7 @@ from basis import DCT, zernike, DST, wavelet
 
 directory = "./src/parameters/"
 
-def configure(file="settings.json"):
+def configure(file="settings.json", dir=None):
     """
         Configure a json settings file for tomography tests
 
@@ -43,10 +43,13 @@ def configure(file="settings.json"):
     # settings["guidestars"]          = [(1, 0), (3, 15), (3, 30), (6, 60), (5, "Asym")]
     # settings["targets"]             = [(5, 30, 6, 8), (40, 100, 7, 5)]
 
-    with open(directory + file, "w") as f:
+    if dir is None:
+        dir = directory
+
+    with open(dir + file, "w") as f:
         json.dump(settings, f, indent=4)
     
-def load(file="settings.json"):
+def load(file="settings.json", dir=None):
     """
         Load test configuration from a file
 
@@ -62,7 +65,10 @@ def load(file="settings.json"):
         settings:
             Dictionary of all parameters required for a simulation
         """
-    with open(directory + file, "r") as f:
+    if dir is None:
+        dir = directory
+
+    with open(dir + file, "r") as f:
         settings = json.load(f)
 
     b = settings["basis"].lower()

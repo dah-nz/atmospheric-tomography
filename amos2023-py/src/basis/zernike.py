@@ -5,7 +5,7 @@ from basis.basis import Basis
 
 class Zernike(Basis):
     """
-    Class that interfaces to Zrenike polynomials as a set of basis functions
+    Class that interfaces to Zernike polynomials as a set of basis functions
     
     Methods
     -------
@@ -29,7 +29,14 @@ class Zernike(Basis):
         # Add one to order as zernike function is 1 indexed
         # Add one more to skip piston (DC) mode
 
-        return self.__zernike(size, order + 1)
+        size = size[0]
+
+        r = np.floor((2 ** 0.5) * size + 1)
+        s0 = int(r/2 - size/2 + 0.5)
+
+        r = (int(r), int(r))
+
+        return self.__zernike(r, order + 1)[s0:s0+size, s0:s0+size]
     
     @lru_cache(maxsize=None)
     def at_point(self, x, y, size, order):

@@ -1,7 +1,7 @@
 import numpy as np
 import joblib
 
-def load_asterism_data(mag, n=None, limit=0):
+def load_asterism_data(mag, n=None, limit=0, rng=None):
     data = []
     # Stars 1, 2, 3
     for star in range(3):
@@ -28,13 +28,16 @@ def load_asterism_data(mag, n=None, limit=0):
         data = data[data[:, 2] <= limit, :]
 
     if n is not None:
-        data = sample(data, n)
+        data = sample(data, n, rng)
         
     return data
 
-def sample(data, n):
+def sample(data, n, rng=None):
     l = data.shape[0]
-    indices = np.random.choice(l, size=n)
+    if rng:
+        indices = rng.choice(l, size=n)
+    else:
+        indices = np.random.choice(l, size=n)
     return data[indices, :] 
 
 if __name__ == "__main__":
