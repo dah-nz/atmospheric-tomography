@@ -9,7 +9,7 @@ from astro import data
 from tomography import beacon, phase_screen
 from parameters import test
 
-class Network(nn.Module):
+class MLNN(nn.Module):
     def __init__(self, settings):
         super().__init__()
         LRELU_grad = settings["LReLU_grad"]
@@ -115,7 +115,7 @@ class Model():
 
         self.device = ml.initialise()
 
-        self.model = Network(self.t).to(self.device)
+        self.model = MLNN(self.t).to(self.device)
         if continue_training:
             self.model.load_state_dict(torch.load(self.model_file + self.t["model_file_suffix"]))
 

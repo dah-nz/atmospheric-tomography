@@ -29,9 +29,9 @@
     "batches_per_epoch": 2,
 
     "n_coeffs": 16,
-    "basis": "dct",
+    "basis": "zernike",
 
-    "model_name": "dct_16_a",
+    "model_name": "cnn_zernike_16_a",
 
     "model_file_fixed_asterism": "fixed_asterism",
     "model_file_fixed_asterism_variable_test": "fixed_asterism_var_test",

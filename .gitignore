@@ -29,7 +29,7 @@ _ReSharper*/
 .vs/
 #Nuget packages folder
 packages/
-*/__pycache__/*
+**/__pycache__/*
 */~$*
 *.pyc
 *.npy
@@ -46,3 +46,10 @@ packages/
 *.csv
 *.pkl
 *.pak
+**/raw/*
+*.pth
+*.mdl
+*.pdf
+*.hdf5
+*.dat
+*.pgf
