@@ -45,13 +45,13 @@ class BatchData(Dataset):
         self.cut_out = (settings["aperture_size"], settings["aperture_size"])
 
         self.n = settings["testing_batch"] if test else settings["training_batch"]
-        self.n *= 10
+        self.n *= settings["batches_per_epoch"]
 
         if not static:
             self.star_gamma = util.arcsec2rad(data.load_asterism_data(settings["star_magnitude"], n=self.n, limit=settings["limiting_angle"], rng=rng))
             self.star_theta = rng.uniform(low=0.0, high=2*np.pi, size=self.star_gamma.shape)
         else:
-            self.static_asterism = [beacon.Beacon(t, 60) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
+            self.static_asterism = [beacon.Beacon(t, settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
 
         limit_star = [beacon.Beacon(0, settings["limiting_angle"], gamma_arcseconds=True)]
         m, l = util.get_layer_shapes(self.altitudes, limit_star, self.D, settings["aperture_size"])
@@ -89,7 +89,7 @@ class BatchData(Dataset):
     
     
 class Model():
-    def __init__(self, seed=None, static_train=False, static_test=False):
+    def __init__(self, seed=None, static_train=False, static_test=False, continue_training=False):
         self.settings_dir = "./src/parameters/"
         self.model_dir = "./data/models/"
         self.settings_file = "settings.json"
@@ -99,14 +99,16 @@ class Model():
         self.static_train = static_train
         if self.static_train:
             if self.static_test:
-                print("Running static model")
-                self.model_file = self.t["model_file_static_asterism"]
+                print("Running fixed asterism model")
+                self.model_file_name = self.t["model_file_fixed_asterism"]
             else: # self.static_test = False
-                print("Running static model (with dynamic test)")
-                self.model_file = self.t["model_file_static_asterism_dynamic_test"]
+                print("Running fixed asterism model (with variable asterism test)")
+                self.model_file_name = self.t["model_file_fixed_asterism_variable_test"]
         else:
-            print("Running dynamic model")
-            self.model_file = self.t["model_file_dynamic_asterism"]
+            print("Running variable asterism model")
+            self.model_file_name = self.t["model_file_variable_asterism"]
+
+        self.model_file = self.model_dir + self.t["model_name"] + "_" + self.model_file_name
 
         self.train_rng = np.random.default_rng(seed=seed)
         self.test_rng = np.random.default_rng(seed=seed+1)
@@ -114,6 +116,8 @@ class Model():
         self.device = ml.initialise()
 
         self.model = Network(self.t).to(self.device)
+        if continue_training:
+            self.model.load_state_dict(torch.load(self.model_file + self.t["model_file_suffix"]))
 
         self.loss_fn = nn.MSELoss()
         self.optimiser = torch.optim.Adam(self.model.parameters(), lr=1e-03, weight_decay=1e-05)
@@ -122,23 +126,24 @@ class Model():
 
         self.train_dataloader = DataLoader(self.train_data, batch_size=self.t["training_batch"], shuffle=True)
         self.test_dataloader = DataLoader(self.test_data, batch_size=self.t['testing_batch'], shuffle=True)
-        self.results = []
+        self.test_results = []
+        self.train_results = []
 
     def train(self):
         epochs = self.t["epochs"]
 
         for i in range(epochs):
-            print(f">>> Training epoch {i}/{epochs}\n-----------------------------------")
-            ml.train(self.train_dataloader, self.model, self.loss_fn, self.optimiser)
-            self.results.append(ml.test(self.test_dataloader, self.model, self.loss_fn))
+            print(f">>> Training epoch {i + 1}/{epochs} <<<")
+            self.train_results.append(ml.train(self.train_dataloader, self.model, self.loss_fn, self.optimiser))
+            self.test_results.append(ml.test(self.test_dataloader, self.model, self.loss_fn))
 
-        print(f"Done.\nTrained {epochs} epochs.")
+        print(f"Done. Trained {epochs} epochs.")
 
-        torch.save(self.model.state_dict(), self.model_dir + self.model_file)
+        torch.save(self.model.state_dict(), self.model_file + self.t["model_file_suffix"])
 
     def evaluate(self):
         self.model = Network(self.t).to(self.device)
-        self.model.load_state_dict(torch.load(self.model_dir + self.model_file))
+        self.model.load_state_dict(torch.load(self.model_file + self.t["model_file_suffix"]))
 
         self.model.eval()
 

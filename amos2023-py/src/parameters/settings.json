@@ -10,28 +10,36 @@
     "f_number": 6.5,
     "star_magnitude": 14,
     "limiting_angle": 120,
+    "fixed_asterism_angle": 15,
+
     "layer_altitudes": [
         1000,
         5000,
         10000
     ],
     "layer_conditions": [
-        5.06,
-        5.06,
-        5.06
+        7.00,
+        7.00,
+        7.00
     ],
     
-    "epochs": 128,
+    "epochs": 32,
     "training_batch": 256,
     "testing_batch": 32,
+    "batches_per_epoch": 2,
 
     "n_coeffs": 16,
     "basis": "dct",
 
-    "model_file_static_asterism": "model_dct_s16b.pth",
-    "model_file_static_asterism_dynamic_test": "model_dct_sd16b.pth",
-    "model_file_dynamic_asterism": "model_dct_d16b.pth",
+    "model_name": "dct_16_a",
+
+    "model_file_fixed_asterism": "fixed_asterism",
+    "model_file_fixed_asterism_variable_test": "fixed_asterism_var_test",
+    "model_file_variable_asterism": "variable_asterism",
+
+    "model_file_suffix": ".mdl",
+    "data_file_suffix": ".dat",
 
     "LReLU_grad": 0.01,
-    "dropout_rate": 0.01
+    "dropout_rate": 0.2
 }

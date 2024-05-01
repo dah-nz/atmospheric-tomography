@@ -14,21 +14,27 @@ def initialise():
 def train(dataloader, model, loss_fn, optimizer):
     size = len(dataloader.dataset)
     model.train()
+    num_batches = len(dataloader)
+    training_loss = 0
+
     for batch, (X, y) in enumerate(dataloader):
         X, y = X.to(device), y.to(device)
 
         pred = model(X)
         loss = loss_fn(pred, y)
 
+        training_loss += loss.item()
+
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
 
-        if batch % 100:
-            now = datetime.now()
-            now = now.strftime("%H:%M:%S")
-            loss, current = loss.item(), (batch + 1) * len(X)
-            print(f"{now} -> loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+        now = datetime.now()
+        now = now.strftime("%H:%M:%S")
+        loss, current = loss.item(), (batch + 1) * len(X)
+        print(f"{now} -> loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+    training_loss /= num_batches
+    return training_loss
 
 def test(dataloader, model, loss_fn):
     size = len(dataloader.dataset)
@@ -42,4 +48,3 @@ def test(dataloader, model, loss_fn):
             test_loss += loss_fn(pred, y).item()
     test_loss /= num_batches
     return test_loss
-    # print(f"Test Error: \n Avg loss: {test_loss:>8f} \n")
