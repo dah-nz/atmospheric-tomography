@@ -9,31 +9,7 @@ from astro import data
 from tomography import beacon, phase_screen
 from parameters import test
 
-class MLNN(nn.Module):
-    def __init__(self, settings):
-        super().__init__()
-        LRELU_grad = settings["LReLU_grad"]
-        do = settings["dropout_rate"]
-        n_coeffs = settings["n_coeffs"]
-        self.flatten = nn.Flatten()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(6+n_coeffs*3, 256),
-            nn.LeakyReLU(LRELU_grad, True),
-            nn.Dropout(do),
-            nn.Linear(256, 512),
-            nn.LeakyReLU(LRELU_grad, True),
-            nn.Dropout(do),
-            nn.Linear(512, 512),
-            nn.LeakyReLU(LRELU_grad, True),
-            nn.Dropout(do),
-            nn.Linear(512, 256),
-            nn.LeakyReLU(LRELU_grad, True),
-            nn.Dropout(do),
-            nn.Linear(256, n_coeffs)
-        )
-    def forward(self, x):
-        x = self.flatten(x)
-        return self.linear_relu_stack(x)
+from ml import modules
     
 class BatchData(Dataset):
     def __init__(self, settings, rng=None, test=False, static=False):
@@ -89,7 +65,7 @@ class BatchData(Dataset):
     
     
 class Model():
-    def __init__(self, seed=None, static_train=False, static_test=False, continue_training=False):
+    def __init__(self, network="CNN", seed=None, static_train=False, static_test=False, continue_training=False):
         self.settings_dir = "./src/parameters/"
         self.model_dir = "./data/models/"
         self.settings_file = "settings.json"
@@ -115,7 +91,9 @@ class Model():
 
         self.device = ml.initialise()
 
-        self.model = MLNN(self.t).to(self.device)
+        self.Network = eval(f"modules.{network}")
+
+        self.model = self.Network(self.t).to(self.device)
         if continue_training:
             self.model.load_state_dict(torch.load(self.model_file + self.t["model_file_suffix"]))
 
@@ -142,7 +120,7 @@ class Model():
         torch.save(self.model.state_dict(), self.model_file + self.t["model_file_suffix"])
 
     def evaluate(self):
-        self.model = Network(self.t).to(self.device)
+        self.model = self.Network(self.t).to(self.device)
         self.model.load_state_dict(torch.load(self.model_file + self.t["model_file_suffix"]))
 
         self.model.eval()

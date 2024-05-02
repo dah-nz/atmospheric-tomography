@@ -23,15 +23,23 @@
         7.00
     ],
     
+    "n_coeffs": 16,
+    "basis": "dct",
+    
+    "ml_network": "CNN",
+    "n_cnn_channels": 16,
+    "internal_nn_size_1": 512,
+    "internal_nn_size_2": 256,
+    "kernel_size": 3,
+    "padding": 1,
+    "max_pool_kernel": 2,
+    
     "epochs": 32,
-    "training_batch": 256,
+    "training_batch": 64,
     "testing_batch": 32,
     "batches_per_epoch": 2,
 
-    "n_coeffs": 16,
-    "basis": "zernike",
-
-    "model_name": "cnn_zernike_16_a",
+    "model_name": "cnn_dct_16_b",
 
     "model_file_fixed_asterism": "fixed_asterism",
     "model_file_fixed_asterism_variable_test": "fixed_asterism_var_test",

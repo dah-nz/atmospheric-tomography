@@ -190,3 +190,51 @@ def get_layer_shapes(altitudes, beacons, diameter, aperture_size):
     layer_pixels = [int(d/diameter * aperture_size + 0.5) for d in metapupil_diameters]
     # layer_grids = [(px, px) for px in layer_pixels]
     return metapupil_diameters, layer_pixels
+
+def prime_factors(n):
+    """
+    Calculate prime factors of n
+
+    Parameters
+    ----------
+    n:      value
+
+    Return
+    ------
+    list of prime factors
+    """
+    i = 2
+    factors = []
+    while i * i <= n:
+        if n % i:
+            i += 1
+        else:
+            n //= i
+            factors.append(i)
+    if n > 1:
+        factors.append(n)
+    return np.array(factors)
+
+def squarest_rectangle(n):
+    """
+    Calculate integers that are closest to the square root of n
+
+    Parameters
+    ----------
+    n:      Value
+
+    Return
+    ------
+    tuple of integers
+    """
+    factors = prime_factors(n)
+    rt = n ** 0.5
+    larger_factors = factors[rt < factors]
+    if len(larger_factors) > 0:
+        closest = [int(larger_factors[0]), int(n / larger_factors[0])]
+    elif n / int(rt) == rt:
+        closest = [int(rt), int(rt)]
+    else:
+        closest = [int(np.prod(factors[:int(len(factors)/2+0.5)])), int(np.prod(factors[int(len(factors)/2+0.5):]))]
+
+    return tuple(sorted(closest))

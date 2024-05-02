@@ -14,7 +14,11 @@ from torchinfo import summary
 def model_summary(m):
     s = ""
     for k, v in m.t.items():
-        s += f"{k}|{v}\n"
+        if type(v) not in [int, float, list, str]:
+            n = v.__class__.__name__
+        else:
+            n = v
+        s += f"{k},{n}\n"
     s += f"loss_fn,{m.loss_fn.__class__.__name__}\n"
     s += f"optimiser,{m.optimiser.__class__.__name__}\n"
     s += str(summary(m.model, input_size=(1, 6+3*m.t["n_coeffs"]), verbose=0))
@@ -40,12 +44,16 @@ def main():
     tomo = tomo_LSQ.LSQ(model.t["basis"], model.t["D"], model.t["n_coeffs"], model.t["aperture_size"])
     tomo_variable = []
     tomo_fixed = []
+    tomo_mixed_loss = []
     open_loop = []
     ol_coeffs = np.zeros(model.t["n_coeffs"])
+
+    fixed_asterism = [beacon.Beacon(t, model.t["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
 
     target = beacon.Beacon(0, 0)
     for n in range(model.t["epochs"]):
         total_loss = 0
+        mixed_loss = 0
         openloop_loss = 0
         print(f"Calculating variable asterism LSQ epoch {n+1}/{model.t['epochs']}")
         for X, y in model.test_dataloader:
@@ -58,16 +66,20 @@ def main():
                 beacon_coeffs = np.reshape(data[6:], (3, -1))
                 beacons = [beacon.Beacon(t, g) for t, g in beacon_data]
                 tomo_coeffs = tomo.run(beacons, target, np.ravel(beacon_coeffs), model.t['layer_altitudes'])
+                tomo_mixed = tomo.run(fixed_asterism, target, np.ravel(beacon_coeffs), model.t['layer_altitudes'])
                 total_loss += model.loss_fn(torch.from_numpy(tomo_coeffs), torch.from_numpy(target_coeffs)).item()
-                openloop_loss += model.loss_fn(torch.from_numpy(ol_coeffs), torch.from_numpy(target_coeffs))
+                mixed_loss += model.loss_fn(torch.from_numpy(tomo_mixed), torch.from_numpy(target_coeffs)).item()
+                openloop_loss += model.loss_fn(torch.from_numpy(ol_coeffs), torch.from_numpy(target_coeffs)).item()
             break
         now = datetime.now()
         now = now.strftime("%H:%M:%S")
         loss = total_loss / model.t["testing_batch"]
+        md_loss = mixed_loss / model.t["testing_batch"]
         ol_loss = openloop_loss / model.t["testing_batch"]
         print(f"{now} -> loss: {loss:>7f}")
         tomo_variable.append(loss)
         open_loop.append(ol_loss)
+        tomo_mixed_loss.append(md_loss)
 
     for n in range(model_ss.t["epochs"]):
         total_loss = 0
@@ -90,20 +102,6 @@ def main():
         print(f"{now} -> loss: {loss:>7f}")
         tomo_fixed.append(loss)
 
-    plt.figure()
-    plt.plot(model.test_results, 'r-', label="Variable Asterism Model")
-    plt.plot(model_sd.test_results, 'b-', label="Fixed Asterism Model (Variable Test)")
-    plt.plot(model_ss.test_results, 'g-', label="Fixed Asterism Model")
-    plt.plot(model.train_results, 'r:', label="Variable Asterism Model [Training}")
-    plt.plot(model_sd.train_results, 'b:', label="Fixed Asterism Model (Variable Test) [Training]")
-    plt.plot(model_ss.train_results, 'g:', label="Fixed Asterism Model [Training]")
-    plt.plot(tomo_fixed, 'k--', label="LSQ Fixed Asterism Tomography")
-    plt.plot(tomo_variable, 'k:', label="LSQ Variable Asterism Tomography")
-    plt.plot(open_loop, 'y--', label="Open Loop")
-    plt.legend()
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss (MSE)")
-
     now = datetime.now()
     now = now.strftime("%Y%m%d_%H%M%S")
     data_file = "./results/ml_models/" + now + "_" + model.t["model_name"] + model.t["data_file_suffix"]
@@ -112,8 +110,9 @@ def main():
         summ = f"{now}\n"
         summ += model_summary(model)
         df.write(summ)
-        df.write('\nEpoch,Variable Training Loss,Variable Test Loss,Fixed Training Loss,Fixed (Var) Test Loss,Fixed (Var) Training Loss,Fixed Test Loss,Open Loop,LSQ Fixed Asterism,LSQ Variable Asterism\n')
-        for e, vtr, vts, ftr, fts, fvtr, fvts, ol, fa, va in zip(range(model.t["epochs"]), 
+        df.write("\nDATA FOLLOWS HERE\n")
+        df.write('Epoch,Variable Training Loss,Variable Test Loss,Fixed Training Loss,Fixed (Var) Test Loss,Fixed (Var) Training Loss,Fixed Test Loss,Open Loop,LSQ Fixed Asterism,LSQ Variable Asterism,LSQ Mixed Asterism\n')
+        for t in zip(range(model.t["epochs"]), 
                                                                     model.train_results, 
                                                                     model.test_results, 
                                                                     model_ss.train_results, 
@@ -122,9 +121,25 @@ def main():
                                                                     model_sd.test_results, 
                                                                     open_loop,
                                                                     tomo_fixed,
-                                                                    tomo_variable):
-            df.write(f"{e},{vtr},{vts},{ftr},{fts},{fvtr},{fvts},{ol},{fa},{va}\n")
-                
+                                                                    tomo_variable,
+                                                                    tomo_mixed_loss):
+            st = t.join(",")
+            df.write(st + "\n")
+
+    plt.figure()
+    plt.plot(model.test_results, 'r-', label="Variable Asterism Model")
+    plt.plot(model_sd.test_results, 'b-', label="Mixed Asterism Model")
+    plt.plot(model_ss.test_results, 'g-', label="Fixed Asterism Model")
+    plt.plot(model.train_results, 'r:', label="Variable Asterism Model [Training}")
+    plt.plot(model_sd.train_results, 'b:', label="Mixed Asterism Model [Training]")
+    plt.plot(model_ss.train_results, 'g:', label="Fixed Asterism Model [Training]")
+    plt.plot(tomo_fixed, 'k--', label="LSQ Fixed Asterism Tomography")
+    plt.plot(tomo_variable, 'k:', label="LSQ Variable Asterism Tomography")
+    plt.plot(tomo_mixed_loss, 'c:', label="LSQ Mixed Asterism Tomography")
+    plt.plot(open_loop, 'y--', label="Open Loop")
+    plt.legend()
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss (MSE)")
 
     plt.show()
     return
