@@ -27,11 +27,11 @@ class LSQ(tomography.Tomography):
             array of coefficients for target/science object
         """
         # generate A and T matrices from pMatrices and tMatrix outputs for each layer
-
         metapupil_d = self._metapupil_diameter(beacons, altitudes)
 
         def proj(beacon, altitude):
-            x, y = azimuth2cart(altitude, beacon.theta, arcsec2rad(beacon.gamma))
+            x, y = azimuth2cart(altitude, beacon.gamma, beacon.theta)
+            # x, y = azimuth2cart(altitude, beacon.theta, beacon.gamma)
             # x = np.tan(beacon.az.rad) * altitude
             # y = np.tan(beacon.alt.rad) * altitude
             d = metapupil_d[altitude]
@@ -41,7 +41,7 @@ class LSQ(tomography.Tomography):
 
         A = np.concatenate([np.concatenate([proj(beacon, altitude) for beacon in beacons], 0) for altitude in altitudes], 1)
         T = np.concatenate([proj(target, altitude) for altitude in altitudes], 1)
-    
+        
         L = np.array(beacon_coeffs)
 
         W = np.matmul(np.linalg.pinv(A), L)
@@ -91,11 +91,12 @@ class LSQ(tomography.Tomography):
         P:
             Projection matrix for transformation from unit circle to a subcircle at location with diameter
         """
+
         screen = np.zeros((self.aperture_size, self.aperture_size))
 
         gridSize = int(GRID_MULTIPLIER * self.n_modes)
 
-        unitGrid = self._getGrid(gridSize)
+        unitGrid = self._getGrid(gridSize) 
 
         # Generate G matrix (unitgrid)
         G = np.zeros((self.n_modes, gridSize))
@@ -118,7 +119,7 @@ class LSQ(tomography.Tomography):
         Y = np.zeros((self.n_modes, gridSize))
         for j in range(self.n_modes):
             f = lambda x, y: self.basis.at_point(x, y, np.shape(screen), j)
-            Y[j, :] = np.array(list(map(f, unitGrid[:, 0], unitGrid[:, 1])))
+            Y[j, :] = np.array(list(map(f, subGrid[:, 0], subGrid[:, 1])))
 
         if G_metapupil:
             Ginv = np.linalg.pinv(G)
@@ -168,7 +169,7 @@ class LSQ(tomography.Tomography):
         ------
         Translated grid
         """
-        return [(x + shift[0], y - shift[1]) for x, y in grid]
+        return np.array([[x + shift[0], y - shift[1]] for x, y in grid])
 
     def _scaleGrid(self, grid, scale):
         """

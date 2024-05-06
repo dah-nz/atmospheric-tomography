@@ -24,7 +24,7 @@ class BatchData(Dataset):
         self.n *= settings["batches_per_epoch"]
 
         if not static:
-            self.star_gamma = util.arcsec2rad(data.load_asterism_data(settings["star_magnitude"], n=self.n, limit=settings["limiting_angle"], rng=rng))
+            self.star_gamma = data.load_asterism_data(settings["star_magnitude"], n=self.n, limit=settings["limiting_angle"], rng=rng)
             self.star_theta = rng.uniform(low=0.0, high=2*np.pi, size=self.star_gamma.shape)
         else:
             self.static_asterism = [beacon.Beacon(t, settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
@@ -48,7 +48,7 @@ class BatchData(Dataset):
         screens = [pg.get(idx=idx) for pg in self.ps_gens]
 
         try: 
-            asterism = [beacon.Beacon(t, g) for t, g in zip(self.star_theta[idx, :], self.star_gamma[idx, :])]
+            asterism = [beacon.Beacon(t, g, gamma_arcseconds=True) for t, g in zip(self.star_theta[idx, :], self.star_gamma[idx, :])]
         except AttributeError:
             asterism = self.static_asterism
 
@@ -65,7 +65,7 @@ class BatchData(Dataset):
     
     
 class Model():
-    def __init__(self, network="CNN", seed=None, static_train=False, static_test=False, continue_training=False):
+    def __init__(self, seed=None, static_train=False, static_test=False, continue_training=False):
         self.settings_dir = "./src/parameters/"
         self.model_dir = "./data/models/"
         self.settings_file = "settings.json"
@@ -91,7 +91,7 @@ class Model():
 
         self.device = ml.initialise()
 
-        self.Network = eval(f"modules.{network}")
+        self.Network = eval(f"modules.{self.t['ml_network']}")
 
         self.model = self.Network(self.t).to(self.device)
         if continue_training:
@@ -103,7 +103,7 @@ class Model():
         self.test_data = BatchData(self.t, rng=self.test_rng, static=static_test, test=True)
 
         self.train_dataloader = DataLoader(self.train_data, batch_size=self.t["training_batch"], shuffle=True)
-        self.test_dataloader = DataLoader(self.test_data, batch_size=self.t['testing_batch'], shuffle=True)
+        self.test_dataloader = DataLoader(self.test_data, batch_size=self.t['testing_batch'])
         self.test_results = []
         self.train_results = []
 

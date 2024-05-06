@@ -35,8 +35,8 @@
     "max_pool_kernel": 2,
     
     "epochs": 32,
-    "training_batch": 64,
-    "testing_batch": 32,
+    "training_batch": 256,
+    "testing_batch": 64,
     "batches_per_epoch": 2,
 
     "model_name": "cnn_dct_16_b",

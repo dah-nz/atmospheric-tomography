@@ -36,10 +36,14 @@ class Beacon():
         if gamma_arcseconds:
             self._gamma_arcsec = gamma
             gamma = util.arcsec2rad(gamma)
+        else:
+            self._gamma_arcsec = util.rad2arcsec(gamma)
         self._gamma0 = gamma
         self.theta = theta
         self.gamma = gamma
         self.motion_path = motion_path
+    def __repr__(self):
+        return f"<Beacon({self.theta},{self.gamma}>" #,{self._gamma_arcsec})>"
     def position(self, altitude):
         """
         Get the current cartesian position of the beacon on a layer at altitude

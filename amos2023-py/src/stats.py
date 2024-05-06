@@ -78,6 +78,7 @@ if __name__ == "__main__":
     for k in [1, 2, 3]:
         data[k] = np.delete(data[k], invalids)
 
+
     n = 500
     to = 360
     # 2) Direct Sampling
@@ -85,6 +86,10 @@ if __name__ == "__main__":
     print(len(direct))
     direct_sample = np.asarray([direct[i] for i in np.random.choice(len(direct), size=n)])
     print(f"Direct sample size: {np.shape(direct_sample)}")
+
+    models = build_models(data[1], distributions=initial_distributions, n=n, timeout=to, Nbest=5, method="ks_statistic")
+    print(models)
+    quit()
 
     # 3) Rejection sampling
     # Build models for each distance
@@ -229,6 +234,8 @@ if __name__ == "__main__":
     print(f"> Second closest: KS Test p-value = {r.pvalue}")
     r = scipy.stats.kstest(direct_sample[:, 2], ss_sample[:, 2])
     print(f"> Third closest: KS Test p-value = {r.pvalue}")
+
+    print()
 
     
     plt.show()
