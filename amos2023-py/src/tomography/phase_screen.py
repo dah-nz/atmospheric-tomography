@@ -43,7 +43,7 @@ class PhaseScreenGenerator():
     def _at(self):
         return "{}_{}_{}".format(self.D, self.r0, self.size)
 
-    def generate(self, seeds, cut_out=None):
+    def generate(self, seeds, cut_out=None, return_type="none"):
         """
         Generate a number of phase screens.
                 
@@ -63,7 +63,10 @@ class PhaseScreenGenerator():
             screens = [self._get_raw(s) for s in seeds]
             self.find_scaling(cut_out, screens)
 
-        return #[self.get(seed=s) for s in seeds]
+        if return_type == "all":
+            return [self.get(seed=s) for s in seeds]
+        else:
+            return
 
     def _get_raw(self, seed=None):
         """

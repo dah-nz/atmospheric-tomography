@@ -71,7 +71,7 @@ def load(file="settings.json", dir=None):
     with open(dir + file, "r") as f:
         settings = json.load(f)
 
-    b = settings["basis"].lower()
+    b = settings["basis_type"].lower()
     n = settings["n_coeffs"]
         
     if b == "dct":

@@ -21,7 +21,7 @@ def model_summary(m):
         s += f"{k},{n}\n"
     s += f"loss_fn,{m.loss_fn.__class__.__name__}\n"
     s += f"optimiser,{m.optimiser.__class__.__name__}\n"
-    s += str(summary(m.model, input_size=(1, 6+3*m.t["n_coeffs"]), verbose=0))
+    s += str(summary(m.model, input_size=(3, 3, m.t["n_coeffs"]), verbose=0))
     return s
 
 def main():
@@ -107,14 +107,14 @@ def main():
 
     now = datetime.now()
     now = now.strftime("%Y%m%d_%H%M%S")
-    data_file = "./results/ml_models/" + now + "_" + model.t["model_name"] + model.t["data_file_suffix"]
+    data_file = "./results/ml_models/" + model.t["ml_network"]+ "_" + model.t["basis_type"] + "_" + str(model.t["n_coeffs"]) + "_" + now + model.t["data_file_suffix"]
     print(f"Saving data to {data_file}")
     with open(data_file, 'w', encoding="utf-8", errors='replace') as df:
         summ = f"{now}\n"
         summ += model_summary(model)
         df.write(summ)
         df.write("\nDATA FOLLOWS HERE\n")
-        df.write('Epoch,Variable Training Loss,Variable Test Loss,Fixed Training Loss,Mixed Test Loss,Mixed Training Loss,Fixed Test Loss,Open Loop,LSQ Fixed Asterism,LSQ Variable Asterism,LSQ Mixed Asterism\n')
+        df.write('Epoch,Variable Training Loss,Variable Test Loss,Fixed Training Loss,Fixed Test Loss,Mixed Training Loss,Mixed Test Loss,Open Loop,LSQ Fixed Asterism,LSQ Variable Asterism,LSQ Mixed Asterism\n')
         for t in zip(range(model.t["epochs"]), 
                 model.train_results, 
                 model.test_results, 

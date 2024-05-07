@@ -11,8 +11,8 @@ from parameters import test
 
 from ml import modules
     
-class BatchData(Dataset):
-    def __init__(self, settings, rng=None, test=False, static=False):
+class TrainData(Dataset):
+    def __init__(self, settings, rng=None, static=False, output_type="1d"):
 
         self.D = settings["D"]
         self.altitudes = settings["layer_altitudes"]
@@ -20,7 +20,7 @@ class BatchData(Dataset):
 
         self.cut_out = (settings["aperture_size"], settings["aperture_size"])
 
-        self.n = settings["testing_batch"] if test else settings["training_batch"]
+        self.n = settings["training_batch"]
         self.n *= settings["batches_per_epoch"]
 
         if not static:
@@ -40,6 +40,7 @@ class BatchData(Dataset):
         
         self.basis = settings["basis"]
         self.target = beacon.Beacon(0, 0)
+        self.output_type = output_type
         
     def __len__(self):
         return self.n
@@ -55,14 +56,87 @@ class BatchData(Dataset):
         asterism_coeffs = util.get_coeffs_for_asterism(asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
         target_coeffs = util.get_coeffs_for_cutout(self.target, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
 
-        data = []        
-        for a in asterism:
-            data.append(a.theta)
-            data.append(a.gamma)
-        data = np.array(np.append(data, asterism_coeffs.flatten()), dtype=np.float32)
+        data = []
+        if self.output_type == "3d":
+            asterism_coeffs = np.expand_dims(asterism_coeffs, axis=-1)
+            theta = np.ones_like(asterism_coeffs)
+            gamma = np.ones_like(asterism_coeffs)
+            for i, b in enumerate(asterism):
+                theta[i, :] = theta[i, :] * b.theta
+                gamma[i, :] = gamma[i, :] * b.gamma
+            data = np.append(asterism_coeffs, theta, axis=2)
+            data = np.append(data, gamma, axis=2)
+        else: # "1d"   
+            for a in asterism:
+                data.append(a.theta)
+                data.append(a.gamma)
+            data = np.array(np.append(data, asterism_coeffs.flatten()), dtype=np.float32)
+
         
         return data, target_coeffs
     
+class TestData(Dataset):
+    def __init__(self, settings, rng=None, static=False, output_type="1d"):
+
+        self.D = settings["D"]
+        self.altitudes = settings["layer_altitudes"]
+        self.layer_r0 = settings["layer_conditions"]
+
+        self.cut_out = (settings["aperture_size"], settings["aperture_size"])
+
+        self.n = settings["testing_batch"]
+
+        if not static:
+            self.star_gamma = data.load_asterism_data(settings["star_magnitude"], n=self.n, limit=settings["limiting_angle"], rng=rng)
+            self.star_theta = rng.uniform(low=0.0, high=2*np.pi, size=self.star_gamma.shape)
+        else:
+            self.static_asterism = [beacon.Beacon(t, settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
+
+        limit_star = [beacon.Beacon(0, settings["limiting_angle"], gamma_arcseconds=True)]
+        m, l = util.get_layer_shapes(self.altitudes, limit_star, self.D, settings["aperture_size"])
+
+        self.metapupil_diameters = m
+        self.layer_shapes = l
+        self.ps_gens = [phase_screen.PhaseScreenGenerator(s, self.D, r0, rng) for s, r0 in zip(l, self.layer_r0)]
+        print("Building test batch")
+        self.screens = [gen.generate(self.n, cut_out=self.cut_out, return_type="all") for gen in self.ps_gens]
+        
+        self.basis = settings["basis"]
+        self.target = beacon.Beacon(0, 0)
+        self.output_type = output_type
+        
+    def __len__(self):
+        return self.n
+    
+    def __getitem__(self, idx):
+        screens = [scr[idx] for scr in self.screens]
+
+        try: 
+            asterism = [beacon.Beacon(t, g, gamma_arcseconds=True) for t, g in zip(self.star_theta[idx, :], self.star_gamma[idx, :])]
+        except AttributeError:
+            asterism = self.static_asterism
+
+        asterism_coeffs = util.get_coeffs_for_asterism(asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
+        target_coeffs = util.get_coeffs_for_cutout(self.target, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
+
+        data = []
+        if self.output_type == "3d":
+            theta = np.ones_like(asterism_coeffs)
+            gamma = np.ones_like(asterism_coeffs)
+            for i, b in enumerate(asterism):
+                theta[i, :] *= b.theta
+                gamma[i, :] *= b.gamma
+            data = np.append(asterism_coeffs, theta, axis=1, dtype=np.float32)
+            data = np.append(asterism_coeffs, gamma, axis=1, dtype=np.float32)
+        else: # "1d"
+            for a in asterism:
+                data.append(a.theta)
+                data.append(a.gamma)
+            data = np.array(np.append(data, asterism_coeffs.flatten()), dtype=np.float32)
+
+        print(data.shape)
+        
+        return data, target_coeffs
     
 class Model():
     def __init__(self, seed=None, static_train=False, static_test=False, continue_training=False):
@@ -84,7 +158,7 @@ class Model():
             print("Running variable asterism model")
             self.model_file_name = self.t["model_file_variable_asterism"]
 
-        self.model_file = self.model_dir + self.t["model_name"] + "_" + self.model_file_name
+        self.model_file = self.model_dir + self.t["ml_network"]+ "_" + self.t["basis_type"] + "_" + str(self.t["n_coeffs"]) + "_" + self.model_file_name
 
         self.train_rng = np.random.default_rng(seed=seed)
         self.test_rng = np.random.default_rng(seed=seed+1)
@@ -99,8 +173,10 @@ class Model():
 
         self.loss_fn = nn.MSELoss()
         self.optimiser = torch.optim.Adam(self.model.parameters(), lr=1e-03, weight_decay=1e-05)
-        self.train_data = BatchData(self.t, rng=self.train_rng, static=static_train)
-        self.test_data = BatchData(self.t, rng=self.test_rng, static=static_test, test=True)
+
+        out_type = self.t["output_type"]
+        self.train_data = TrainData(self.t, rng=self.train_rng, static=static_train, output_type=out_type)
+        self.test_data = TestData(self.t, rng=self.test_rng, static=static_test, output_type=out_type)
 
         self.train_dataloader = DataLoader(self.train_data, batch_size=self.t["training_batch"], shuffle=True)
         self.test_dataloader = DataLoader(self.test_data, batch_size=self.t['testing_batch'])

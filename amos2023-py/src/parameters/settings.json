@@ -24,9 +24,10 @@
     ],
     
     "n_coeffs": 16,
-    "basis": "dct",
+    "basis_type": "dct",
     
-    "ml_network": "CNN",
+    "ml_network": "CNN2D",
+    "output_type": "3d",
     "n_cnn_channels": 16,
     "internal_nn_size_1": 512,
     "internal_nn_size_2": 256,
@@ -38,8 +39,6 @@
     "training_batch": 256,
     "testing_batch": 64,
     "batches_per_epoch": 2,
-
-    "model_name": "cnn_dct_16_b",
 
     "model_file_fixed_asterism": "fixed_asterism",
     "model_file_fixed_asterism_variable_test": "fixed_asterism_var_test",
