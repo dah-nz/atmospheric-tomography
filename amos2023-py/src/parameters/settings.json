@@ -11,6 +11,7 @@
     "star_magnitude": 14,
     "limiting_angle": 120,
     "fixed_asterism_angle": 15,
+    "variable_asterism_angle_deg": 5,
 
     "layer_altitudes": [
         1000,
@@ -26,7 +27,7 @@
     "n_coeffs": 16,
     "basis_type": "dct",
     
-    "ml_network": "ResNet",
+    "ml_network": "CNN2Da",
     "ml_net_block": "ResidualBlock",
     "ml_net_layers": [3, 4, 6, 3],
     

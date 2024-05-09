@@ -22,10 +22,16 @@ class TrainData(Dataset):
 
         self.n = settings["training_batch"]
         self.n *= settings["batches_per_epoch"]
+        self.offset = settings["variable_asterism_angle_deg"] * (np.pi / 180)
 
         if not static:
             self.star_gamma = data.load_asterism_data(settings["star_magnitude"], n=self.n, limit=settings["limiting_angle"], rng=rng)
-            self.star_theta = rng.uniform(low=0.0, high=2*np.pi, size=self.star_gamma.shape)
+            # self.star_theta = rng.uniform(low=0.0, high=2*np.pi, size=self.star_gamma.shape)
+            st0 = rng.uniform(low=0, high=2*np.pi, size=(self.star_gamma.shape[0], 1))
+            st1 = rng.uniform(low=st0 + self.offset, high=2*np.pi + st0 - self.offset, size=(self.star_gamma.shape[0], 1))
+            st0[st1 > (st0 + np.pi)] = st0[st1 > (st0 + np.pi)] + 2 * np.pi
+            st2 = rng.uniform(low=np.min([st0, st1], axis=0)-self.offset, high=np.max([st0, st1], axis=0)+self.offset) + np.pi
+            self.star_theta = np.concatenate([st0, st1, st2], axis=1)
         else:
             self.static_asterism = [beacon.Beacon(t, settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
 

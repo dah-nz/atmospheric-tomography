@@ -87,6 +87,8 @@ def main():
         tomo_variable.append(loss)
         open_loop.append(ol_loss)
         tomo_mixed_loss.append(md_loss)
+        print(f"{now} -> variable loss: {loss:>7f}")
+        print(f"{now} ->    mixed loss: {md_loss:>7f}")
 
     for n in range(model_ss.t["epochs"]):
         total_loss = 0
@@ -106,7 +108,7 @@ def main():
         now = datetime.now()
         now = now.strftime("%H:%M:%S")
         loss = total_loss / model.t["testing_batch"]
-        print(f"{now} -> loss: {loss:>7f}")
+        print(f"{now} -> fixed loss: {loss:>7f}")
         tomo_fixed.append(loss)
 
     now = datetime.now()
