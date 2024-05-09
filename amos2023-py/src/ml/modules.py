@@ -4,6 +4,7 @@ from util import util
 class MLNN(nn.Module):
     def __init__(self, settings):
         super().__init__()
+        self.input_type='1d'
         LRELU_grad = settings["LReLU_grad"]
         do = settings["dropout_rate"]
         n_coeffs = settings["n_coeffs"]
@@ -30,6 +31,7 @@ class MLNN(nn.Module):
 class CNN(nn.Module):
     def __init__(self, settings):
         super().__init__()
+        self.input_type='1d'
         LRELU_grad = settings["LReLU_grad"]
         do = settings["dropout_rate"]
         n_coeffs = settings["n_coeffs"]
@@ -63,6 +65,7 @@ class CNN(nn.Module):
 class CNN2(nn.Module):
     def __init__(self, settings):
         super().__init__()
+        self.input_type='1d'
         LRELU_grad = settings["LReLU_grad"]
         do = settings["dropout_rate"]
         n_coeffs = settings["n_coeffs"]
@@ -95,6 +98,7 @@ class CNN2(nn.Module):
 class CNN_1D(nn.Module):
     def __init__(self, settings):
         super().__init__()
+        self.input_type='1d'
         LRELU_grad = settings["LReLU_grad"]
         do = settings["dropout_rate"]
         n_coeffs = settings["n_coeffs"]
@@ -130,6 +134,7 @@ class CNN_1D(nn.Module):
 class CNN1D(nn.Module):
     def __init__(self, settings):
         super().__init__()
+        self.input_type='1d'
         LRELU_grad = settings["LReLU_grad"]
         do = settings["dropout_rate"]
         n_coeffs = settings["n_coeffs"]
@@ -169,6 +174,7 @@ class CNN1D(nn.Module):
 class CNN1Db(nn.Module):
     def __init__(self, settings):
         super().__init__()
+        self.input_type='1d'
         LRELU_grad = settings["LReLU_grad"]
         do = settings["dropout_rate"]
         n_coeffs = settings["n_coeffs"]
@@ -213,6 +219,7 @@ class CNN1Db(nn.Module):
 class CNN2D(nn.Module):
     def __init__(self, settings):
         super().__init__()
+        self.input_type = '3d'
         LRELU_grad = settings["LReLU_grad"]
         do = settings["dropout_rate"]
         n_coeffs = settings["n_coeffs"]
@@ -240,6 +247,134 @@ class CNN2D(nn.Module):
 
         )
     def forward(self, x):
-        # x = self.unflatten(x)
-        # x = x.transpose(1, 2).contiguous()
+        x = x.transpose(2, -1).contiguous()
         return self.model_stack(x)
+    
+class CNN2Da(nn.Module):
+    def __init__(self, settings):
+        super().__init__()
+        self.input_type = '3d'
+        LRELU_grad = settings["LReLU_grad"]
+        do = settings["dropout_rate"]
+        n_coeffs = settings["n_coeffs"]
+
+        self.model_stack = nn.Sequential(
+            nn.Conv2d(3, 33, kernel_size=(3, 3), padding=1, groups=3),    # 3x3x16 -> 33x3x16
+            nn.LeakyReLU(LRELU_grad, True),
+            nn.Dropout(do),
+
+            nn.Conv2d(33, 33, kernel_size=(3, 3), padding=1, groups=3),   # 33x3x16 -> 33x3x16
+            nn.LeakyReLU(LRELU_grad, True),
+            nn.Dropout(do),
+ 
+            nn.Flatten(),
+ 
+            nn.Linear(1584, 256),
+            nn.LeakyReLU(LRELU_grad, True),
+            nn.Dropout(do),
+
+            nn.Linear(256, 64),
+            nn.LeakyReLU(LRELU_grad, True),
+            nn.Dropout(do),
+
+            nn.Linear(64, n_coeffs)
+
+        )
+    def forward(self, x):
+        x = x.transpose(2, -1).contiguous()
+        return self.model_stack(x)
+    
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride = 1, downsample = None):
+        super(ResidualBlock, self).__init__()
+        self.conv1 = nn.Sequential(
+                        nn.Conv2d(in_channels, out_channels, kernel_size = 3, stride = stride, padding = 1),
+                        nn.BatchNorm2d(out_channels),
+                        nn.ReLU())
+        self.conv2 = nn.Sequential(
+                        nn.Conv2d(out_channels, out_channels, kernel_size = 3, stride = 1, padding = 1),
+                        nn.BatchNorm2d(out_channels))
+        self.downsample = downsample
+        self.relu = nn.ReLU()
+        self.out_channels = out_channels
+        
+    def forward(self, x):
+        residual = x
+        out = self.conv1(x)
+        out = self.conv2(out)
+        if self.downsample:
+            residual = self.downsample(x)
+        out += residual
+        out = self.relu(out)
+        return out
+    
+class ResNet(nn.Module):
+    def __init__(self, settings):
+        super(ResNet, self).__init__()
+        self.input_type = '3d'
+        block = eval(f"{settings['ml_net_block']}")
+        layers = settings["ml_net_layers"]
+        self.inplanes = 63
+        self.conv1 = nn.Sequential(
+                        nn.Conv2d(3, self.inplanes, kernel_size = 3, stride = 1, padding = 1, groups=3),
+                        nn.BatchNorm2d(self.inplanes),
+                        nn.ReLU())
+        self.maxpool = nn.MaxPool2d(kernel_size = 2, stride = 1, padding = 1)
+        self.layer0 = self._make_layer(block, self.inplanes, layers[0], stride = 2)
+        self.layer1 = self._make_layer(block, 126, layers[1], stride = 2)
+        self.layer2 = self._make_layer(block, 255, layers[2], stride = 2)
+        self.layer3 = self._make_layer(block, 513, layers[3], stride = 2)
+        self.avgpool = nn.AvgPool2d(kernel_size=(2, 1), stride=1)
+        self.fc = nn.Linear(513, settings["n_coeffs"])
+        
+    def _make_layer(self, block, planes, blocks, stride=1):
+        downsample = None
+        if stride != 1 or self.inplanes != planes:
+            
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride, groups=3),
+                nn.BatchNorm2d(planes),
+            )
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample))
+        self.inplanes = planes
+        for i in range(1, blocks):
+            layers.append(block(self.inplanes, planes))
+
+        return nn.Sequential(*layers)
+    
+    
+    def forward(self, x):
+        # x = x.transpose(2, -1).contiguous()
+        x = self.conv1(x)
+        # x = self.maxpool(x)
+        x = self.layer0(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+
+        # x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+
+        return x
+    
+# class FFBlock(nn.Module):
+#     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1, LReLU_grad=0.01, dropout=0.2):
+#         super(FFBlock, self).__init__()
+#         self.conv1 = nn.Sequential(
+#             nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding),
+#             nn.LeakyReLU(LReLU_grad),
+#             nn.Dropout(dropout)
+
+#         )
+#         self.conv2 = nn.Sequential(
+#             nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding),
+#         )
+#         self.lrelu = nn.LeakyReLU(LReLU_grad)
+#         self.out_channels = out_channels
+#     def forward(self, x):
+#         residual = x
+#         out = self.conv1(x)
+#         out = self.conv2(out)
+#         out += residual

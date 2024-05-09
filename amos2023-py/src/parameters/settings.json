@@ -26,14 +26,9 @@
     "n_coeffs": 16,
     "basis_type": "dct",
     
-    "ml_network": "CNN2D",
-    "output_type": "3d",
-    "n_cnn_channels": 16,
-    "internal_nn_size_1": 512,
-    "internal_nn_size_2": 256,
-    "kernel_size": 3,
-    "padding": 1,
-    "max_pool_kernel": 2,
+    "ml_network": "ResNet",
+    "ml_net_block": "ResidualBlock",
+    "ml_net_layers": [3, 4, 6, 3],
     
     "epochs": 32,
     "training_batch": 256,

@@ -21,7 +21,7 @@ def model_summary(m):
         s += f"{k},{n}\n"
     s += f"loss_fn,{m.loss_fn.__class__.__name__}\n"
     s += f"optimiser,{m.optimiser.__class__.__name__}\n"
-    s += str(summary(m.model, input_size=(3, 3, m.t["n_coeffs"]), verbose=0))
+    s += str(summary(m.model, input_size=(1, 3, m.t["n_coeffs"], 3), verbose=0))
     return s
 
 def main():
@@ -50,6 +50,10 @@ def main():
 
     fixed_asterism = [beacon.Beacon(t, model.t["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
 
+    # Reset output type for LSQ
+    model.test_data.output_type = '1d'
+    model_ss.test_data.output_type = '1d'
+    
     target = beacon.Beacon(0, 0)
     for n in range(model.t["epochs"]):
         total_loss = 0
@@ -107,7 +111,7 @@ def main():
 
     now = datetime.now()
     now = now.strftime("%Y%m%d_%H%M%S")
-    data_file = "./results/ml_models/" + model.t["ml_network"]+ "_" + model.t["basis_type"] + "_" + str(model.t["n_coeffs"]) + "_" + now + model.t["data_file_suffix"]
+    data_file = "./results/ml_models/" + now + "_" + model.t["ml_network"]+ "_" + model.t["basis_type"] + str(model.t["n_coeffs"]) + model.t["data_file_suffix"]
     print(f"Saving data to {data_file}")
     with open(data_file, 'w', encoding="utf-8", errors='replace') as df:
         summ = f"{now}\n"

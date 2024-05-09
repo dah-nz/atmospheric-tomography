@@ -121,20 +121,19 @@ class TestData(Dataset):
 
         data = []
         if self.output_type == "3d":
+            asterism_coeffs = np.expand_dims(asterism_coeffs, axis=-1)
             theta = np.ones_like(asterism_coeffs)
             gamma = np.ones_like(asterism_coeffs)
             for i, b in enumerate(asterism):
-                theta[i, :] *= b.theta
-                gamma[i, :] *= b.gamma
-            data = np.append(asterism_coeffs, theta, axis=1, dtype=np.float32)
-            data = np.append(asterism_coeffs, gamma, axis=1, dtype=np.float32)
+                theta[i, :] = theta[i, :] * b.theta
+                gamma[i, :] = gamma[i, :] * b.gamma
+            data = np.append(asterism_coeffs, theta, axis=2)
+            data = np.append(data, gamma, axis=2)
         else: # "1d"
             for a in asterism:
                 data.append(a.theta)
                 data.append(a.gamma)
             data = np.array(np.append(data, asterism_coeffs.flatten()), dtype=np.float32)
-
-        print(data.shape)
         
         return data, target_coeffs
     
@@ -174,7 +173,7 @@ class Model():
         self.loss_fn = nn.MSELoss()
         self.optimiser = torch.optim.Adam(self.model.parameters(), lr=1e-03, weight_decay=1e-05)
 
-        out_type = self.t["output_type"]
+        out_type = self.model.input_type
         self.train_data = TrainData(self.t, rng=self.train_rng, static=static_train, output_type=out_type)
         self.test_data = TestData(self.t, rng=self.test_rng, static=static_test, output_type=out_type)
 
