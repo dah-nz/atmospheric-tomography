@@ -27,9 +27,9 @@
     "n_coeffs": 16,
     "basis_type": "dct",
     
-    "ml_network": "CNN2Da",
-    "ml_net_block": "ResidualBlock",
-    "ml_net_layers": [3, 4, 6, 3],
+    "ml_network": "ParallelCNN",
+    "ml_net_block": "ConvNeXtBlock",
+    "ml_net_layers": [3, 3, 9, 3],
     
     "epochs": 32,
     "training_batch": 256,

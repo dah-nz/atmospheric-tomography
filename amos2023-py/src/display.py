@@ -53,10 +53,23 @@ plt.figure()
 
 for f, d in file_data.items():
     gain = np.mean(d['Open Loop'])
-    for k, v in d.items():
-        d[k] = np.array(v) / gain
-    plt.plot(d["Variable Test Loss"], label=f)
+    o = np.array(d["Variable Test Loss"]) / gain
+    plt.plot(o, label=f)
+plt.plot(np.array(d["Open Loop"])/gain, "k:", label="Open Loop")
 plt.legend()
+plt.title("Normalised to open loop output")
+plt.xlabel("Epoch")
+plt.ylabel("Loss (MSE)")
+
+plt.figure()
+
+for f, d in file_data.items():
+    gain = np.mean(d['LSQ Fixed Asterism'])
+    o = np.array(d["Variable Test Loss"]) / gain
+    plt.plot(o, label=f)
+plt.plot(np.array(d["LSQ Fixed Asterism"])/gain, "k:", label="Fixed LSQ")
+plt.legend()
+plt.title("Normalised to Fixed Asterism LSQ output")
 plt.xlabel("Epoch")
 plt.ylabel("Loss (MSE)")
 

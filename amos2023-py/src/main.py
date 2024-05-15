@@ -25,12 +25,11 @@ def model_summary(m):
     return s
 
 def main():
-    seed1 = np.random.randint((2**31)-1)
-    seed2 = np.random.randint((2**31)-1)
-    model = ml.Model(seed=seed1)
+    seed = np.random.randint((2**31)-1)
+    model = ml.Model(seed=seed)
     print(model_summary(model))
-    model_sd = ml.Model(seed=seed2, static_train=True)
-    model_ss = ml.Model(seed=seed2, static_train=True, static_test=True)
+    model_sd = ml.Model(seed=seed, static_train=True)
+    model_ss = ml.Model(seed=seed, static_train=True, static_test=True)
 
     model.train()
     model.evaluate()
