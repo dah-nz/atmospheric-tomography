@@ -4,6 +4,8 @@ import scipy
 
 FAKE_DATA = False
 
+cache = {}
+
 def load_asterism_data(mag, n=None, limit=0, rng=None):
     if FAKE_DATA:
         data = np.array([])
@@ -21,9 +23,14 @@ def load_asterism_data(mag, n=None, limit=0, rng=None):
     # Stars 1, 2, 3
     for star in range(3):
         filename = f'data/satellites/data_{mag}_{star+1}.pak'
-        with open(filename, 'rb') as f:
-            print(f'Opening file "{filename}"')
-            data.append(joblib.load(f))
+        try:
+            data = cache[filename]
+            print(f'Loading satellite data for "{filename}"')
+        except KeyError:
+            with open(filename, 'rb') as f:
+                print(f'Opening file "{filename}"')
+                data.append(joblib.load(f))
+                cache[filename] = data
 
     invalids = []
 
