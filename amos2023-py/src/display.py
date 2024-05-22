@@ -53,7 +53,7 @@ plt.figure()
 
 for f, d in file_data.items():
     gain = np.mean(d['Open Loop'])
-    o = np.array(d["Variable Test Loss"]) / gain
+    o = np.array(d["Variable Validation Loss"]) / gain
     plt.plot(o, label=f)
 plt.plot(np.array(d["Open Loop"])/gain, "k:", label="Open Loop")
 plt.legend()
@@ -65,7 +65,7 @@ plt.figure()
 
 for f, d in file_data.items():
     gain = np.mean(d['LSQ Fixed Asterism'])
-    o = np.array(d["Variable Test Loss"]) / gain
+    o = np.array(d["Variable Validation Loss"]) / gain
     plt.plot(o, label=f)
 plt.plot(np.array(d["LSQ Fixed Asterism"])/gain, "k:", label="Fixed LSQ")
 plt.legend()

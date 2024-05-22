@@ -19,9 +19,20 @@ class TomoDataset(Dataset):
         self.altitudes = settings["layer_altitudes"]
         self.layer_r0 = settings["layer_conditions"]
         self.cut_out = (settings["aperture_size"], settings["aperture_size"])
+        self.static = static
 
         self.rng = rng
         self.n = self.get_size()
+
+        try:
+            if settings["mini_batch"] > 1:
+                self.n_asterisms = int(self.n / settings["mini_batch"])
+                self.n_screens = settings["mini_batch"]
+            else:
+                raise KeyError
+        except KeyError:
+            self.n_asterisms = self.n
+            self.n_screens = self.n
 
         self.asterisms = self.get_asterisms()
 
@@ -54,7 +65,7 @@ class TomoDataset(Dataset):
             self.offset = self.settings["variable_asterism_angle_deg"] * np.pi / 180
             self.star_gamma = data.load_asterism_data(
                 self.settings["star_magnitude"],
-                n=self.n,
+                n=self.n_asterisms,
                 limit=self.settings["limiting_angle"], rng=self.rng)
             st0 = self.rng.uniform(low=0, high=2*np.pi, size=(self.star_gamma.shape[0], 1))
             st1 = self.rng.uniform(low=st0 + self.offset, 
@@ -68,8 +79,12 @@ class TomoDataset(Dataset):
 
             asterisms = [[beacon.Beacon(t, g) for t, g in zip(tht, gma)] 
                          for tht, gma in zip(self.star_theta, self.star_gamma)]
+            
+            if self.n != self.n_asterisms:
+                asterisms = np.array(int(self.n / self.n_asterisms) * asterisms)
+                self.rng.shuffle(asterisms)
         else:
-            asterisms = [[beacon.Beacon(t, self.settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for _ in range(self.n)]
+            asterisms = np.array([[beacon.Beacon(t, self.settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for _ in range(self.n)])
         return asterisms
 
     def get_screens(self):
@@ -79,6 +94,8 @@ class TomoDataset(Dataset):
         raise NotImplementedError
     
     def __getitem__(self, idx):
+        if self.n != self.n_screens:
+            idx = idx - (idx % self.settings["training_batch"]) + (idx % self.settings["mini_batch"])
         screens = self.get_screen_at(idx)
         asterism = self.asterisms[idx]
 
@@ -91,22 +108,11 @@ class TomoDataset(Dataset):
         for i, b in enumerate(asterism):
             theta[i, :] = theta[i, :] * b.theta
             gamma[i, :] = gamma[i, :] * b.gamma
-
-        # Normalise angle data from 0-2pi
-        theta /= (2 * np.pi)
-
-        # Normalise angle data from 0-limiting_angle arcseconds
-        gamma /= util.arcsec2rad(self.settings['limiting_angle'])
-
-        scaling_factor = max(np.amax(np.abs(asterism_coeffs)), np.amax(np.abs(target_coeffs)))
-
-        asterism_coeffs /= scaling_factor
-        target_coeffs /= scaling_factor
         
         data = np.append(asterism_coeffs, theta, axis=2)
         data = np.append(data, gamma, axis=2)
         
-        return data, target_coeffs, scaling_factor
+        return data, target_coeffs
     
 class TrainData(TomoDataset):
     def get_size(self):
@@ -125,6 +131,11 @@ class TestData(TomoDataset):
     def get_size(self):
         return self.settings["testing_batch"]
     
+    def get_asterisms(self):
+        self.n_asterisms = self.n
+        self.n_screens = self.n
+        return super().get_asterisms()
+    
     def get_screens(self):
         print("Building test batch")
         return [gen.generate(self.n, cut_out=self.cut_out, return_type="all") for gen in self.ps_gens]
@@ -136,6 +147,11 @@ class ValidationData(TomoDataset):
     def get_size(self):
         self.rng = np.random.default_rng(seed=0)
         return self.settings["validation_batch"]
+    
+    def get_asterisms(self):
+        self.n_asterisms = self.n
+        self.n_screens = self.n
+        return super().get_asterisms()
     
     def get_screens(self):
         print("Building validation batch")
@@ -193,9 +209,9 @@ class Model():
         self.test_data = TestData(self.t, rng=self.test_rng, static=static_test)
         self.validation_data = ValidationData(self.t, rng=None, static=static_test)
 
-        self.train_dataloader = DataLoader(self.train_data, batch_size=self.t["training_batch"], shuffle=True)
+        self.train_dataloader = DataLoader(self.train_data, batch_size=self.t["training_batch"])
         self.test_dataloader = DataLoader(self.test_data, batch_size=self.t['testing_batch'])
-        self.validation_dataloader = DataLoader(self.validation_data, batch_size=self.t['testing_batch'])
+        self.validation_dataloader = DataLoader(self.validation_data, batch_size=self.t['validation_batch'])
         self.test_results = []
         self.train_results = []
         self.validation_results = []
@@ -219,7 +235,7 @@ class Model():
 
         self.model.eval()
 
-        x, y, f = self.validation_data[0]
+        x, y = self.validation_data[0]
 
         # y = torch.from_numpy(y)
         X = torch.from_numpy(x).unsqueeze(0)
@@ -237,8 +253,8 @@ class Model():
         # print(pred.shape)
         # print(pred)
         # print(y)
-        predicted = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), f * pred)
-        actual = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), f * y)
+        predicted = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), pred)
+        actual = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), y)
 
         fig, axs = plt.subplots(1, 2)
         if self.static_train:

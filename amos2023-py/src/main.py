@@ -56,18 +56,13 @@ def main():
     
     target = beacon.Beacon(0, 0)
 
-    def process_data(X, y, f, i):
+    def process_data(X, y, i):
         data = X[i]
-        target_coeffs = f[i] * y[i]
-
+        target_coeffs = y[i]
         theta = np.array([data[0, 0, 1], data[1, 0, 1], data[2, 0, 1]])
         gamma = np.array([data[0, 0, 2], data[1, 0, 2], data[2, 0, 2]])
-        # Denormalise angle data from 0-1 to 0-2pi
-        theta *= (2 * np.pi)
-        # Denormalise angle data from 0-1 to 0-limiting_angle arcseconds
-        gamma *= util.arcsec2rad(model_var.t['limiting_angle'])
 
-        beacon_coeffs = f[i] * np.ravel(data[:, :, 0])
+        beacon_coeffs = np.ravel(data[:, :, 0])
         beacons = [beacon.Beacon(t, g, gamma_arcseconds=False) for t, g in zip(theta, gamma)]
 
         return target_coeffs, beacon_coeffs, beacons
@@ -78,12 +73,12 @@ def main():
         mixed_loss = 0
         openloop_loss = 0
         print(f"Calculating LSQ data for this epoch {n+1}/{model_var.t['epochs']}")
-        for (X, y, f), (Xf, yf, ff) in zip(model_var.validation_dataloader, model_fix.validation_dataloader):
-            X, y, f = X.numpy(), y.numpy(), f.numpy()
-            Xf, yf, ff = Xf.numpy(), yf.numpy(), ff.numpy()
+        for (X, y), (Xf, yf) in zip(model_var.validation_dataloader, model_fix.validation_dataloader):
+            X, y = X.numpy(), y.numpy()
+            Xf, yf = Xf.numpy(), yf.numpy()
             for i in range(model_var.t["validation_batch"]):
-                target_coeffs, beacon_coeffs, beacons = process_data(X, y, f, i)
-                target_coeffs_f, beacon_coeffs_f, beacons_f = process_data(Xf, yf, ff, i)
+                target_coeffs, beacon_coeffs, beacons = process_data(X, y, i)
+                target_coeffs_f, beacon_coeffs_f, beacons_f = process_data(Xf, yf, i)
                 
                 tomo_variable = tomo.run(beacons,   target, beacon_coeffs,   model_var.t['layer_altitudes'])
                 tomo_mixed =    tomo.run(beacons_f, target, beacon_coeffs,   model_var.t['layer_altitudes'])
@@ -151,18 +146,18 @@ def main():
             df.write(st + "\n")
 
     plt.figure()
-    plt.plot(model_var.validation_results, 'r-',   label="Variable Asterism Model")
-    plt.plot(model_mix.validation_results, 'b-',   label="Mixed Asterism Model")
-    plt.plot(model_fix.validation_results, 'g-',   label="Fixed Asterism Model")
-    plt.plot(model_var.train_results,      'r:',   label="Variable Asterism Model [Training]")
-    plt.plot(model_mix.train_results,      'b:',   label="Mixed Asterism Model [Training]")
-    plt.plot(model_fix.train_results,      'g:',   label="Fixed Asterism Model [Training]")
-    plt.plot(model_var.test_results,       'r--',   label="Variable Asterism Model [Test]")
-    plt.plot(model_mix.test_results,       'b--',   label="Mixed Asterism Model [Test]")
-    plt.plot(model_fix.test_results,       'g--',   label="Fixed Asterism Model [Test]")
+    plt.plot(model_var.validation_results, 'r-',  label="Variable Asterism Model")
+    plt.plot(model_mix.validation_results, 'b-',  label="Mixed Asterism Model")
+    plt.plot(model_fix.validation_results, 'g-',  label="Fixed Asterism Model")
+    plt.plot(model_var.train_results,      'r:',  label="Variable Asterism Model [Training]")
+    plt.plot(model_mix.train_results,      'b:',  label="Mixed Asterism Model [Training]")
+    plt.plot(model_fix.train_results,      'g:',  label="Fixed Asterism Model [Training]")
+    plt.plot(model_var.test_results,       'r--', label="Variable Asterism Model [Test]")
+    plt.plot(model_mix.test_results,       'b--', label="Mixed Asterism Model [Test]")
+    plt.plot(model_fix.test_results,       'g--', label="Fixed Asterism Model [Test]")
     plt.plot(tomo_variable_loss,           'm:',  label="LSQ Variable Asterism Tomography")
-    plt.plot(tomo_mixed_loss,              'c:',   label="LSQ Mixed Asterism Tomography")
-    plt.plot(tomo_fixed_loss,              'k:',   label="LSQ Fixed Asterism Tomography")
+    plt.plot(tomo_mixed_loss,              'c:',  label="LSQ Mixed Asterism Tomography")
+    plt.plot(tomo_fixed_loss,              'k:',  label="LSQ Fixed Asterism Tomography")
     plt.plot(tomo_open_loop_loss,          'y:',  label="Open Loop")
     plt.legend()
     plt.xlabel("Epoch")
