@@ -28,21 +28,29 @@ for file in files:
             if l == "DATA FOLLOWS HERE":
                 record = 0
 
+    labels = {
+        "Variable Model (Training Loss)":           'r-',
+        "Variable Model (Test Loss)":               'r:',
+        "Variable Model (Validation Loss [Var])":   'r--',
+        "Variable Model (Validation Loss [Fixed])": 'r-.',
+        "Fixed Model (Training Loss)":              'b-',
+        "Fixed Model (Test Loss)":                  'b:',
+        "Fixed Model (Validation Loss [Var])":      'b--',
+        "Fixed Model (Validation Loss [Fixed])":    'b-.',
+        "Mixed Model (Training Loss)":              'g-',
+        "Mixed Model (Test Loss)":                  'g:',
+        "Mixed Model (Validation Loss [Var])":      'g--',
+        "Mixed Model (Validation Loss [Fixed])":    'g-.',
+        "Open Loop Comparison":                     'y:',
+        "LSQ Tomography (Fixed Asterism)":          'k:',
+        "LSQ Tomography (Variable Asterism)":       'c:',
+        "LSQ Tomography (Mixed Asterism)":          'm:'
+    }
+
     plt.figure()
     plt.title(file)
-    plt.plot(data["Variable Validation Loss"],  'r-', label="Variable Asterism Model")
-    plt.plot(data["Mixed Validation Loss"],     'b-', label="Mixed Asterism Model")
-    plt.plot(data["Fixed Validation Loss"],     'g-', label="Fixed Asterism Model")
-    plt.plot(data["Variable Training Loss"],    'r:', label="Variable Asterism Model [Training]")
-    plt.plot(data["Mixed Training Loss"],       'b:', label="Mixed Asterism Model [Training]")
-    plt.plot(data["Fixed Training Loss"],       'g:', label="Fixed Asterism Model [Training]")
-    plt.plot(data["Variable Test Loss"],        'r--', label="Variable Asterism Model [Test]")
-    plt.plot(data["Mixed Test Loss"],           'b--', label="Mixed Asterism Model [Test]")
-    plt.plot(data["Fixed Test Loss"],           'g--', label="Fixed Asterism Model [Test]")
-    plt.plot(data["LSQ Variable Asterism"],     'm:', label="LSQ Variable Asterism Tomography")
-    plt.plot(data["LSQ Mixed Asterism"],        'c:', label="LSQ Mixed Asterism Tomography")
-    plt.plot(data["LSQ Fixed Asterism"],        'k:', label="LSQ Fixed Asterism Tomography")
-    plt.plot(data["Open Loop"],                 'y:', label="Open Loop")
+    for lbl, clr in labels.items():
+        plt.plot(data[lbl], clr, label=lbl)
     plt.legend()
     plt.xlabel("Epoch")
     plt.ylabel("Loss (MSE)")
@@ -51,11 +59,15 @@ for file in files:
 
 plt.figure()
 
+ol_lbl = 'Open Loop Comparison'
+vm_lbl = "Variable Model (Validation Loss [Var])"
+fx_lbl = "LSQ Tomography (Fixed Asterism)"
+
 for f, d in file_data.items():
-    gain = np.mean(d['Open Loop'])
-    o = np.array(d["Variable Validation Loss"]) / gain
+    gain = np.mean(d[ol_lbl])
+    o = np.array(d[vm_lbl]) / gain
     plt.plot(o, label=f)
-plt.plot(np.array(d["Open Loop"])/gain, "k:", label="Open Loop")
+plt.plot(np.array(d[ol_lbl])/gain, "k:", label="Open Loop")
 plt.legend()
 plt.title("Normalised to open loop output")
 plt.xlabel("Epoch")
@@ -64,10 +76,10 @@ plt.ylabel("Loss (MSE)")
 plt.figure()
 
 for f, d in file_data.items():
-    gain = np.mean(d['LSQ Fixed Asterism'])
-    o = np.array(d["Variable Validation Loss"]) / gain
+    gain = np.mean(d[fx_lbl])
+    o = np.array(d[vm_lbl]) / gain
     plt.plot(o, label=f)
-plt.plot(np.array(d["LSQ Fixed Asterism"])/gain, "k:", label="Fixed LSQ")
+plt.plot(np.array(d[fx_lbl])/gain, "k:", label="Fixed LSQ")
 plt.legend()
 plt.title("Normalised to Fixed Asterism LSQ output")
 plt.xlabel("Epoch")

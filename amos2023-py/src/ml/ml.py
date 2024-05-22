@@ -12,14 +12,14 @@ from parameters import test
 from ml import modules
 
 class TomoDataset(Dataset):
-    def __init__(self, settings, rng=None, static=False):
+    def __init__(self, settings, rng=None, fixed_asterism=False):
         self.settings = settings
 
         self.D = settings["D"]
         self.altitudes = settings["layer_altitudes"]
         self.layer_r0 = settings["layer_conditions"]
         self.cut_out = (settings["aperture_size"], settings["aperture_size"])
-        self.static = static
+        self.fixed_asterism = fixed_asterism
 
         self.rng = rng
         self.n = self.get_size()
@@ -55,13 +55,9 @@ class TomoDataset(Dataset):
         raise NotImplementedError
     
     def get_asterisms(self):
-        try:
-            if self.static is not None:
-                pass
-        except AttributeError:
-            self.static=False
-        
-        if not self.static:
+        if self.fixed_asterism:
+            asterisms = np.array([[beacon.Beacon(t, self.settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for _ in range(self.n)])
+        else:
             self.offset = self.settings["variable_asterism_angle_deg"] * np.pi / 180
             self.star_gamma = data.load_asterism_data(
                 self.settings["star_magnitude"],
@@ -83,8 +79,7 @@ class TomoDataset(Dataset):
             if self.n != self.n_asterisms:
                 asterisms = np.array(int(self.n / self.n_asterisms) * asterisms)
                 self.rng.shuffle(asterisms)
-        else:
-            asterisms = np.array([[beacon.Beacon(t, self.settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for _ in range(self.n)])
+            
         return asterisms
 
     def get_screens(self):
@@ -163,16 +158,16 @@ class ValidationData(TomoDataset):
         return [scr[idx] for scr in self.screens]
     
 class Model():
-    def __init__(self, seed=None, static_train=False, static_test=False, continue_training=False):
+    def __init__(self, seed=None, fixed_train=False, fixed_test=False, continue_training=False):
         self.settings_dir = "./src/parameters/"
         self.model_dir = "./data/models"
         self.settings_file = "settings.json"
         self.t = test.load(file=self.settings_file, dir=self.settings_dir)
 
-        self.static_test = static_test
-        self.static_train = static_train
-        if self.static_train:
-            if self.static_test:
+        self.fixed_test = fixed_test
+        self.fixed_train = fixed_train
+        if self.fixed_train:
+            if self.fixed_test:
                 print("Running fixed asterism model")
                 self.model_file_name = self.t["model_file_fixed_asterism"]
             else: # self.static_test = False
@@ -205,16 +200,20 @@ class Model():
         self.loss_fn = nn.MSELoss()
         self.optimiser = torch.optim.AdamW(self.model.parameters(), lr=1e-03, weight_decay=1e-05)
 
-        self.train_data = TrainData(self.t, rng=self.train_rng, static=static_train)
-        self.test_data = TestData(self.t, rng=self.test_rng, static=static_test)
-        self.validation_data = ValidationData(self.t, rng=None, static=static_test)
+        self.train_data = TrainData(self.t, rng=self.train_rng, fixed_asterism=fixed_train)
+        self.test_data = TestData(self.t, rng=self.test_rng, fixed_asterism=fixed_test)
+        self.vali_var_data = ValidationData(self.t, rng=None, fixed_asterism=False)
+        self.vali_fix_data = ValidationData(self.t, rng=None, fixed_asterism=True)
 
         self.train_dataloader = DataLoader(self.train_data, batch_size=self.t["training_batch"])
         self.test_dataloader = DataLoader(self.test_data, batch_size=self.t['testing_batch'])
-        self.validation_dataloader = DataLoader(self.validation_data, batch_size=self.t['validation_batch'])
+        self.vali_var_dataloader = DataLoader(self.vali_var_data, batch_size=self.t['validation_batch'])
+        self.vali_fix_dataloader = DataLoader(self.vali_fix_data, batch_size=self.t['validation_batch'])
+
         self.test_results = []
         self.train_results = []
-        self.validation_results = []
+        self.validation_var_results = []
+        self.validation_fix_results = []
 
     def train(self):
         epochs = self.t["epochs"]
@@ -223,7 +222,8 @@ class Model():
             print(f">>> Training epoch {i + 1}/{epochs} <<<")
             self.train_results.append(ml.train(self.train_dataloader, self.model, self.loss_fn, self.optimiser))
             self.test_results.append(ml.test(self.test_dataloader, self.model, self.loss_fn))
-            self.validation_results.append(ml.test(self.validation_dataloader, self.model, self.loss_fn))
+            self.validation_var_results.append(ml.test(self.vali_var_dataloader, self.model, self.loss_fn))
+            self.validation_fix_results.append(ml.test(self.vali_fix_dataloader, self.model, self.loss_fn))
 
         print(f"Done. Trained {epochs} epochs.")
 
@@ -235,34 +235,37 @@ class Model():
 
         self.model.eval()
 
-        x, y = self.validation_data[0]
-
-        # y = torch.from_numpy(y)
-        X = torch.from_numpy(x).unsqueeze(0)
-        # print(X.size())
-        with torch.no_grad():
-            X = X.to(self.device)
-            pred = self.model(X)
-
-        pred = pred.to("cpu")
-        pred = pred.numpy()
-
         basis = self.t["basis"]
         print(basis.name)
-        pred = pred.flatten()
-        # print(pred.shape)
-        # print(pred)
-        # print(y)
-        predicted = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), pred)
-        actual = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), y)
 
-        fig, axs = plt.subplots(1, 2)
-        if self.static_train:
-            if self.static_test:
-                fig.suptitle("Static Model results")
+        def get_comparisons(data):
+            x, y = data[0]
+            X = torch.from_numpy(x).unsqueeze(0)
+            with torch.no_grad():
+                X = X.to(self.device)
+                p = self.model(X)
+            p = p.to("cpu").numpy()
+            p = p.flatten()
+            predicted = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), p)
+            actual = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), y)
+            return predicted, actual
+
+        p1, a1 = get_comparisons(self.vali_var_data)
+        p2, a2 = get_comparisons(self.vali_fix_data)
+
+        fig, axs = plt.subplots(2, 2)
+        if self.fixed_train:
+            if self.fixed_test:
+                fig.suptitle("Fixed Model results")
             else:
-                fig.suptitle("Static Model (Dynamic Test) results")
+                fig.suptitle("Mixed Model results")
         else:
-            fig.suptitle("Dynamic Model results")
-        axs[0].imshow(predicted)
-        axs[1].imshow(actual)
+            fig.suptitle("Variable Model results")
+        axs[0, 0].imshow(p1)
+        axs[0, 0].set_title("Predicted phase screen for variable asterism")
+        axs[0, 1].imshow(a1)
+        axs[0, 1].set_title("Actual phase screen for variable asterism")
+        axs[1, 0].imshow(p2)
+        axs[1, 0].set_title("Predicted phase screen for fixed asterism")
+        axs[1, 1].imshow(a2)
+        axs[1, 1].set_title("Actual phase screen for fixed asterism")

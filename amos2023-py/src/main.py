@@ -29,8 +29,8 @@ def main():
     
     print("Building model configurations")
     model_var = ml.Model(seed=seed)
-    model_mix = ml.Model(seed=seed, static_train=True)
-    model_fix = ml.Model(seed=seed, static_train=True, static_test=True)
+    model_mix = ml.Model(seed=seed, fixed_train=True)
+    model_fix = ml.Model(seed=seed, fixed_train=True, fixed_test=True)
     print(model_summary(model_var))
 
     print(">>> Variable model")
@@ -55,6 +55,7 @@ def main():
     ol_coeffs = np.zeros(model_var.t["n_coeffs"])
     
     target = beacon.Beacon(0, 0)
+    fixed_asterism = [beacon.Beacon(t, model_var.t["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)]
 
     def process_data(X, y, i):
         data = X[i]
@@ -66,14 +67,14 @@ def main():
         beacons = [beacon.Beacon(t, g, gamma_arcseconds=False) for t, g in zip(theta, gamma)]
 
         return target_coeffs, beacon_coeffs, beacons
-
+    
     for n in range(model_var.t["epochs"]):
         fixed_loss = 0
         variable_loss = 0
         mixed_loss = 0
         openloop_loss = 0
         print(f"Calculating LSQ data for this epoch {n+1}/{model_var.t['epochs']}")
-        for (X, y), (Xf, yf) in zip(model_var.validation_dataloader, model_fix.validation_dataloader):
+        for (X, y), (Xf, yf) in zip(model_var.test_dataloader, model_fix.test_dataloader):
             X, y = X.numpy(), y.numpy()
             Xf, yf = Xf.numpy(), yf.numpy()
             for i in range(model_var.t["validation_batch"]):
@@ -122,43 +123,41 @@ def main():
                                                           model_var.t["data_file_suffix"])
     print(f"Saving data to {data_file}")
 
+    data = {
+        "Variable Model (Training Loss)":           ['r-',  model_var.train_results] ,
+        "Variable Model (Test Loss)":               ['r:',  model_var.test_results],
+        "Variable Model (Validation Loss [Var])":   ['r--', model_var.validation_var_results],
+        "Variable Model (Validation Loss [Fixed])": ['r-.', model_var.validation_fix_results],
+        "Fixed Model (Training Loss)":              ['b-',  model_fix.train_results],
+        "Fixed Model (Test Loss)":                  ['b:',  model_fix.test_results],
+        "Fixed Model (Validation Loss [Var])":      ['b--', model_fix.validation_var_results],
+        "Fixed Model (Validation Loss [Fixed])":    ['b-.', model_fix.validation_fix_results],
+        "Mixed Model (Training Loss)":              ['g-',  model_mix.train_results],
+        "Mixed Model (Test Loss)":                  ['g:',  model_mix.test_results],
+        "Mixed Model (Validation Loss [Var])":      ['g--', model_mix.validation_var_results],
+        "Mixed Model (Validation Loss [Fixed])":    ['g-.', model_mix.validation_fix_results],
+        "Open Loop Comparison":                     ['y:',  tomo_open_loop_loss],
+        "LSQ Tomography (Fixed Asterism)":          ['k:',  tomo_fixed_loss],
+        "LSQ Tomography (Variable Asterism)":       ['c:',  tomo_variable_loss],
+        "LSQ Tomography (Mixed Asterism)":          ['m:',  tomo_mixed_loss]
+    }
+
     with open(data_file, 'w', encoding="utf-8", errors='replace') as df:
         summ = f"{now}\n"
         summ += model_summary(model_var)
         df.write(summ)
         df.write("\nDATA FOLLOWS HERE\n")
-        df.write('Epoch,Variable Training Loss,Variable Test Loss,Variable Validation Loss,Fixed Training Loss,Fixed Test Loss,Fixed Validation Loss,Mixed Training Loss,Mixed Test Loss,Mixed Validation Loss,Open Loop,LSQ Fixed Asterism,LSQ Variable Asterism,LSQ Mixed Asterism\n')
-        for t in zip(range(model_var.t["epochs"]), 
-                model_var.train_results, 
-                model_var.test_results,
-                model_var.validation_results,
-                model_fix.train_results, 
-                model_fix.test_results, 
-                model_fix.validation_results,
-                model_mix.train_results, 
-                model_mix.test_results, 
-                model_mix.validation_results,
-                tomo_open_loop_loss,
-                tomo_fixed_loss,
-                tomo_variable_loss,
-                tomo_mixed_loss):
-            st = ",".join(map(str,t))
-            df.write(st + "\n")
+        headings = ",".join(data.keys())
+        data_vals = data.values()
+
+        df.write(f'Epoch,{headings}\n')
+        for i in range(model_var.t["epochs"]):
+            st = ",".join(map(str,[h[1][i] for h in data_vals]))
+            df.write(f"{i+1},{st}\n")
 
     plt.figure()
-    plt.plot(model_var.validation_results, 'r-',  label="Variable Asterism Model")
-    plt.plot(model_mix.validation_results, 'b-',  label="Mixed Asterism Model")
-    plt.plot(model_fix.validation_results, 'g-',  label="Fixed Asterism Model")
-    plt.plot(model_var.train_results,      'r:',  label="Variable Asterism Model [Training]")
-    plt.plot(model_mix.train_results,      'b:',  label="Mixed Asterism Model [Training]")
-    plt.plot(model_fix.train_results,      'g:',  label="Fixed Asterism Model [Training]")
-    plt.plot(model_var.test_results,       'r--', label="Variable Asterism Model [Test]")
-    plt.plot(model_mix.test_results,       'b--', label="Mixed Asterism Model [Test]")
-    plt.plot(model_fix.test_results,       'g--', label="Fixed Asterism Model [Test]")
-    plt.plot(tomo_variable_loss,           'm:',  label="LSQ Variable Asterism Tomography")
-    plt.plot(tomo_mixed_loss,              'c:',  label="LSQ Mixed Asterism Tomography")
-    plt.plot(tomo_fixed_loss,              'k:',  label="LSQ Fixed Asterism Tomography")
-    plt.plot(tomo_open_loop_loss,          'y:',  label="Open Loop")
+    for k, v in data.items():
+        plt.plot(v[1], v[0], label=k)
     plt.legend()
     plt.xlabel("Epoch")
     plt.ylabel("Loss (MSE)")
