@@ -33,15 +33,16 @@
     
     "epochs": 32,
     "training_batch": 256,
+    "validation_batch": 128,
     "testing_batch": 64,
     "batches_per_epoch": 2,
 
     "model_file_fixed_asterism": "fixed_asterism",
-    "model_file_fixed_asterism_variable_test": "fixed_asterism_var_test",
+    "model_file_mixed_asterism": "mixed_asterism",
     "model_file_variable_asterism": "variable_asterism",
 
-    "model_file_suffix": ".mdl",
-    "data_file_suffix": ".dat",
+    "model_file_suffix": "mdl",
+    "data_file_suffix": "dat",
 
     "LReLU_grad": 0.01,
     "dropout_rate": 0.2

@@ -17,11 +17,11 @@ def train(dataloader, model, loss_fn, optimizer):
     num_batches = len(dataloader)
     training_loss = 0
 
-    for batch, (X, y) in enumerate(dataloader):
-        X, y = X.to(device), y.to(device)
+    for batch, (X, y, f) in enumerate(dataloader):
+        X, y, f = X.to(device), y.to(device), f.to(device)
 
         pred = model(X)
-        loss = loss_fn(pred, y)
+        loss = loss_fn(pred * f, y * f)
 
         training_loss += loss.item()
 
@@ -37,14 +37,13 @@ def train(dataloader, model, loss_fn, optimizer):
     return training_loss
 
 def test(dataloader, model, loss_fn):
-    size = len(dataloader.dataset)
     num_batches = len(dataloader)
     model.eval()
-    test_loss, correct = 0, 0
+    test_loss = 0
     with torch.no_grad():
-        for X, y in dataloader:
-            X, y = X.to(device), y.to(device)
+        for X, y, f in dataloader:
+            X, y, f = X.to(device), y.to(device), f.to(device)
             pred = model(X)
-            test_loss += loss_fn(pred, y).item()
+            test_loss += loss_fn(pred * f, y * f).item()
     test_loss /= num_batches
     return test_loss

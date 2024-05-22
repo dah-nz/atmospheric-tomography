@@ -112,7 +112,7 @@ class PhaseScreenGenerator():
         """
 
         self._exp_sigma = self._expected_sigma()
-        self._est_sigma = self._estimated_sigma(cut_out_size, screens)
+        self._est_sigma = self._estimated_sigma(cut_out_size, screens, min(len(screens), 20))
 
         self.k = self._exp_sigma / self._est_sigma
         return self.k
@@ -144,10 +144,7 @@ class PhaseScreenGenerator():
 
         sigma = []
 
-        #  screens = self.cache.keys()
-
         for screen in screens:
-            # screen = self.cache[key]
             x_max = screen.shape[0] - size
             y_max = screen.shape[1] - size
 
