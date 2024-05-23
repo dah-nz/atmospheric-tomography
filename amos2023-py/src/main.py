@@ -63,7 +63,7 @@ def main():
         theta = np.array([data[0, 0, 1], data[1, 0, 1], data[2, 0, 1]])
         gamma = np.array([data[0, 0, 2], data[1, 0, 2], data[2, 0, 2]])
 
-        beacon_coeffs = np.ravel(data[:, :, 0])
+        beacon_coeffs = data[:, :, 0]
         beacons = [beacon.Beacon(t, g, gamma_arcseconds=False) for t, g in zip(theta, gamma)]
 
         return target_coeffs, beacon_coeffs, beacons
@@ -74,7 +74,7 @@ def main():
         mixed_loss = 0
         openloop_loss = 0
         print(f"Calculating LSQ data for this epoch {n+1}/{model_var.t['epochs']}")
-        for (X, y), (Xf, yf) in zip(model_var.test_dataloader, model_fix.test_dataloader):
+        for (X, y), (Xf, yf) in zip(model_var.vali_var_dataloader, model_fix.vali_fix_dataloader):
             X, y = X.numpy(), y.numpy()
             Xf, yf = Xf.numpy(), yf.numpy()
             for i in range(model_var.t["validation_batch"]):

@@ -248,12 +248,12 @@ class Model():
             p = p.flatten()
             predicted = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), p)
             actual = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), y)
-            return predicted, actual
+            return predicted, actual, p, y
 
-        p1, a1 = get_comparisons(self.vali_var_data)
-        p2, a2 = get_comparisons(self.vali_fix_data)
+        p1, a1, pc1, ac1 = get_comparisons(self.vali_var_data)
+        p2, a2, pc2, ac2 = get_comparisons(self.vali_fix_data)
 
-        fig, axs = plt.subplots(2, 2)
+        fig, axs = plt.subplots(2, 3)
         if self.fixed_train:
             if self.fixed_test:
                 fig.suptitle("Fixed Model results")
@@ -265,7 +265,17 @@ class Model():
         axs[0, 0].set_title("Predicted phase screen for variable asterism")
         axs[0, 1].imshow(a1)
         axs[0, 1].set_title("Actual phase screen for variable asterism")
+        axs[0, 2].set_title("Coefficients for variable asterism")
+        axs[0, 2].plot(pc1, label="Predicted Coefficients")
+        axs[0, 2].plot(ac1, label="Actual Coefficients")
+        axs[0, 2].legend()
+
+
         axs[1, 0].imshow(p2)
         axs[1, 0].set_title("Predicted phase screen for fixed asterism")
         axs[1, 1].imshow(a2)
         axs[1, 1].set_title("Actual phase screen for fixed asterism")
+        axs[1, 2].set_title("Coefficients for fixed asterism")
+        axs[1, 2].plot(pc2, label="Predicted Coefficients")
+        axs[1, 2].plot(ac2, label="Actual Coefficients")
+        axs[1, 2].legend()

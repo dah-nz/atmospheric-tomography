@@ -85,17 +85,18 @@ class Beacon():
 
         # Convert location to pixel position
         screen_dim = max(screen.shape)
-        cut_out_dim = int(screen_dim * (diameter / screen_size) + 0.5)
+        cut_out_dim = screen_dim * (diameter / screen_size)
         pix_x = int((x * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
         pix_y = int((y * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
         r = int(cut_out_dim / 2 + 0.5)
+        # cut_out_dim = int(cut_out_dim + 0.5)
 
         phase = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
 
-        mask = util.circle(r, 2 * r)
+        # mask = util.circle(r, 2 * r)
         # return phase * mask
-        # return phase
-        return phase - np.mean(phase)
+        # return phase - np.mean(phase)
+        return phase
 
     def step(self, dt):
         """

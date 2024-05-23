@@ -33,7 +33,8 @@ class DCT(Basis):
             discrete cosine coefficient order
         """
         c = np.zeros((self.C * self.C,))
-        c[order] = 1
+        if order < self.N:
+            c[order] = 1
         return self.compose(size, c)
 
     @lru_cache(maxsize=None)
