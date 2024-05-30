@@ -17,8 +17,8 @@ alts = [1000, 3000, 10000]
 r0 = 0.07 # m
 rng = np.random.default_rng()
 
-basis_fn = zernike.Zernike(modes)
-# basis_fn = DCT.DCT(modes)
+# basis_fn = zernike.Zernike(modes)
+basis_fn = DCT.DCT(modes)
 
 cmap = "BrBG"
 
@@ -40,9 +40,15 @@ for g, beacons in beacon_list.items():
     for a, d, sz in zip(alts, md, szs):
         print(f"D: {D}, a: {a:5}, d: {d:7.4f}, sz: {sz:4}")
 
-    gens = [phase_screen.PhaseScreenGenerator(s, D, r0, rng) for s in szs]
-    cutout = (ap_sz, ap_sz)
-    screens = [g.generate(1, cutout, "all")[0] for g in gens]
+    # gens = [phase_screen.PhaseScreenGenerator(s, D, r0, rng) for s in szs]
+    # cutout = (ap_sz, ap_sz)
+    # screens = [g.generate(1, cutout, "all")[0] for g in gens]
+
+    screen_modes = np.zeros(modes)
+    screen_modes[1] = 4
+    screens = [util.circle(s / 2, s) * basis_fn.compose((s, s), screen_modes) for s in szs]
+    mask = lambda x: util.circle(x / 2, x)
+    screens = [mask(s) * (sc - np.mean(sc)) for sc, s in zip(screens, szs)]
 
     targets = []
     guidestars = []
@@ -59,7 +65,7 @@ for g, beacons in beacon_list.items():
         vmin = -vmax
 
         axs[0, 0].imshow(screen, vmin=vmin, vmax=vmax, cmap=cmap)
-        recons = basis_fn.compose(screen.shape, basis_fn.decompose(screen))
+        recons = mask(screen.shape[0]) * basis_fn.compose(screen.shape, basis_fn.decompose(screen))
         axs[1, 0].imshow(screen, vmin=vmin, vmax=vmax, cmap=cmap)
         axs[2, 0].imshow(screen - recons, vmin=vmin, vmax=vmax, cmap=cmap)
 
@@ -91,7 +97,7 @@ for g, beacons in beacon_list.items():
             else:
                 guidestars[l].append(coeffs)
 
-            dc = basis_fn.compose(cutout.shape, coeffs)
+            dc = mask(cutout.shape[0]) * basis_fn.compose(cutout.shape, coeffs)
 
             axs[1, i+1].imshow(dc, vmin=vmin, vmax=vmax, cmap=cmap)
             axs[2, i+1].imshow(cutout - dc, vmin=vmin, vmax=vmax, cmap=cmap)

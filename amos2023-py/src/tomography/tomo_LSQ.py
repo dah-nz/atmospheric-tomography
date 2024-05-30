@@ -1,6 +1,7 @@
 import numpy as np
 from functools import lru_cache
 from itertools import combinations
+import copy
 
 from tomography import tomography, beacon
 from parameters import test
@@ -8,12 +9,14 @@ from util.util import *
 
 
 GRID_MULTIPLIER = 16
-PADDING = 0
+PADDING = 16
 
 class LSQ(tomography.Tomography):
     def __init__(self, basis, diameter, n_modes, aperture_size=256):
         super().__init__(basis, diameter, n_modes, aperture_size)
         self.n_modes += PADDING
+        self.basis = copy.deepcopy(self.basis)
+        self.basis.N = self.n_modes
     def run(self, beacons, target, beacon_coeffs, altitudes):
         """
         Runs tomographic algorithm
@@ -99,15 +102,15 @@ class LSQ(tomography.Tomography):
         W = []
         L = []
         K = 1
-        modes = np.array(range(self.n_modes))
-        # np.random.shuffle(modes)
+        coeff_K = 1
+        rng = np.random.default_rng()
 
         if diameter > self.D:
             print("A")
             sz = (int(K * (self.aperture_size / self.D) * diameter + 1), int(K * (self.aperture_size / self.D) * diameter + 1))
-            for mode in modes:
+            for mode in range(self.n_modes):
                 coeff = np.zeros((self.n_modes))
-                coeff[mode] = 1
+                coeff[mode] = coeff_K
                 W.append(coeff)
 
                 screen = self.basis.compose(sz, coeff)
@@ -117,16 +120,17 @@ class LSQ(tomography.Tomography):
                 r = K * self.aperture_size // 2
 
                 screen = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
+                print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
 
                 l_modes = self.basis.decompose(screen)
+                # l_modes = np.pad(l_modes, (0, PADDING))
                 L.append(l_modes)
-                print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
         else:
             print("B")
             sz = (int(K * (self.aperture_size / diameter) * self.D + 1), int(K * (self.aperture_size / diameter) * self.D + 1))
-            for mode in modes:
+            for mode in range(self.n_modes):
                 coeff = np.zeros((self.n_modes))
-                coeff[mode] = 1
+                coeff[mode] = coeff_K
                 W.append(coeff)
 
                 screen = self.basis.compose(sz, coeff)
@@ -136,19 +140,20 @@ class LSQ(tomography.Tomography):
                 r = K * self.aperture_size // 2
                 
                 screen = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
+                print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
 
                 l_modes = self.basis.decompose(screen)
+                # l_modes = np.pad(l_modes, (0, PADDING))
                 L.append(l_modes)
-                print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
         W = np.array(W)
-        print(W)
         L = np.array(L)
-        print(L)
-        P = np.matmul(L, np.linalg.pinv(W))
-        print(P)
-
+        # P = np.matmul(L, np.linalg.pinv(W))
+        P = L
+        # print(P)
         eps = 1e-12
         P = (np.abs(P) > eps) * P
+
+        print(f"cond(W): {np.linalg.cond(W)}, cond(L): {np.linalg.cond(L)}, cond(P): {np.linalg.cond(P)}")
         return P
 
         screen = np.zeros((self.aperture_size, self.aperture_size))
@@ -276,8 +281,8 @@ def main():
     aper_size = 64
     diameter = 1.8
 
-    dct = DCT.DCT(n_modes)
-    # dct = zernike.Zernike(n_modes)
+    # dct = DCT.DCT(n_modes)
+    dct = zernike.Zernike(n_modes)
 
     lsq = LSQ(basis=dct, diameter=diameter, n_modes=n_modes, aperture_size=aper_size)
 
@@ -301,9 +306,9 @@ def main():
     np.random.seed(4)
     test_modes = np.array(list(m * np.exp(-(i+1)/n_modes) for i, m in enumerate(np.random.rand(n_modes) - 0.5)))
     test_modes = np.pad(test_modes, (0, PADDING))
-    scale = 0.6
+    scale = 0.8
     # l = 0.3
-    location = np.array((-0.15, 0.10))
+    location = np.array((-0.10, 0.10))
     # locs = [np.array((0, 0)),
     #         np.array((l, 0)),
     #         np.array((l, l)),
@@ -357,7 +362,7 @@ def main():
     # Calculate subpupils
     mode_screen = dct.compose(tuple(size), modes)
     sub_modes = np.matmul(P, modes)
-    sub_mode_screen = dct.compose(tuple(np.array(scale * size, dtype=np.int64)), sub_modes)
+    sub_mode_screen = dct.compose(tuple(size), sub_modes)
     reconstructed_modes = np.matmul(np.linalg.pinv(P), sub_modes)
     reconstructed_screen = dct.compose(tuple(size), reconstructed_modes)
 
