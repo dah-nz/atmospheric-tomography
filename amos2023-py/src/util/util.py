@@ -67,10 +67,10 @@ def circle(radius, dimension, location=(0,0)):
         _circle_cache[(radius, dimension, location)] = mask
         return mask
 
-def cart2imagespace(image_dim, location):
+def cart2imagespace(image_dim, d, location):
     center = image_dim / 2
-    x = center + (-location[1] * center)# - 0.5
-    y = center + ( location[0] * center)# - 0.5
+    x = center + ( location[0] * image_dim / d)# - 0.5
+    y = center + (-location[1] * image_dim / d)# - 0.5
     return (int(x), int(y))
 
 def rmse(expected, actual):
@@ -171,7 +171,7 @@ def get_metapupil_diameters(altitudes, beacons, diameter):
     Return
     ------
     diameters:
-        metapupil diameters at each altitude
+        metapupil diameters (m) at each altitude
     """
 
     d = []

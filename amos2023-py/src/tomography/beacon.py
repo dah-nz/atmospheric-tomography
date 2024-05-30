@@ -81,17 +81,21 @@ class Beacon():
         screen_size: float  Size of phase screen extent (largest dimension) (metres)
         """
         # Cartesian location of star on layer (in metres)
-        x, y = self.position(altitude)
+        pos = np.array(self.position(altitude))
 
         # Convert location to pixel position
         screen_dim = max(screen.shape)
+        pix_x, pix_y = util.cart2imagespace(screen_dim, screen_size, pos)
+
         cut_out_dim = screen_dim * (diameter / screen_size)
-        pix_x = int((x * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
-        pix_y = int((y * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
+        # pix_x = int((x * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
+        # pix_y = int((y * screen_dim / screen_size) + ( screen_dim / 2) + 0.5)
         r = int(cut_out_dim / 2 + 0.5)
         # cut_out_dim = int(cut_out_dim + 0.5)
 
-        phase = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
+        phase = screen[pix_y-r:pix_y+r, pix_x-r:pix_x+r]
+
+        # print(f"screen: {screen.shape}, cutout: {phase.shape}, x: {pix_x}, y:{pix_y}, r: {r}, pos: {pos}, tele D: {diameter}, meta D: {screen_size}")
 
         # mask = util.circle(r, 2 * r)
         # return phase * mask

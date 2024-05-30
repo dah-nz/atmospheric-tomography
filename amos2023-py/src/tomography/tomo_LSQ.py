@@ -7,7 +7,7 @@ from parameters import test
 from util.util import *
 
 
-GRID_MULTIPLIER = 6
+GRID_MULTIPLIER = 16
 PADDING = 0
 
 class LSQ(tomography.Tomography):
@@ -32,24 +32,20 @@ class LSQ(tomography.Tomography):
         target_coeffs:
             array of coefficients for target/science object
         """
-        # generate A and T matrices from pMatrices and tMatrix outputs for each layer
-        metapupil_d = self._metapupil_diameter(beacons, altitudes)
+        mds = self._metapupil_diameter(beacons, altitudes)
 
         beacon_coeffs = np.array([np.pad(c, (0, PADDING)) for c in beacon_coeffs])
         beacon_coeffs = beacon_coeffs.flatten()
 
         # print(metapupil_d)
 
-        def proj(beacon, altitude):
-            x, y = azimuth2cart(altitude, beacon.gamma, beacon.theta)
-            d = metapupil_d[altitude]
-            r = d/2
-            P = self._projectionMatrix((x/r, y/r), d)
-            # print(f"{beacon}, a:{altitude}, x:{x}, y:{y}, r:{r}, P:{P[:5,:5]}")
+        def proj(beacon, altitude, d):
+            x, y = beacon.position(altitude)
+            P = self._projectionMatrix((x, y), d)
             return P
 
-        A = np.concatenate([np.concatenate([proj(beacon, altitude) for beacon in beacons], 0) for altitude in altitudes], 1)
-        T = np.concatenate([proj(target, altitude) for altitude in altitudes], 1)
+        A = np.concatenate([np.concatenate([proj(beacon, a, mds[a]) for beacon in beacons], 0) for a in altitudes], 1)
+        T = np.concatenate([proj(target, a, self.D/mds[a]) for a in altitudes], 1)
         
         L = np.array(beacon_coeffs)
 
@@ -76,15 +72,12 @@ class LSQ(tomography.Tomography):
             Dictionary of metapupil diameters, keys are the altitudes 
         """
 
+        return {a: d for a, d in zip(altitudes, get_metapupil_diameters(altitudes, beacons, self.D))}
+
         d = {}
-        for a in altitudes:
-            r_outer = 0                            # outer radius of metapupil
-            for b in beacons:
-                rA = a * np.tan(b.gamma)         # distance of guide star centre from azimuth
-                if rA > r_outer:
-                    r_outer = rA                        
-            r_outer += (self.D / 2)              # Calculate extent of footprint projected onto layer (diameter is of telescope aperture)
-            d[a] = r_outer * 2
+        radii = self._metapupil_radii(beacons, altitudes)
+        for r, a in zip(radii, altitudes):
+            d[a] = r * 2
         return d
 
     def _projectionMatrix(self, location, diameter):
@@ -103,6 +96,60 @@ class LSQ(tomography.Tomography):
         P:
             Projection matrix for transformation from unit circle to a subcircle at location with diameter
         """
+        W = []
+        L = []
+        K = 1
+        modes = np.array(range(self.n_modes))
+        # np.random.shuffle(modes)
+
+        if diameter > self.D:
+            print("A")
+            sz = (int(K * (self.aperture_size / self.D) * diameter + 1), int(K * (self.aperture_size / self.D) * diameter + 1))
+            for mode in modes:
+                coeff = np.zeros((self.n_modes))
+                coeff[mode] = 1
+                W.append(coeff)
+
+                screen = self.basis.compose(sz, coeff)
+                pix_x = int((K * self.aperture_size / self.D) * (diameter / 2 + location[0]) + 0.5)
+                pix_y = int((K * self.aperture_size / self.D) * (diameter / 2 - location[1]) + 0.5)
+                
+                r = K * self.aperture_size // 2
+
+                screen = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
+
+                l_modes = self.basis.decompose(screen)
+                L.append(l_modes)
+                print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
+        else:
+            print("B")
+            sz = (int(K * (self.aperture_size / diameter) * self.D + 1), int(K * (self.aperture_size / diameter) * self.D + 1))
+            for mode in modes:
+                coeff = np.zeros((self.n_modes))
+                coeff[mode] = 1
+                W.append(coeff)
+
+                screen = self.basis.compose(sz, coeff)
+
+                pix_x = int((K * self.aperture_size / diameter) * (self.D / 2 + location[0]) + 0.5)
+                pix_y = int((K * self.aperture_size / diameter) * (self.D / 2 - location[1]) + 0.5)
+                r = K * self.aperture_size // 2
+                
+                screen = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
+
+                l_modes = self.basis.decompose(screen)
+                L.append(l_modes)
+                print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
+        W = np.array(W)
+        print(W)
+        L = np.array(L)
+        print(L)
+        P = np.matmul(L, np.linalg.pinv(W))
+        print(P)
+
+        eps = 1e-12
+        P = (np.abs(P) > eps) * P
+        return P
 
         screen = np.zeros((self.aperture_size, self.aperture_size))
 
@@ -116,11 +163,15 @@ class LSQ(tomography.Tomography):
             f = lambda x, y: self.basis.at_point(x, y, np.shape(screen), j)
             G[j, :] = np.array(list(map(f, unitGrid[:, 0], unitGrid[:, 1])))
 
+        location = np.array(location)
+
         # Transform unitgrid to subsection
-        if diameter > 1:
-            D = 1 / diameter
+        if diameter > self.D:
+            D = self.D / diameter
+            location = location * -(self.D / diameter)
         else:
-            D = diameter
+            D = diameter / self.D
+            location = location * (diameter / self.D)
         
         subGrid = self._scaleGrid(unitGrid, D)
         subGrid = self._translateGrid(subGrid, location)
@@ -134,6 +185,8 @@ class LSQ(tomography.Tomography):
         P = np.matmul(G, np.linalg.pinv(Y))
         if diameter > 1:
             P = np.linalg.pinv(P)
+        # else:
+        #     P = np.matmul(Y, np.linalg.pinv(G))
         
         # Remove small values
         eps = 1e-12
@@ -155,8 +208,8 @@ class LSQ(tomography.Tomography):
         New unit grid
         """
         # rng = np.random.default_rng()
-        # grid = rng.integers(0, self.aperture_size, size=(N, 2))
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(N)
+        grid = rng.uniform(0, self.aperture_size, size=(N, 2))
         # radius = [((n+1)**0.3) for n in range(N)]
         # theta = [np.pi*np.pi*N*r for r in radius]
         # radius = rng.uniform(0.0, 1.0, N)
@@ -164,15 +217,15 @@ class LSQ(tomography.Tomography):
         # theta = rng.uniform(0.0, 2*np.pi, N)
         # grid = np.array([pol2cart(r, t) for r, t in zip(radius, theta)])
 
-        x = np.linspace(0, self.aperture_size, N, endpoint=False)
-        y = np.linspace(0, self.aperture_size, N, endpoint=False)
+        # x = np.linspace(0, self.aperture_size, N, endpoint=False)
+        # y = np.linspace(0, self.aperture_size, N, endpoint=False)
         
-        rng.shuffle(x)
-        rng.shuffle(y)
-        x = np.resize(x, (N, 1))
-        y = np.resize(y, (N, 1))
+        # rng.shuffle(x)
         # rng.shuffle(y)
-        grid = np.concatenate((x, y), axis=1)
+        # x = np.resize(x, (N, 1))
+        # y = np.resize(y, (N, 1))
+        # # rng.shuffle(y)
+        # grid = np.concatenate((x, y), axis=1)
 
         return grid
 
@@ -190,6 +243,7 @@ class LSQ(tomography.Tomography):
         Return
         ------
         Translated grid
+
         """
         return np.array([[x + shift[0], y - shift[1]] for x, y in grid])
 
@@ -222,7 +276,8 @@ def main():
     aper_size = 64
     diameter = 1.8
 
-    dct = zernike.Zernike(n_modes)
+    dct = DCT.DCT(n_modes)
+    # dct = zernike.Zernike(n_modes)
 
     lsq = LSQ(basis=dct, diameter=diameter, n_modes=n_modes, aperture_size=aper_size)
 
@@ -232,32 +287,42 @@ def main():
     circlePoints = getCircle(1, n_points)
     grid = lsq._getGrid(n_points)
     def plotgrid(grid, l, d, dsp):
+        print(l, d)
+        g = grid
         g = lsq._scaleGrid(grid, d)
         g = lsq._translateGrid(g, l)
         X = [x for x,_ in g]
         Y = [y for _,y in g]
         plt.scatter(X, Y, c=dsp)
-        plt.hist2d(X, Y, bins=21, alpha=0.3)
+        # plt.hist2d(X, Y, bins=21, alpha=0.3)
 
 
 
     np.random.seed(4)
     test_modes = np.array(list(m * np.exp(-(i+1)/n_modes) for i, m in enumerate(np.random.rand(n_modes) - 0.5)))
     test_modes = np.pad(test_modes, (0, PADDING))
-    scale = 0.75
-    l = 0.25
-    # location = np.array((-0.25, 0.10))
-    locs = [np.array((0, 0)),
-            np.array((l, 0)),
-            np.array((l, l)),
-            np.array((0, l)),
-            np.array((-l, l)),
-            np.array((-l, 0)),
-            np.array((-l, -l)),
-            np.array((0, -l)),
-            np.array((l, -l))]
+    scale = 0.6
+    # l = 0.3
+    location = np.array((-0.15, 0.10))
+    # locs = [np.array((0, 0)),
+    #         np.array((l, 0)),
+    #         np.array((l, l)),
+    #         np.array((0, l)),
+    #         np.array((-l, l)),
+    #         np.array((-l, 0)),
+    #         np.array((-l, -l)),
+    #         np.array((0, -l)),
+    #         np.array((l, -l))]
     
-    plotgrid(grid, locs[2], scale, 'r')
+    # for loc in locs:
+    #     plt.figure()
+    #     plotgrid(circlePoints, loc, scale, dsp='k')
+    #     plotgrid(circlePoints, (0,0), 1.0, dsp='r')
+    #     plotgrid(circlePoints, loc / -scale, 1/scale, dsp='g')
+    #     plt.title(loc)
+    
+    # plt.figure()
+    # plotgrid(grid, locs[2], scale, 'r')
 
     cmap = "RdBu"
     # matplotlib.use('pgf')
@@ -266,15 +331,15 @@ def main():
 
     modes = np.array(test_modes)
     errors = []
-    for loc in locs:
-        P = lsq._projectionMatrix(tuple(loc), scale)
-        mode_screen = dct.compose(tuple(size), modes)
-        sub_modes = np.matmul(P, modes)
-        sub_mode_screen = dct.compose(tuple(np.array(scale * size, dtype=np.int64)), sub_modes)
-        reconstructed_modes = np.matmul(np.linalg.pinv(P), sub_modes)
-        reconstructed_screen = dct.compose(tuple(size), reconstructed_modes)
-        error = mode_screen - reconstructed_screen
-        errors.append(np.sqrt(np.average(error * error)))
+    # for loc in locs:
+    #     P = lsq._projectionMatrix(tuple(loc), scale)
+    #     mode_screen = dct.compose(tuple(size), modes)
+    #     sub_modes = np.matmul(P, modes)
+    #     sub_mode_screen = dct.compose(tuple(np.array(scale * size, dtype=np.int64)), sub_modes)
+    #     reconstructed_modes = np.matmul(np.linalg.pinv(P), sub_modes)
+    #     reconstructed_screen = dct.compose(tuple(size), reconstructed_modes)
+    #     error = mode_screen - reconstructed_screen
+    #     errors.append(np.sqrt(np.average(error * error)))
     
     fig = plt.figure()
     fig.set_size_inches(5.5,3)
@@ -284,7 +349,7 @@ def main():
     plt.tight_layout()
     # plt.savefig("img/ProjectionMatrixErrors.pgf")
 
-    location = locs[2]
+    # location = locs[2]
     modes = np.array(test_modes)
     P = lsq._projectionMatrix(tuple(location), scale)
     # P = np.linalg.pinv(P)
