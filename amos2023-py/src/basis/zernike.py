@@ -2,6 +2,7 @@ from functools import lru_cache
 import numpy as np
 
 from basis.basis import Basis
+from util.util import circle
 
 class Zernike(Basis):
     """
@@ -12,7 +13,7 @@ class Zernike(Basis):
     out(grid, order)    Return nth-order Zernike polynomial on a grid
     """
     def __init__(self, max_coeffs):
-        super().__init__(max_coeffs, "Zernike")
+        super().__init__(max_coeffs, "Zernike", mask=True)
 
     @lru_cache(maxsize=64)
     def out(self, size, order):
@@ -37,7 +38,26 @@ class Zernike(Basis):
         r = (int(r), int(r))
 
         return self.__zernike(r, order + 1)[s0:s0+size, s0:s0+size]
-    
+
+    def decompose(self, screen):
+        offset = 1
+        z = [0] * (self.N + offset)
+
+        if self.mask:
+            r = screen.shape[0] / 2
+            mask = circle(r, screen.shape[0])
+        else:
+            mask = np.ones_like(screen)
+
+        # Generate basis functions for each mode
+        for n in range(self.N + offset):
+            z[n] = mask * np.float64(self.__zernike(screen.shape, n))
+
+        screen = mask * screen
+
+        # Do 2D dot product of each basis function mode with the input phase screen
+        return [np.sum(screen * z[n], dtype=np.float64)/np.sum(z[n] * z[n]) for n in range(offset, self.N + offset)]
+
     @lru_cache(maxsize=None)
     def at_point(self, x, y, size, order):
         """

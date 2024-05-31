@@ -14,7 +14,7 @@ class DCT(Basis):
     out(grid, order)    Return nth-order Discrete Cosine Transform on a grid
     """
     def __init__(self, max_coeffs):
-        super().__init__(max_coeffs, "DCT")
+        super().__init__(max_coeffs, "DCT", mask=False)
         c = int(np.sqrt(max_coeffs))
         if c * c < max_coeffs:
             c += 1

@@ -9,7 +9,7 @@ from util.util import *
 
 
 GRID_MULTIPLIER = 16
-PADDING = 16
+PADDING = 0
 
 class LSQ(tomography.Tomography):
     def __init__(self, basis, diameter, n_modes, aperture_size=256):
@@ -35,26 +35,42 @@ class LSQ(tomography.Tomography):
         target_coeffs:
             array of coefficients for target/science object
         """
-        mds = self._metapupil_diameter(beacons, altitudes)
+        mds, szs = self._metapupil_diameter(beacons, altitudes)
 
         beacon_coeffs = np.array([np.pad(c, (0, PADDING)) for c in beacon_coeffs])
         beacon_coeffs = beacon_coeffs.flatten()
 
         # print(metapupil_d)
 
-        def proj(beacon, altitude, d):
-            x, y = beacon.position(altitude)
-            P = self._projectionMatrix((x, y), d)
+        def proj(b, l):
+            a = altitudes[l]
+            sz = (szs[l], szs[l])
+            L = []
+
+            for m in range(self.n_modes):
+                coeffs = np.zeros(self.n_modes)
+                coeffs[m] = 1
+
+                scr = self.basis.compose(sz, coeffs)
+                co = b.cut_out(self.D, a, scr, mds[l])
+                dco = self.basis.decompose(co)
+                L.append(dco)
+            eps = 1e-12
+            P = np.array(L)
+            P = (np.abs(P) > eps) * P
+            print(f"cond(P): {np.linalg.cond(P)}")
             return P
 
-        A = np.concatenate([np.concatenate([proj(beacon, a, mds[a]) for beacon in beacons], 0) for a in altitudes], 1)
-        T = np.concatenate([proj(target, a, self.D/mds[a]) for a in altitudes], 1)
+        layers = list(range(len(altitudes)))
+
+        A = np.concatenate([np.concatenate([proj(beacon, l) for beacon in beacons], 0) for l in layers], 1)
+        T = np.concatenate([proj(target, l) for l in layers], 1)
         
+        M = np.linalg.pinv(np.matmul(A, np.linalg.pinv(T)))
+
         L = np.array(beacon_coeffs)
+        target_coeffs = np.matmul(M, L)
 
-        W = np.matmul(np.linalg.pinv(A), L)
-
-        target_coeffs = np.matmul(T, W)
         if PADDING > 0:
             target_coeffs = target_coeffs[:-PADDING]
 
@@ -74,7 +90,8 @@ class LSQ(tomography.Tomography):
         diameters:
             Dictionary of metapupil diameters, keys are the altitudes 
         """
-
+        metapupils = get_metapupil_diameters(altitudes, beacons, self.D)
+        return metapupils, [int(self.aperture_size * (d / self.D) + 1) for d in metapupils]
         return {a: d for a, d in zip(altitudes, get_metapupil_diameters(altitudes, beacons, self.D))}
 
         d = {}

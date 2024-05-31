@@ -9,9 +9,8 @@ from util import util
 
 D = 1.0
 ap_sz = 64
-modes = 32
+modes = 25
 ast_gamma = 15
-alts = [1000, 3000, 10000]
 alts = [1000, 3000, 10000]
 
 r0 = 0.07 # m
@@ -24,13 +23,13 @@ cmap = "BrBG"
 
 # tomo_LSQ.PADDING = 0
 
-# lsq = tomo_LSQ.LSQ(basis_fn, D, modes, ap_sz)
+
 
 # beacon_list = {ast_gamma: [beacon.Beacon(t, ast_gamma) for t in np.linspace(0, 2 * np.pi, 3, endpoint=False)] for ast_gamma in np.linspace(1, 15, 2)}
 beacon_list = {}
-beacon_list["random"] = [beacon.Beacon(t, g) for t, g in zip(rng.uniform(0, 2*np.pi, size=3), rng.gamma(ast_gamma, 1, size=3))]
+beacon_list["random"] = [beacon.Beacon(t, g, mask=basis_fn.mask) for t, g in zip(rng.uniform(0, 2*np.pi, size=3), rng.gamma(ast_gamma, 1, size=3))]
 
-target = beacon.Beacon(0, 0)
+target = beacon.Beacon(0, 0, mask=basis_fn.mask)
 
 for g, beacons in beacon_list.items():
     md = util.get_metapupil_diameters(alts, beacons, D)
@@ -40,24 +39,27 @@ for g, beacons in beacon_list.items():
     for a, d, sz in zip(alts, md, szs):
         print(f"D: {D}, a: {a:5}, d: {d:7.4f}, sz: {sz:4}")
 
-    # gens = [phase_screen.PhaseScreenGenerator(s, D, r0, rng) for s in szs]
-    # cutout = (ap_sz, ap_sz)
-    # screens = [g.generate(1, cutout, "all")[0] for g in gens]
+    mask = lambda x: util.circle(x / 2, x) if basis_fn.mask else np.ones((x, x))
+    gens = [phase_screen.PhaseScreenGenerator(s, D, r0, rng) for s in szs]
+    cutout = (ap_sz, ap_sz)
+    screens = [mask(s) * g.generate(1, cutout, "all")[0] for g, s in zip(gens, szs)]
 
-    screen_modes = np.zeros(modes)
-    screen_modes[1] = 4
-    screens = [util.circle(s / 2, s) * basis_fn.compose((s, s), screen_modes) for s in szs]
-    mask = lambda x: util.circle(x / 2, x)
-    screens = [mask(s) * (sc - np.mean(sc)) for sc, s in zip(screens, szs)]
+    # screen_modes = np.zeros(modes)
+    # screen_modes[1] = 4
+    # screens = [util.circle(s / 2, s) * basis_fn.compose((s, s), screen_modes) for s in szs]
+    # screens = [mask(s) * (sc - np.mean(sc)) for sc, s in zip(screens, szs)]
 
-    targets = []
-    guidestars = []
+    # targets = []
+    # guidestars = []
 
     target_cutout = []
+    gs_cutouts = []
 
     for l, screen in enumerate(screens):
         fig, axs = plt.subplots(3, 5)
         fig.suptitle(f"Layer {l + 1}")
+
+        gs_cutouts.append([])
 
         vmin = np.amin(screen)
         vmax = np.amax(screen)
@@ -70,9 +72,7 @@ for g, beacons in beacon_list.items():
         axs[2, 0].imshow(screen - recons, vmin=vmin, vmax=vmax, cmap=cmap)
 
         cs = "krbg"
-        guidestars.append([])
-
-
+        
         for i, b in enumerate([target] + beacons):
             sz = szs[l]
             pos = util.cart2imagespace(sz, md[l], np.array(b.position(alts[l])))
@@ -86,16 +86,13 @@ for g, beacons in beacon_list.items():
             cutout = b.cut_out(D, alts[l], screen, md[l])
             if i == 0:
                 target_cutout.append(cutout)
+            else:
+                gs_cutouts[l].append(cutout)
 
             axs[0, i+1].set_title(title)
             axs[0, i+1].imshow(cutout, vmin=vmin, vmax=vmax, cmap=cmap)
             
             coeffs = basis_fn.decompose(cutout)
-
-            if i == 0:
-                targets.append(coeffs)
-            else:
-                guidestars[l].append(coeffs)
 
             dc = mask(cutout.shape[0]) * basis_fn.compose(cutout.shape, coeffs)
 
@@ -110,15 +107,19 @@ for g, beacons in beacon_list.items():
         plt.tight_layout()
 
     # sum target coeffs along layers
-    targets = np.array(targets)
-    target_coeffs = np.sum(targets, axis=0)
+    target_cutout = np.array(target_cutout)
+    target_ps = np.sum(target_cutout, axis=0)
+    target_ps = target_ps - np.average(target_ps)
+    target_coeffs = basis_fn.decompose(target_ps)
     
     # sum guide star coeffs along layers and flatten
-    print(guidestars)
-    guidestars = np.array(guidestars)
-    guide_coeffs = np.sum(guidestars, axis=0)
-    print(guide_coeffs.shape)
-    print(guide_coeffs)
+    gs_cutouts = np.array(gs_cutouts)
+    print(gs_cutouts.shape)
+    gs_ps = np.sum(gs_cutouts, axis=0)
+    print(gs_ps.shape)
+    gs_ps = [ps - np.average(ps) for ps in gs_ps]
+    guide_coeffs = [basis_fn.decompose(ps) for ps in gs_ps]
+    
     guide_coeffs = np.ravel(guide_coeffs)
 
     def proj(b, l):
@@ -190,24 +191,51 @@ for g, beacons in beacon_list.items():
     axs[1, 0].legend()
 
 
-plt.show()
+for g, beacons in beacon_list.items():
+    md = util.get_metapupil_diameters(alts, beacons, D)
+    
+    szs = [int(ap_sz * (d / D) + 1) for d in md]
+    
+    gens = [phase_screen.PhaseScreenGenerator(s, D, r0, rng) for s in szs]
+    cutout = (ap_sz, ap_sz)
+    screens = [g.generate(1, cutout, "all")[0] for g in gens]
 
-    # coeffs = util.get_coeffs_for_asterism(beacons, basis_fn, screens, alts, D, md)
-    # print(coeffs.shape)
+    lsq = tomo_LSQ.LSQ(basis_fn, D, modes, ap_sz)
 
-    # tgt = beacon.Beacon(0, 0)
-    # tgt_coeffs = util.get_coeffs_for_cutout(tgt, basis_fn, screens, alts, D, md)
-    # print(tgt_coeffs.shape)
+    coeffs = util.get_coeffs_for_asterism(beacons, basis_fn, screens, alts, D, md)
+    print(coeffs.shape)
 
-    # pred_coeffs = lsq.run(beacons, tgt, coeffs, alts)
+    tgt = beacon.Beacon(0, 0, mask=basis_fn.mask)
+    tgt_coeffs = util.get_coeffs_for_cutout(tgt, basis_fn, screens, alts, D, md)
+    print(tgt_coeffs.shape)
 
-    # print(pred_coeffs.shape)
+    pred_coeffs = lsq.run(beacons, tgt, coeffs, alts)
 
-    # plt.figure()
-    # plt.plot(tgt_coeffs, label="Target Coeffs")
-    # plt.plot(pred_coeffs, label="Predicted Coeffs")
-    # plt.legend()
-    # plt.title(f"Asterism angle = {g}")
+    print(pred_coeffs.shape)
+
+    plt.figure()
+    plt.plot(tgt_coeffs, label="Target Coeffs")
+    plt.plot(pred_coeffs, label="Predicted Coeffs")
+    plt.title("Tomography Coefficient Performance Comparison")
+    plt.legend()
+
+    fig, axs = plt.subplots(2, 3)
+    fig.suptitle(f"Asterism angle = {g}")
+
+    actual_screen = util.get_cutout(tgt, screens, alts, D, md)
+    vmin = np.amin(actual_screen)
+    vmax = np.amax(actual_screen)
+    axs[0, 0].imshow(actual_screen, vmin=vmin, vmax=vmax, cmap=cmap)
+
+    tgt_scr = basis_fn.compose((ap_sz, ap_sz), tgt_coeffs)
+    pred_scr = basis_fn.compose((ap_sz, ap_sz), pred_coeffs)
+
+    axs[0, 1].imshow(tgt_scr, vmin=vmin, vmax=vmax, cmap=cmap)
+    axs[0, 2].imshow(pred_scr, vmin=vmin, vmax=vmax, cmap=cmap)
+
+    axs[1, 0].imshow(actual_screen - tgt_scr, vmin=vmin, vmax=vmax, cmap=cmap)
+    axs[1, 1].imshow(actual_screen - pred_scr, vmin=vmin, vmax=vmax, cmap=cmap)
+    axs[1, 2].imshow(tgt_scr - pred_scr, vmin=vmin, vmax=vmax, cmap=cmap)
 
 # tomo_LSQ.main()
 

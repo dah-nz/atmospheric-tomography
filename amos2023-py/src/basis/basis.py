@@ -1,9 +1,11 @@
 import numpy as np
+from util.util import circle
 
 class Basis():
-    def __init__(self, max_coeffs, name=""):
+    def __init__(self, max_coeffs, name="", mask=False):
         self.name = name
         self.N = max_coeffs
+        self.mask = mask
     def out(self, size, order):
         raise NotImplementedError()
     def at_point(self, x, y, size, order):
@@ -26,6 +28,11 @@ class Basis():
         phase = np.zeros(size, dtype=np.float64)
         for m, c in enumerate(coefficients):
             phase += np.float64(c * self.out(size, m))
+
+        if self.mask:
+            r = size[0] / 2
+            phase = phase * circle(r, size[0])
+
         return phase
 
     def decompose(self, screen):
@@ -48,6 +55,10 @@ class Basis():
         z = [0] * self.N
         for n in range(self.N):
             z[n] = np.float64(self.out(np.shape(screen), n))
+
+        if self.mask:
+            r = screen.shape[0] / 2
+            screen = screen * circle(r, screen.shape[0])
 
         # Do 2D dot product of each basis function mode with the input phase screen
         return [np.sum(screen * z[n], dtype=np.float64)/np.sum(z[n] * z[n]) for n in range(0, self.N)]

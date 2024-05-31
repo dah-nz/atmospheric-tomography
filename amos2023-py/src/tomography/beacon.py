@@ -31,7 +31,7 @@ class Beacon():
     reset()
         Reset beacon to initial position
     """
-    def __init__(self, theta, gamma, motion_path=None, gamma_arcseconds=True):
+    def __init__(self, theta, gamma, gamma_arcseconds=True, mask=False):
         self._theta0 = theta
         if gamma_arcseconds:
             self._gamma_arcsec = gamma
@@ -41,7 +41,8 @@ class Beacon():
         self._gamma0 = gamma
         self.theta = theta
         self.gamma = gamma
-        self.motion_path = motion_path
+        self.motion_path = None
+        self.mask = False
     def __repr__(self):
         return f"<Beacon({self.theta},{self.gamma}>" #,{self._gamma_arcsec})>"
     def position(self, altitude):
@@ -97,10 +98,11 @@ class Beacon():
 
         # print(f"screen: {screen.shape}, cutout: {phase.shape}, x: {pix_x}, y:{pix_y}, r: {r}, pos: {pos}, tele D: {diameter}, meta D: {screen_size}")
 
-        # mask = util.circle(r, 2 * r)
-        # return phase * mask
-        # return phase - np.mean(phase)
-        return phase
+        if self.mask:
+            mask = util.circle(r, 2 * r)
+        else:
+            mask = np.ones_like(phase)
+        return phase * mask
 
     def step(self, dt):
         """
