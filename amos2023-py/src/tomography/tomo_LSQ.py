@@ -58,7 +58,7 @@ class LSQ(tomography.Tomography):
             eps = 1e-12
             P = np.array(L)
             P = (np.abs(P) > eps) * P
-            print(f"cond(P): {np.linalg.cond(P)}")
+            # print(f"cond(P): {np.linalg.cond(P)}")
             return P
 
         layers = list(range(len(altitudes)))

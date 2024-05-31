@@ -153,7 +153,6 @@ def get_coeffs_for_cutout(beacon, basis, layer_screens, layer_altitudes, D, meta
 def get_cutout(beacon, layer_screens, layer_altitudes, D, metapupil_diameters):
     cutouts = [beacon.cut_out(D, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, metapupil_diameters)]
     cutout = np.sum(cutouts, 0)
-    print(f"get_cutout: shape: {cutout.shape}")
     return cutout - np.average(cutout)
 
 def get_metapupil_diameters(altitudes, beacons, diameter):
