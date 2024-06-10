@@ -8,6 +8,10 @@ from basis import DCT, zernike, DST, wavelet
 
 directory = "./src/parameters/"
 
+from util import log
+logger = log.get_logger(__name__)
+log.setup_logger(logger)
+
 def configure(file="settings.json", dir=None):
     """
         Configure a json settings file for tomography tests
@@ -65,6 +69,10 @@ def load(file="settings.json", dir=None):
         settings:
             Dictionary of all parameters required for a simulation
         """
+    
+
+    logger.info("Loading settings file")
+
     if dir is None:
         dir = directory
 
@@ -84,6 +92,8 @@ def load(file="settings.json", dir=None):
         basis = wavelet.wavelet(n, wavelets="haar")
     elif "db2" in b:
         basis = wavelet.wavelet(n, wavelets="db2")
+
+    logger.info(f"Configured basis as {b}, with {n} coeffs")
 
     settings["basis"] = basis
     

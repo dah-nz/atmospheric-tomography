@@ -148,7 +148,7 @@ def get_coeffs_for_asterism(asterism, basis, layer_screens, layer_altitudes, D, 
 
 def get_coeffs_for_cutout(beacon, basis, layer_screens, layer_altitudes, D, metapupil_diameters):
     cutout = get_cutout(beacon, layer_screens, layer_altitudes, D, metapupil_diameters)
-    return np.array(basis.decompose(cutout))
+    return np.array(basis.decompose(cutout), dtype=np.float32)
 
 def get_cutout(beacon, layer_screens, layer_altitudes, D, metapupil_diameters):
     cutouts = [beacon.cut_out(D, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, metapupil_diameters)]

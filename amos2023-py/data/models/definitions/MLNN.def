@@ -1,0 +1,25 @@
+class MLNN(nn.Module):
+    def __init__(self, settings):
+        super().__init__()
+        LRELU_grad = settings["LReLU_grad"]
+        do = settings["dropout_rate"]
+        n_coeffs = settings["n_coeffs"]
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(n_coeffs*3, 256),
+            nn.LeakyReLU(LRELU_grad, True),
+            nn.Dropout(do),
+            nn.Linear(256, 512),
+            nn.LeakyReLU(LRELU_grad, True),
+            nn.Dropout(do),
+            nn.Linear(512, 512),
+            nn.LeakyReLU(LRELU_grad, True),
+            nn.Dropout(do),
+            nn.Linear(512, 256),
+            nn.LeakyReLU(LRELU_grad, True),
+            nn.Dropout(do),
+            nn.Linear(256, n_coeffs)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_relu_stack(x)

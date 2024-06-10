@@ -1,281 +1,283 @@
 import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime
+import glob
+
+from parameters import test
+from astro import data
+from util import util, log
+from tomography import beacon, phase_screen
+from ml import dataset
+from tomography import tomo_LSQ
 import torch
 from torch import nn
-from torch.utils.data import Dataset, DataLoader
-import matplotlib.pyplot as plt
+from torchinfo import summary
 
-from util import util, ml
-from astro import data
-from tomography import beacon, phase_screen
-from parameters import test
+logger = log.get_logger(__name__)
+log.setup_logger(logger)
 
-from ml import modules
+settings = test.load(file="settings.json", dir="./src/parameters/")
 
-class TomoDataset(Dataset):
-    def __init__(self, settings, rng=None, fixed_asterism=False):
-        self.settings = settings
+def load(file):
+    # Load a model definition from file
+    # Return: model class definition
+    with open(file, "r") as f:
+        data = f.readlines()
+        data = "\n".join(data)
 
-        self.D = settings["D"]
-        self.altitudes = settings["layer_altitudes"]
-        self.layer_r0 = settings["layer_conditions"]
-        self.cut_out = (settings["aperture_size"], settings["aperture_size"])
-        self.fixed_asterism = fixed_asterism
+        name = file.split("\\")[-1]
+        name = name.split('.')[0]
+        logger.info(f"Loading model {name} from {file}")
 
-        self.rng = rng
-        self.n = self.get_size()
+        exec(data)
 
-        try:
-            if settings["mini_batch"] > 1:
-                self.n_asterisms = int(self.n / settings["mini_batch"])
-                self.n_screens = settings["mini_batch"]
-            else:
-                raise KeyError
-        except KeyError:
-            self.n_asterisms = self.n
-            self.n_screens = self.n
+    return name, eval(name)
 
-        self.asterisms = self.get_asterisms()
+def compare(models):
+    # Compare a group of models to each other with a single validation set
+    # Returns a list of tuples (name, loss), ordered by ranking
 
-        limit_star = [beacon.Beacon(0, settings["limiting_angle"], gamma_arcseconds=True)]
-        m, l = util.get_layer_shapes(self.altitudes, limit_star, self.D, settings["aperture_size"])
+    logger.info(f"Building validation dataset")
+    validation_data = dataset.ValidationData(settings)
+    validation_loader = validation_data.get_dataloader()
 
-        self.metapupil_diameters = m
-        self.layer_shapes = l
-        self.ps_gens = [phase_screen.PhaseScreenGenerator(s, self.D, r0, rng) for s, r0 in zip(l, self.layer_r0)]
+    results = {}
 
-        self.screens = self.get_screens()
-        
-        self.basis = settings["basis"]
-        self.target = beacon.Beacon(0, 0)
-        
-    def __len__(self):
-        return self.n
-    
-    def get_size(self):
-        raise NotImplementedError
-    
-    def get_asterisms(self):
-        if self.fixed_asterism:
-            asterisms = np.array([[beacon.Beacon(t, self.settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for _ in range(self.n)])
-        else:
-            self.offset = self.settings["variable_asterism_angle_deg"] * np.pi / 180
-            self.star_gamma = data.load_asterism_data(
-                self.settings["star_magnitude"],
-                n=self.n_asterisms,
-                limit=self.settings["limiting_angle"], rng=self.rng)
-            st0 = self.rng.uniform(low=0, high=2*np.pi, size=(self.star_gamma.shape[0], 1))
-            st1 = self.rng.uniform(low=st0 + self.offset, 
-                                   high=2*np.pi + st0 - self.offset, 
-                                   size=(self.star_gamma.shape[0], 1))
-            st0[st1 > (st0 + np.pi)] = st0[st1 > (st0 + np.pi)] + 2 * np.pi
-            st2 = self.rng.uniform(low=np.min([st0, st1], axis=0)-self.offset, 
-                                   high=np.max([st0, st1], axis=0)+self.offset) + np.pi
-            self.star_theta = np.concatenate([st0, st1, st2], axis=1)
-            self.star_theta[self.star_theta > 2 * np.pi] = self.star_theta[self.star_theta > 2 * np.pi] - (2*np.pi)
+    logger.info(f"Comparing models: {','.join(list(models.keys()))}")
+    for n, m in models:
+        logger.info(f"Configuring model {n}")
+        mdl = dataset.Configure(m, settings)
+        results = (n, mdl.evaluate(validation_loader))
 
-            asterisms = [[beacon.Beacon(t, g) for t, g in zip(tht, gma)] 
-                         for tht, gma in zip(self.star_theta, self.star_gamma)]
-            
-            if self.n != self.n_asterisms:
-                asterisms = np.array(int(self.n / self.n_asterisms) * asterisms)
-                self.rng.shuffle(asterisms)
-            
-        return asterisms
+    return sorted(results, key=lambda x: x[1])
 
-    def get_screens(self):
-        raise NotImplementedError
-    
-    def get_screen_at(self, idx):
-        raise NotImplementedError
-    
-    def __getitem__(self, idx):
-        if self.n != self.n_screens:
-            idx = idx - (idx % self.settings["training_batch"]) + (idx % self.settings["mini_batch"])
-        screens = self.get_screen_at(idx)
-        asterism = self.asterisms[idx]
+def display(models, rankings):
+    # Display the results of the model relative to each other and themselves.
+    directory = "./data/models/results/*.dat"
+    files = glob.glob(directory)
 
-        asterism_coeffs = util.get_coeffs_for_asterism(asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
-        target_coeffs = util.get_coeffs_for_cutout(self.target, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
+    model_data = {}
+    file_data = {}
 
-        asterism_coeffs = np.expand_dims(asterism_coeffs, axis=-1)
-        theta = np.ones_like(asterism_coeffs)
-        gamma = np.ones_like(asterism_coeffs)
-        for i, b in enumerate(asterism):
-            theta[i, :] = theta[i, :] * b.theta
-            gamma[i, :] = gamma[i, :] * b.gamma
-        
-        data = np.append(asterism_coeffs, theta, axis=2)
-        data = np.append(data, gamma, axis=2)
-        
-        return data, target_coeffs
-    
-class TrainData(TomoDataset):
-    def get_size(self):
-        return self.settings["training_batch"] * self.settings["batches_per_epoch"]
-    
-    def get_screens(self):
-        # Find scaling factor to get the correct r0 for the cut out
-        for gen in self.ps_gens:
-            gen.generate(int(self.n / 10) if self.n > 100 else self.n, cut_out=self.cut_out)
+    def get(lst, name):
+        for l in lst:
+            if f"/{models[name].file_name}.dat" in l:
+                return l
         return None
+           
+    for name, rank in rankings:
+        model_data[name] = (rank, models[name], get(files, name))
 
-    def get_screen_at(self, idx):
-        return [pg.get(idx=idx) for pg in self.ps_gens]
     
-class TestData(TomoDataset):
-    def get_size(self):
-        return self.settings["testing_batch"]
-    
-    def get_asterisms(self):
-        self.n_asterisms = self.n
-        self.n_screens = self.n
-        return super().get_asterisms()
-    
-    def get_screens(self):
-        print("Building test batch")
-        return [gen.generate(self.n, cut_out=self.cut_out, return_type="all") for gen in self.ps_gens]
-    
-    def get_screen_at(self, idx):
-        return [scr[idx] for scr in self.screens]
+    for name, (rank, mdl, path) in model_data.items():
+        keys = []
+        data = {}
+        record = -1
+        with open(path, 'r') as file:
+            for line in file:
+                l = line.strip()
+                if record == 0:
+                    keys = l.split(',')
+                    for k in keys:
+                        data[k] = []
+                    record += 1
+                elif record > 0:
+                    dt = l.split(',')
+                    for k, d in zip(keys, dt):
+                        data[k].append(float(d))
+                if l == "DATA FOLLOWS HERE":
+                    record = 0
 
-class ValidationData(TomoDataset):
-    def get_size(self):
-        self.rng = np.random.default_rng(seed=0)
-        return self.settings["validation_batch"]
-    
-    def get_asterisms(self):
-        self.n_asterisms = self.n
-        self.n_screens = self.n
-        return super().get_asterisms()
-    
-    def get_screens(self):
-        print("Building validation batch")
-        self.ps_gens = None
-        gens = [phase_screen.PhaseScreenGenerator(s, self.D, r0, self.rng) for s, r0 in zip(self.layer_shapes, self.layer_r0)]
-        return [gen.generate(self.n, cut_out=self.cut_out, return_type="all") for gen in gens]
-    
-    def get_screen_at(self, idx):
-        return [scr[idx] for scr in self.screens]
-    
-class Model():
-    def __init__(self, seed=None, fixed_train=False, fixed_test=False, continue_training=False):
-        self.settings_dir = "./src/parameters/"
-        self.model_dir = "./data/models"
-        self.settings_file = "settings.json"
-        self.t = test.load(file=self.settings_file, dir=self.settings_dir)
+        labels = {
+            "Variable Model (Training Loss)":           'r-',
+            "Variable Model (Test Loss)":               'r:',
+            "Fixed Model (Training Loss)":              'b-',
+            "Fixed Model (Test Loss)":                  'b:',
+            "Mixed Model (Training Loss)":              'g-',
+            "Mixed Model (Test Loss)":                  'g:',
+            "Open Loop Comparison":                     'y:',
+            "LSQ Tomography (Fixed Asterism)":          'k:',
+            "LSQ Tomography (Variable Asterism)":       'c:',
+            "LSQ Tomography (Mixed Asterism)":          'm:',
+        }
 
-        self.fixed_test = fixed_test
-        self.fixed_train = fixed_train
-        if self.fixed_train:
-            if self.fixed_test:
-                print("Running fixed asterism model")
-                self.model_file_name = self.t["model_file_fixed_asterism"]
-            else: # self.static_test = False
-                print("Running mixed asterism model")
-                self.model_file_name = self.t["model_file_mixed_asterism"]
+        plt.figure()
+        plt.title(f"{name} [{rank}]")
+        for lbl, clr in labels.items():
+            plt.plot(data[lbl], clr, label=lbl)
+        plt.legend()
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss (MSE)")
+
+        file_data[name] = data
+    
+    openloop_label = 'Open Loop Comparison'
+    fixed_label = "LSQ Tomography (Fixed Asterism)"
+    var_model_label = "Variable Model (Test Loss)"
+
+    plt.figure()
+    for name in file_data.keys():
+        d = file_data[name]
+        rank = model_data[name][0]
+        gain = np.mean(d[openloop_label])
+        o = np.array(d[var_model_label]) / gain
+        plt.plot(o, label=f"{name} [{rank}]")
+    plt.plot(np.array(d[openloop_label])/gain, "k:", label="Open Loop")
+    plt.legend()
+    plt.title("Test loss normalised to open loop output")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss (MSE)")
+
+    plt.figure()
+
+    for name in file_data.keys():
+        d = file_data[name]
+        rank = model_data[name][0]
+        gain = np.mean(d[fixed_label])
+        o = np.array(d[var_model_label]) / gain
+        plt.plot(o, label=f"{name} [{rank}]")
+    plt.plot(np.array(d[fixed_label])/gain, "k:", label="Fixed LSQ")
+    plt.legend()
+    plt.title("Test loss normalised to Fixed Asterism least squares output")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss (MSE)")
+
+def model_summary(m):
+    s = ""
+    for k, v in m.t.items():
+        if type(v) not in [int, float, list, str]:
+            n = v.__class__.__name__
         else:
-            print("Running variable asterism model")
-            self.model_file_name = self.t["model_file_variable_asterism"]
+            n = v
+        s += f"{k},{n}\n"
+    s += f"loss_fn,{m.loss_fn.__class__.__name__}\n"
+    s += f"optimiser,{m.optimiser.__class__.__name__}\n"
+    s += str(summary(m.model, input_size=(1, 3, m.t["n_coeffs"], 3), verbose=0))
+    return s
 
-        self.model_file = "{}/{}_{}_{}_{}.{}".format(
-            self.model_dir,
-            self.t["ml_network"],
-            self.t["basis_type"],
-            str(self.t["n_coeffs"]),
-            self.model_file_name,
-            self.t["model_file_suffix"]
-        )
+def train(model):
+    # Train a model on randomised data
+    # Returns nothing, operates on model definition
+    logger.info("Building model configurations")
+    
+    model_var = dataset.Configure(model, settings)
+    model_mix = dataset.Configure(model, settings, fixed_train=True)
+    model_fix = dataset.Configure(model, settings, fixed_train=True, fixed_test=True)
+    print(model_summary(model_var))
+    logger.info("Models configured")
 
-        self.train_rng = np.random.default_rng(seed=seed)
-        self.test_rng = np.random.default_rng(seed=seed+1)
+    logger.info(f"Training {model_var.model_name} variable model")
+    model_var.train()
 
-        self.device = ml.initialise()
+    logger.info(f"Training {model_mix.model_name} mixed model")
+    model_mix.train()
 
-        self.Network = eval(f"modules.{self.t['ml_network']}")
+    logger.info(f"Training {model_fix.model_name} fixed model")
+    model_fix.train()
 
-        self.model = self.Network(self.t).to(self.device)
-        if continue_training:
-            self.model.load_state_dict(torch.load(self.model_file))
+    logger.info("Model training complete")
 
-        self.loss_fn = nn.MSELoss()
-        self.optimiser = torch.optim.AdamW(self.model.parameters(), lr=1e-03, weight_decay=1e-05)
+    logger.info("Running Least Squares models")
+    tomo = tomo_LSQ.LSQ(model_var.t["basis"], model_var.t["D"], model_var.t["n_coeffs"], model_var.t["aperture_size"])
+    tomo_variable_loss = []
+    tomo_fixed_loss = []
+    tomo_mixed_loss = []
+    tomo_open_loop_loss = []
+    ol_coeffs = np.zeros(model_var.t["n_coeffs"])
+    
+    target = beacon.Beacon(0, 0)
+    
+    def process_data(X, y, i):
+        data = X[i]
+        target_coeffs = y[i]
+        theta = np.array([data[0, 0, 1], data[1, 0, 1], data[2, 0, 1]])
+        gamma = np.array([data[0, 0, 2], data[1, 0, 2], data[2, 0, 2]])
 
-        self.train_data = TrainData(self.t, rng=self.train_rng, fixed_asterism=fixed_train)
-        self.test_data = TestData(self.t, rng=self.test_rng, fixed_asterism=fixed_test)
-        self.vali_var_data = ValidationData(self.t, rng=None, fixed_asterism=False)
-        self.vali_fix_data = ValidationData(self.t, rng=None, fixed_asterism=True)
+        beacon_coeffs = data[:, :, 0]
+        beacons = [beacon.Beacon(t, g, gamma_arcseconds=False) for t, g in zip(theta, gamma)]
 
-        self.train_dataloader = DataLoader(self.train_data, batch_size=self.t["training_batch"])
-        self.test_dataloader = DataLoader(self.test_data, batch_size=self.t['testing_batch'])
-        self.vali_var_dataloader = DataLoader(self.vali_var_data, batch_size=self.t['validation_batch'])
-        self.vali_fix_dataloader = DataLoader(self.vali_fix_data, batch_size=self.t['validation_batch'])
+        return target_coeffs, beacon_coeffs, beacons
+    
+    for n in range(model_var.t["epochs"]):
+        fixed_loss = 0
+        variable_loss = 0
+        mixed_loss = 0
+        openloop_loss = 0
+        logger.info(f"Calculating LSQ data for epoch {n+1}/{model_var.t['epochs']}")
+        for (X, y), (Xf, yf) in zip(model_var.test_dataloader, model_fix.test_dataloader):
+            X, y = X.numpy(), y.numpy()
+            Xf, yf = Xf.numpy(), yf.numpy()
+            for i in range(model_var.t["testing_batch"]):
+                target_coeffs, beacon_coeffs, beacons = process_data(X, y, i)
+                target_coeffs_f, beacon_coeffs_f, beacons_f = process_data(Xf, yf, i)
+                
+                tomo_variable = tomo.run(beacons,   target, beacon_coeffs,   model_var.t['layer_altitudes'])
+                tomo_mixed =    tomo.run(beacons_f, target, beacon_coeffs,   model_var.t['layer_altitudes'])
+                tomo_fixed =    tomo.run(beacons_f, target, beacon_coeffs_f, model_var.t['layer_altitudes'])
 
-        self.test_results = []
-        self.train_results = []
-        self.validation_var_results = []
-        self.validation_fix_results = []
+                variable_loss += model_var.loss_fn(torch.from_numpy(tomo_variable), 
+                                                   torch.from_numpy(target_coeffs)).item()
+                mixed_loss    += model_var.loss_fn(torch.from_numpy(tomo_mixed),
+                                                   torch.from_numpy(target_coeffs)).item()
+                openloop_loss += model_var.loss_fn(torch.from_numpy(ol_coeffs),
+                                                   torch.from_numpy(target_coeffs)).item()
+                fixed_loss    += model_var.loss_fn(torch.from_numpy(tomo_fixed),
+                                                   torch.from_numpy(target_coeffs_f)).item()
+                
+            break
+        va_loss = variable_loss / model_var.t["testing_batch"]
+        ma_loss = mixed_loss    / model_var.t["testing_batch"]
+        fa_loss = fixed_loss    / model_var.t["testing_batch"]
+        ol_loss = openloop_loss / model_var.t["testing_batch"]
+        if ma_loss > 100:
+            ma_loss = 100
+        if va_loss > 100:
+            va_loss = 100
+        if fa_loss > 100:
+            fa_loss = 100
+        tomo_variable_loss.append(va_loss)
+        tomo_open_loop_loss.append(ol_loss)
+        tomo_mixed_loss.append(ma_loss)
+        tomo_fixed_loss.append(fa_loss)
+        logger.info(f"LSQ Results: Variable loss: {va_loss:>7f}, Mixed loss: {ma_loss:>7f}, Fixed loss: {fa_loss:>7f}, Open loop loss: {ol_loss:>7f}")
 
-    def train(self):
-        epochs = self.t["epochs"]
+    now = log.time
+    data_file = f"./data/models/results/{model_var.file_name}.dat"
+    logger.info(f"Saving data to {data_file}")
 
-        for i in range(epochs):
-            print(f">>> Training epoch {i + 1}/{epochs} <<<")
-            self.train_results.append(ml.train(self.train_dataloader, self.model, self.loss_fn, self.optimiser))
-            self.test_results.append(ml.test(self.test_dataloader, self.model, self.loss_fn))
-            self.validation_var_results.append(ml.test(self.vali_var_dataloader, self.model, self.loss_fn))
-            self.validation_fix_results.append(ml.test(self.vali_fix_dataloader, self.model, self.loss_fn))
+    data = {
+        "Variable Model (Training Loss)":           ['r-',  model_var.train_results] ,
+        "Variable Model (Test Loss)":               ['r:',  model_var.test_results],
+        "Fixed Model (Training Loss)":              ['b-',  model_fix.train_results],
+        "Fixed Model (Test Loss)":                  ['b:',  model_fix.test_results],
+        "Mixed Model (Training Loss)":              ['g-',  model_mix.train_results],
+        "Mixed Model (Test Loss)":                  ['g:',  model_mix.test_results],
+        "Open Loop Comparison":                     ['y:',  tomo_open_loop_loss],
+        "LSQ Tomography (Fixed Asterism)":          ['k:',  tomo_fixed_loss],
+        "LSQ Tomography (Variable Asterism)":       ['c:',  tomo_variable_loss],
+        "LSQ Tomography (Mixed Asterism)":          ['m:',  tomo_mixed_loss]
+    }
 
-        print(f"Done. Trained {epochs} epochs.")
+    with open(data_file, 'w', encoding="utf-8", errors='replace') as df:
+        summ = f"{now}\n"
+        summ += model_summary(model_var)
+        df.write(summ)
+        df.write("\nDATA FOLLOWS HERE\n")
+        headings = ",".join(data.keys())
+        data_vals = data.values()
 
-        torch.save(self.model.state_dict(), self.model_file)
+        df.write(f'Epoch,{headings}\n')
+        for i in range(model_var.t["epochs"]):
+            st = ",".join(map(str,[h[1][i] for h in data_vals]))
+            df.write(f"{i+1},{st}\n")
 
-    def evaluate(self):
-        self.model = self.Network(self.t).to(self.device)
-        self.model.load_state_dict(torch.load(self.model_file))
+    # plt.figure()
+    # for k, v in data.items():
+    #     plt.plot(v[1], v[0], label=k)
+    # plt.legend()
+    # plt.xlabel("Epoch")
+    # plt.ylabel("Loss (MSE)")
 
-        self.model.eval()
+    # plt.show()
+    return
 
-        basis = self.t["basis"]
-        print(basis.name)
-
-        def get_comparisons(data):
-            x, y = data[0]
-            X = torch.from_numpy(x).unsqueeze(0)
-            with torch.no_grad():
-                X = X.to(self.device)
-                p = self.model(X)
-            p = p.to("cpu").numpy()
-            p = p.flatten()
-            predicted = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), p)
-            actual = basis.compose((self.t["aperture_size"], self.t["aperture_size"]), y)
-            return predicted, actual, p, y
-
-        p1, a1, pc1, ac1 = get_comparisons(self.vali_var_data)
-        p2, a2, pc2, ac2 = get_comparisons(self.vali_fix_data)
-
-        fig, axs = plt.subplots(2, 3)
-        if self.fixed_train:
-            if self.fixed_test:
-                fig.suptitle("Fixed Model results")
-            else:
-                fig.suptitle("Mixed Model results")
-        else:
-            fig.suptitle("Variable Model results")
-        axs[0, 0].imshow(p1)
-        axs[0, 0].set_title("Predicted phase screen for variable asterism")
-        axs[0, 1].imshow(a1)
-        axs[0, 1].set_title("Actual phase screen for variable asterism")
-        axs[0, 2].set_title("Coefficients for variable asterism")
-        axs[0, 2].plot(pc1, label="Predicted Coefficients")
-        axs[0, 2].plot(ac1, label="Actual Coefficients")
-        axs[0, 2].legend()
-
-
-        axs[1, 0].imshow(p2)
-        axs[1, 0].set_title("Predicted phase screen for fixed asterism")
-        axs[1, 1].imshow(a2)
-        axs[1, 1].set_title("Actual phase screen for fixed asterism")
-        axs[1, 2].set_title("Coefficients for fixed asterism")
-        axs[1, 2].plot(pc2, label="Predicted Coefficients")
-        axs[1, 2].plot(ac2, label="Actual Coefficients")
-        axs[1, 2].legend()

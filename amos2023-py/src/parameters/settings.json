@@ -24,27 +24,17 @@
         7.00
     ],
     
+    "basis_type": "zernike",
     "n_coeffs": 16,
-    "basis_type": "dct",
-    
-    "ml_network": "ParallelCNN",
-    "ml_net_block": "ConvNeXtBlock",
-    "ml_net_layers": [3, 3, 9, 3],
-    
+
     "epochs": 32,
-    "training_batch": 256,
-    "validation_batch": 128,
-    "mini_batch": 32,
+    "training_batch": 128,
     "testing_batch": 64,
+    "mini_batch": 16,
     "batches_per_epoch": 2,
 
-    "model_file_fixed_asterism": "fixed_asterism",
-    "model_file_mixed_asterism": "mixed_asterism",
-    "model_file_variable_asterism": "variable_asterism",
+    "validation_size": 64,
 
-    "model_file_suffix": "mdl",
-    "data_file_suffix": "dat",
-
-    "LReLU_grad": 0.01,
-    "dropout_rate": 0.2
+    "dropout_rate": 0.3,
+    "LReLU_grad": 0.05
 }

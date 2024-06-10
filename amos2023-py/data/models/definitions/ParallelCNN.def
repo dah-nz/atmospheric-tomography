@@ -1,0 +1,66 @@
+class ParallelCNN(nn.Module):
+    def __init__(self, settings):
+        super().__init__()
+        do = settings["dropout_rate"]
+        n_coeffs = settings["n_coeffs"]
+
+        self.vert_stack = nn.Sequential(
+            # 3x3x16 -> 36x5x16
+            nn.Conv2d(3, 36, (3, 1), padding=(2, 0), padding_mode="zeros", groups=3), 
+            nn.GELU(),
+            nn.Dropout(do),
+ 
+            # 36x5x16 -> 36x7x16
+            nn.Conv2d(36, 36, (3, 1), padding=(2, 0), padding_mode="zeros", groups=3),
+            nn.GELU(),
+            nn.Dropout(do),
+
+            # 36x7x16 -> 36x7x16
+            nn.Conv2d(36, 36, (3, 1), padding=(2, 0), padding_mode="zeros", groups=3),
+            nn.GELU(),
+            nn.Dropout(do),
+ 
+            nn.Flatten(),
+ 
+            nn.Linear(5184, 1024),
+            nn.GELU(),
+            nn.Dropout(do)
+        )
+
+        self.horz_stack = nn.Sequential(
+            # 3x3x16 -> 36x3x18
+            nn.Conv2d(3, 36, (1, n_coeffs), padding=(0, n_coeffs//2+1), padding_mode="zeros", groups=3), 
+            nn.GELU(),
+            nn.Dropout(do),
+ 
+            # 36x3x18 -> 36x3x18
+            nn.Conv2d(36, 36, (1, n_coeffs), padding=(0, n_coeffs//2+1), padding_mode="zeros", groups=3),
+            nn.GELU(),
+            nn.Dropout(do),
+
+            # 36x3x18 -> 36x3x18
+            nn.Conv2d(36, 36, (1, n_coeffs), padding=(0, n_coeffs//2+1), padding_mode="zeros", groups=3),
+            nn.GELU(),
+            nn.Dropout(do),
+ 
+            nn.Flatten(),
+ 
+            nn.Linear(2700, 1024),
+            nn.GELU(),
+            nn.Dropout(do)
+        )
+
+        self.comb_stack = nn.Sequential(
+            nn.Linear(2048, 512),
+            nn.GELU(),
+            nn.Dropout(do),
+
+            nn.Linear(512, n_coeffs)
+        )
+
+    def forward(self, x):
+        x = x.transpose(2, -1).contiguous()
+        x1 = self.vert_stack(x)
+        x2 = self.horz_stack(x)
+        x = torch.cat([x1, x2], 1)
+        return self.comb_stack(x)
