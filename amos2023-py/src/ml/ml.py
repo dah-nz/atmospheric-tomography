@@ -18,6 +18,16 @@ log.setup_logger(logger)
 
 settings = test.load(file="settings.json", dir="./src/parameters/")
 
+class Network(nn.Module):
+    def __init__(self, s):
+        super().__init__()
+        self.name = self.__class__.__name__
+        self.file_name = f"{self.name}_{s['basis_type']}_{s['n_coeffs']}"
+        logger.debug(f"Initiating model with file_name = {self.file_name}")
+        self.LRELU_grad = s["LReLU_grad"]
+        self.do = s["dropout_rate"]
+        self.n_coeffs = s["n_coeffs"]
+
 def load(file):
     # Load a model definition from file
     # Return: model class definition
@@ -37,17 +47,19 @@ def compare(models):
     # Compare a group of models to each other with a single validation set
     # Returns a list of tuples (name, loss), ordered by ranking
 
+    rng = np.random.default_rng()
+
     logger.info(f"Building validation dataset")
-    validation_data = dataset.ValidationData(settings)
+    validation_data = dataset.ValidationData(settings, rng=rng)
     validation_loader = validation_data.get_dataloader()
 
-    results = {}
+    results = []
 
     logger.info(f"Comparing models: {','.join(list(models.keys()))}")
-    for n, m in models:
+    for n, m in models.items():
         logger.info(f"Configuring model {n}")
         mdl = dataset.Configure(m, settings)
-        results = (n, mdl.evaluate(validation_loader))
+        results.append((n, mdl.evaluate(validation_loader), mdl.file_name))
 
     return sorted(results, key=lambda x: x[1])
 
@@ -58,18 +70,16 @@ def display(models, rankings):
 
     model_data = {}
     file_data = {}
-
-    def get(lst, name):
+    def get(lst, file_name):
         for l in lst:
-            if f"/{models[name].file_name}.dat" in l:
+            if f"{file_name}.dat" in l:
                 return l
         return None
            
-    for name, rank in rankings:
-        model_data[name] = (rank, models[name], get(files, name))
-
+    for name, rank, file_name in rankings:
+        model_data[name] = (rank, get(files, file_name))
     
-    for name, (rank, mdl, path) in model_data.items():
+    for name, (rank, path) in model_data.items():
         keys = []
         data = {}
         record = -1
@@ -198,48 +208,51 @@ def train(model):
 
         return target_coeffs, beacon_coeffs, beacons
     
-    for n in range(model_var.t["epochs"]):
-        fixed_loss = 0
-        variable_loss = 0
-        mixed_loss = 0
-        openloop_loss = 0
-        logger.info(f"Calculating LSQ data for epoch {n+1}/{model_var.t['epochs']}")
-        for (X, y), (Xf, yf) in zip(model_var.test_dataloader, model_fix.test_dataloader):
-            X, y = X.numpy(), y.numpy()
-            Xf, yf = Xf.numpy(), yf.numpy()
-            for i in range(model_var.t["testing_batch"]):
-                target_coeffs, beacon_coeffs, beacons = process_data(X, y, i)
-                target_coeffs_f, beacon_coeffs_f, beacons_f = process_data(Xf, yf, i)
-                
-                tomo_variable = tomo.run(beacons,   target, beacon_coeffs,   model_var.t['layer_altitudes'])
-                tomo_mixed =    tomo.run(beacons_f, target, beacon_coeffs,   model_var.t['layer_altitudes'])
-                tomo_fixed =    tomo.run(beacons_f, target, beacon_coeffs_f, model_var.t['layer_altitudes'])
+    fixed_loss = 0
+    variable_loss = 0
+    mixed_loss = 0
+    openloop_loss = 0
+    logger.info(f"Calculating LSQ test data")
+    n = model_var.t["testing_batch"]
+    for (X, y), (Xf, yf) in zip(model_var.test_dataloader, model_fix.test_dataloader):
+        X, y = X.numpy(), y.numpy()
+        Xf, yf = Xf.numpy(), yf.numpy()
+        for i in range(n):
+            logger.info(f"Calculating LSQ test data, index {i}/{n}")
+            target_coeffs, beacon_coeffs, beacons = process_data(X, y, i)
+            target_coeffs_f, beacon_coeffs_f, beacons_f = process_data(Xf, yf, i)
+            
+            tomo_variable = tomo.run(beacons,   target, beacon_coeffs,   model_var.t['layer_altitudes'])
+            tomo_mixed =    tomo.run(beacons_f, target, beacon_coeffs,   model_var.t['layer_altitudes'])
+            tomo_fixed =    tomo.run(beacons_f, target, beacon_coeffs_f, model_var.t['layer_altitudes'])
 
-                variable_loss += model_var.loss_fn(torch.from_numpy(tomo_variable), 
-                                                   torch.from_numpy(target_coeffs)).item()
-                mixed_loss    += model_var.loss_fn(torch.from_numpy(tomo_mixed),
-                                                   torch.from_numpy(target_coeffs)).item()
-                openloop_loss += model_var.loss_fn(torch.from_numpy(ol_coeffs),
-                                                   torch.from_numpy(target_coeffs)).item()
-                fixed_loss    += model_var.loss_fn(torch.from_numpy(tomo_fixed),
-                                                   torch.from_numpy(target_coeffs_f)).item()
-                
-            break
-        va_loss = variable_loss / model_var.t["testing_batch"]
-        ma_loss = mixed_loss    / model_var.t["testing_batch"]
-        fa_loss = fixed_loss    / model_var.t["testing_batch"]
-        ol_loss = openloop_loss / model_var.t["testing_batch"]
-        if ma_loss > 100:
-            ma_loss = 100
-        if va_loss > 100:
-            va_loss = 100
-        if fa_loss > 100:
-            fa_loss = 100
+            variable_loss += model_var.loss_fn(torch.from_numpy(tomo_variable), 
+                                                torch.from_numpy(target_coeffs)).item()
+            mixed_loss    += model_var.loss_fn(torch.from_numpy(tomo_mixed),
+                                                torch.from_numpy(target_coeffs)).item()
+            openloop_loss += model_var.loss_fn(torch.from_numpy(ol_coeffs),
+                                                torch.from_numpy(target_coeffs)).item()
+            fixed_loss    += model_var.loss_fn(torch.from_numpy(tomo_fixed),
+                                                torch.from_numpy(target_coeffs_f)).item()
+            
+        break
+    va_loss = variable_loss / n
+    ma_loss = mixed_loss    / n
+    fa_loss = fixed_loss    / n
+    ol_loss = openloop_loss / n
+    if ma_loss > 100:
+        ma_loss = 100
+    if va_loss > 100:
+        va_loss = 100
+    if fa_loss > 100:
+        fa_loss = 100
+    for n in range(model_var.t["epochs"]):
         tomo_variable_loss.append(va_loss)
         tomo_open_loop_loss.append(ol_loss)
         tomo_mixed_loss.append(ma_loss)
         tomo_fixed_loss.append(fa_loss)
-        logger.info(f"LSQ Results: Variable loss: {va_loss:>7f}, Mixed loss: {ma_loss:>7f}, Fixed loss: {fa_loss:>7f}, Open loop loss: {ol_loss:>7f}")
+
+    logger.info(f"LSQ Results: Variable loss: {va_loss:>7f}, Mixed loss: {ma_loss:>7f}, Fixed loss: {fa_loss:>7f}, Open loop loss: {ol_loss:>7f}")
 
     now = log.time
     data_file = f"./data/models/results/{model_var.file_name}.dat"

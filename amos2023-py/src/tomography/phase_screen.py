@@ -2,7 +2,6 @@ from functools import lru_cache
 
 import numpy as np
 import scipy.io as sio
-import h5py
 import cv2
 
 import random

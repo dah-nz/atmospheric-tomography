@@ -9,7 +9,7 @@ def get_logger(name):
     return logging.getLogger(name)
 
 def setup_logger(logger, level=logging.INFO):
-    fstring = "%(asctime)s:%(levelname)s:%(module)s:%(funcName)s - %(message)s"
+    fstring = "%(asctime)s:%(levelname)s:%(name)s:%(funcName)s - %(message)s"
     logging.basicConfig(filename=f"data/models/logs/{time}.log",
                         level=level,
                         format=fstring)

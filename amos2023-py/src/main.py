@@ -65,30 +65,36 @@ def clear(q, rankings):
     # Clear old models and results from the workspace directories
     # Does not change the values in q
     start_time = log.time
-    n = len(list(q.keys()))
+    n_models = len(list(q.keys()))
 
     logger.info(f"Clearing model files")
-    if n > N_BEST:
-        for name in q.keys():
-            if name not in rankings[:N_BEST]:
-                logger.debug(f"Model: {name} is not one of the top {N_BEST}, moving definition file to old")
+    if n_models > N_BEST:
+        for n, (name, performance, file_name) in enumerate(rankings):
+            if n >= N_BEST:
+                logger.info(f"Model: {name} is not one of the top {N_BEST}, moving definition file to old")
                 def0 = f"data/models/definitions/{name}.def"
                 def1 = f"data/models/definitions/old/{name}_{start_time}.def"
                 os.rename(def0, def1)
             else:
-                logger.debug(f"Model: {name} is one of the top {N_BEST}")
+                logger.info(f"Model: {name} is one of the top {N_BEST}")
     else:
-        logger.debug(f"Less than {N_BEST} models, none are moved")
+        logger.info(f"There are {n_models}/{N_BEST}. None are moved")
         
     models = f"data/models/params/*.mdl"
     files = glob.glob(models)
-    print(files)
-    # os.rename(mdl0, mdl1)
+    for file in files:
+        f = file.split('\\')
+        nm = f[1].split(".")
+        f2 = f"{f[0]}/old/{nm[0]}_{start_time}.{nm[1]}"
+        os.rename(file, f2)
 
     results = f"data/models/results/*.dat"
     files = glob.glob(results)
-    print(files)
-    # os.rename(dat0, dat1)
+    for file in files:
+        f = file.split('\\')
+        nm = f[1].split(".")
+        f2 = f"{f[0]}/old/{nm[0]}_{start_time}.{nm[1]}"
+        os.rename(file, f2)
 
 if __name__ == "__main__":
     main()

@@ -1,34 +1,31 @@
-class CNN1Db(nn.Module):
+class CNN1Db(Network):
     def __init__(self, settings):
-        super().__init__()
-        LRELU_grad = settings["LReLU_grad"]
-        do = settings["dropout_rate"]
-        n_coeffs = settings["n_coeffs"]
+        super().__init__(settings)
         self.flatten = nn.Flatten(start_dim=2)
 
         self.model_stack = nn.Sequential(
-            nn.Conv1d(3, 16, 7, padding=6, groups=3),                           # 3x48 -> 16x54
-            nn.LeakyReLU(LRELU_grad, True),
-            nn.Dropout(do),
+            nn.Conv1d(3, 18, 7, padding=6, groups=3),                           # 3x48 -> 16x54
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
  
-            nn.Conv1d(16, 32, kernel_size=5, padding=4, groups=4),              # 16x54 -> 32x58
-            nn.LeakyReLU(LRELU_grad, True),
-            nn.Dropout(do),
+            nn.Conv1d(18, 36, kernel_size=5, padding=4, groups=6),              # 16x54 -> 32x58
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
 
-            nn.Conv1d(32, 32, kernel_size=3, padding=2, dilation=2, groups=8),  # 32x58 -> 32x58
-            nn.LeakyReLU(LRELU_grad, True),
-            nn.Dropout(do),
+            nn.Conv1d(36, 36, kernel_size=3, padding=2, dilation=2, groups=12),  # 32x58 -> 32x58
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
             
-            nn.Conv1d(32, 16, kernel_size=3, padding=2, groups=4),              # 32x58 -> 16x60
-            nn.LeakyReLU(LRELU_grad, True),
+            nn.Conv1d(36, 18, kernel_size=3, padding=2, groups=6),              # 32x58 -> 16x60
+            nn.LeakyReLU(self.LRELU_grad, True),
             nn.MaxPool1d(kernel_size=2),                                        # 16x60 -> 16x30
  
             nn.Flatten(),
  
-            nn.Linear(480, 256),
-            nn.LeakyReLU(LRELU_grad, True),
-            nn.Dropout(do),
-            nn.Linear(256, n_coeffs)
+            nn.Linear(540, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, self.n_coeffs)
 
         )
     def forward(self, x):

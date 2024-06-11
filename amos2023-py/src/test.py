@@ -1,3 +1,17 @@
+import glob
+import os
+
+start_time = "20240611_155529"
+
+results = f"data/models/results/*.dat"
+files = glob.glob(results)
+for file in files:
+    f = file.split('\\')
+    nm = f[1].split(".")
+    f2 = f"{f[0]}/old/{nm[0]}_{start_time}.{nm[1]}"
+    os.rename(file, f2)
+
+quit()
 
 import numpy as np
 import matplotlib.pyplot as plt
