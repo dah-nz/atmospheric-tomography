@@ -112,7 +112,7 @@ def display(models, rankings):
         }
 
         plt.figure()
-        plt.title(f"{name} [{rank}]")
+        plt.title(f"{name} [{rank:.6f}]")
         for lbl, clr in labels.items():
             plt.plot(data[lbl], clr, label=lbl)
         plt.legend()
@@ -120,6 +120,7 @@ def display(models, rankings):
         plt.ylabel("Loss (MSE)")
 
         file_data[name] = data
+        print(f"{name:20}: {rank:8.6f}")
     
     openloop_label = 'Open Loop Comparison'
     fixed_label = "LSQ Tomography (Fixed Asterism)"
@@ -131,7 +132,7 @@ def display(models, rankings):
         rank = model_data[name][0]
         gain = np.mean(d[openloop_label])
         o = np.array(d[var_model_label]) / gain
-        plt.plot(o, label=f"{name} [{rank}]")
+        plt.plot(o, label=f"{name} [{rank:.6f}]")
     plt.plot(np.array(d[openloop_label])/gain, "k:", label="Open Loop")
     plt.legend()
     plt.title("Test loss normalised to open loop output")
@@ -145,7 +146,7 @@ def display(models, rankings):
         rank = model_data[name][0]
         gain = np.mean(d[fixed_label])
         o = np.array(d[var_model_label]) / gain
-        plt.plot(o, label=f"{name} [{rank}]")
+        plt.plot(o, label=f"{name} [{rank:.6f}]")
     plt.plot(np.array(d[fixed_label])/gain, "k:", label="Fixed LSQ")
     plt.legend()
     plt.title("Test loss normalised to Fixed Asterism least squares output")

@@ -3,6 +3,7 @@ import glob
 from datetime import datetime
 import matplotlib.pyplot as plt
 from util import log
+import shutil
 
 from ml import ml
 
@@ -70,13 +71,14 @@ def clear(q, rankings):
     logger.info(f"Clearing model files")
     if n_models > N_BEST:
         for n, (name, performance, file_name) in enumerate(rankings):
+            def0 = f"data/models/definitions/{name}.def"
+            def1 = f"data/models/definitions/old/{name}_{start_time}.def"
             if n >= N_BEST:
-                logger.info(f"Model: {name} is not one of the top {N_BEST}, moving definition file to old")
-                def0 = f"data/models/definitions/{name}.def"
-                def1 = f"data/models/definitions/old/{name}_{start_time}.def"
+                logger.info(f"Model: {name} is not one of the top {N_BEST}. Moving definition file to old")
                 os.rename(def0, def1)
             else:
-                logger.info(f"Model: {name} is one of the top {N_BEST}")
+                logger.info(f"Model: {name} is one of the top {N_BEST}. Copying definition file to old")
+                shutil.copyfile(def0, def1)
     else:
         logger.info(f"There are {n_models}/{N_BEST}. None are moved")
         
