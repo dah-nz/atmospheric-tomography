@@ -39,7 +39,7 @@ def main():
     rankings = ml.compare(models)
 
     logger.info(f"Displaying model data")
-    ml.display(models, rankings)
+    ml.display(rankings)
 
     clear(models, rankings)
 

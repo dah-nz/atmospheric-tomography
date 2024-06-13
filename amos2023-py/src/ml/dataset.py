@@ -12,15 +12,18 @@ from parameters import test
 logger = log.get_logger(__name__)
 log.setup_logger(logger)
 
+FIXED = 1
+MIXED = 2
+VARIABLE = 0
+
 class TomoDataset(Dataset):
-    def __init__(self, settings, rng=None, fixed_asterism=False):
+    def __init__(self, settings, rng=None):
         self.settings = settings
 
         self.D = settings["D"]
         self.altitudes = settings["layer_altitudes"]
         self.layer_r0 = settings["layer_conditions"]
         self.cut_out = (settings["aperture_size"], settings["aperture_size"])
-        self.fixed_asterism = fixed_asterism
 
         self.rng = rng
         self.n = self.get_size()
@@ -28,7 +31,7 @@ class TomoDataset(Dataset):
         self.n_screens = self.n
         logger.info(f"Creating data set with {self.n} items, {self.n_asterisms} asterisms and {self.n_screens} screens")
 
-        self.asterisms = self.get_asterisms()
+        self.generate_asterisms()
 
         limit_star = [beacon.Beacon(0, settings["limiting_angle"]+1, gamma_arcseconds=True)]            # add one to limiting angle to add a little leeway for numerical differences pushing bounds slightly over the edges
         m, l = util.get_layer_shapes(self.altitudes, limit_star, self.D, settings["aperture_size"])
@@ -41,6 +44,7 @@ class TomoDataset(Dataset):
         
         self.basis = settings["basis"]
         self.target = beacon.Beacon(0, 0)
+        self.select()
         
     def __len__(self):
         return self.n
@@ -48,36 +52,40 @@ class TomoDataset(Dataset):
     def get_size(self):
         raise NotImplementedError
     
-    def get_asterisms(self):
-        if self.fixed_asterism:
-            logger.info(f"Getting fixed asterism, angle = {self.settings['fixed_asterism_angle']} arcseconds")
-            asterisms = np.array([[beacon.Beacon(t, self.settings["fixed_asterism_angle"]) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for _ in range(self.n)])
-        else:
-            logger.info(f"Getting {self.n_asterisms} variable asterisms, offset = {self.settings['variable_asterism_angle_deg']} deg")
-            self.offset = self.settings["variable_asterism_angle_deg"] * np.pi / 180
-            self.star_gamma = data.load_asterism_data(
-                self.settings["star_magnitude"],
-                n=self.n_asterisms,
-                limit=self.settings["limiting_angle"], rng=self.rng)
-            st0 = self.rng.uniform(low=0, high=2*np.pi, size=(self.star_gamma.shape[0], 1))
-            st1 = self.rng.uniform(low=st0 + self.offset, 
-                                   high=2*np.pi + st0 - self.offset, 
-                                   size=(self.star_gamma.shape[0], 1))
-            st0[st1 > (st0 + np.pi)] = st0[st1 > (st0 + np.pi)] + 2 * np.pi
-            st2 = self.rng.uniform(low=np.min([st0, st1], axis=0)-self.offset, 
-                                   high=np.max([st0, st1], axis=0)+self.offset) + np.pi
-            self.star_theta = np.concatenate([st0, st1, st2], axis=1)
-            self.star_theta[self.star_theta > 2 * np.pi] = self.star_theta[self.star_theta > 2 * np.pi] - (2*np.pi)
+    def generate_asterisms(self):
+        self.offset = self.settings["variable_asterism_angle_deg"]
+        self.fixed_angle = self.settings["fixed_asterism_angle"]
+        logger.info(f"Generating asterisms, n: {self.n_asterisms}, variable offset = {self.offset} deg, fixed angle = {self.fixed_angle} arcseconds")
+        self.fixed_asterisms = np.array([[beacon.Beacon(t, self.fixed_angle) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for _ in range(self.n)])
 
-            asterisms = [[beacon.Beacon(t, g) for t, g in zip(tht, gma)] 
-                         for tht, gma in zip(self.star_theta, self.star_gamma)]
-            
-            if self.n != self.n_asterisms:
-                logger.debug(f"Shuffling {self.n_asterisms} into {self.n} positions")
-                asterisms = np.array(int(self.n / self.n_asterisms) * asterisms)
-                self.rng.shuffle(asterisms)
-            
-        return asterisms
+        self.offset = self.offset * np.pi / 180
+        self.star_gamma = data.load_asterism_data(
+            self.settings["star_magnitude"],
+            n=self.n_asterisms,
+            limit=self.settings["limiting_angle"], rng=self.rng)
+        
+        st0 = self.rng.uniform(low=0, high=2*np.pi, size=(self.star_gamma.shape[0], 1))
+        st1 = self.rng.uniform(low=st0 + self.offset, 
+                                high=2*np.pi + st0 - self.offset, 
+                                size=(self.star_gamma.shape[0], 1))
+        st0[st1 > (st0 + np.pi)] = st0[st1 > (st0 + np.pi)] + 2 * np.pi
+        st2 = self.rng.uniform(low=np.min([st0, st1], axis=0)-self.offset, 
+                                high=np.max([st0, st1], axis=0)+self.offset) + np.pi
+        
+
+        self.star_theta = np.concatenate([st0, st1, st2], axis=1)
+        self.star_theta[self.star_theta > 2 * np.pi] = self.star_theta[self.star_theta > 2 * np.pi] - (2*np.pi)
+
+        asterisms = [[beacon.Beacon(t, g) for t, g in zip(tht, gma)] 
+                        for tht, gma in zip(self.star_theta, self.star_gamma)]
+        
+        if self.n != self.n_asterisms:
+            logger.debug(f"Shuffling {self.n_asterisms} into {self.n} positions")
+            asterisms = np.array(int(self.n / self.n_asterisms) * asterisms)
+            self.rng.shuffle(asterisms)
+
+        self.variable_asterisms = asterisms
+        return 
 
     def get_screens(self):
         raise NotImplementedError
@@ -94,26 +102,41 @@ class TomoDataset(Dataset):
             scr_idx = idx % self.settings["mini_batch"]
         logger.debug(f"Retrieving data at index {idx} [screen index: {scr_idx}]")
         screens = self.get_screen_at(scr_idx)
-        asterism = self.asterisms[idx]
+        var_asterism = self.variable_asterisms[idx]
+        fix_asterism = self.fixed_asterisms[idx]
 
-        asterism_coeffs = util.get_coeffs_for_asterism(asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
+        var_asterism_coeffs = util.get_coeffs_for_asterism(var_asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
+        fix_asterism_coeffs = util.get_coeffs_for_asterism(fix_asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
         target_coeffs = util.get_coeffs_for_cutout(self.target, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
 
-        asterism_coeffs = np.expand_dims(asterism_coeffs, axis=-1)
-        theta = np.ones_like(asterism_coeffs)
-        gamma = np.ones_like(asterism_coeffs)
-        for i, b in enumerate(asterism):
-            theta[i, :] = theta[i, :] * b.theta
-            gamma[i, :] = gamma[i, :] * b.gamma
+        def coalesce(asterism_coeffs, asterism_angles):
+            asterism_coeffs = np.expand_dims(asterism_coeffs, axis=-1)
+            theta = np.ones_like(asterism_coeffs)
+            gamma = np.ones_like(asterism_coeffs)
+            for i, b in enumerate(asterism_angles):
+                theta[i, :] = theta[i, :] * b.theta
+                gamma[i, :] = gamma[i, :] * b.gamma
+            
+            data = np.append(asterism_coeffs, theta, axis=2)
+            data = np.append(data, gamma, axis=2)
+            return data
         
-        data = np.append(asterism_coeffs, theta, axis=2)
-        data = np.append(data, gamma, axis=2)
-        
-        return data, target_coeffs
+        if self.output_type == MIXED:
+            X = coalesce(var_asterism_coeffs, fix_asterism)
+        elif self.output_type == FIXED:
+            X = coalesce(fix_asterism_coeffs, fix_asterism)
+        else: # self.output_type == VARIABLE:
+            X = coalesce(var_asterism_coeffs, var_asterism)
+
+        return X, target_coeffs
     
     def get_dataloader(self):
         logger.info(f"Loading dataloader, batch_size={self.get_size()}")
         return DataLoader(self, batch_size=self.get_size())
+    
+    def select(self, output_type=VARIABLE):
+        # Select how to build output data from asterisms and phase screens
+        self.output_type = output_type
     
 class TrainData(TomoDataset):
     def get_size(self):
@@ -121,14 +144,14 @@ class TrainData(TomoDataset):
         logger.debug(f"Size of training batch: {n}")
         return n
     
-    def get_asterisms(self):
+    def generate_asterisms(self):
         self.n_asterisms = self.n
         try:
             self.n_screens = self.settings["mini_batch"] * self.settings["batches_per_epoch"]
         except KeyError:
             self.n_screens = self.n
         logger.info(f"Training batch has {self.n_screens} phase screens and {self.n_asterisms} asterisms")
-        return super().get_asterisms()
+        return super().generate_asterisms()
     
     def get_batch_size(self):
         logger.debug(f"Size of training batch: {self.settings['training_batch']}")
@@ -139,7 +162,7 @@ class TrainData(TomoDataset):
         return [gen.generate(self.n_screens, cut_out=self.cut_out, return_type="all") for gen in self.ps_gens]
 
     def get_screen_at(self, idx):
-        logger.debug(f"Training batch screens for index: {idx}/{self.n_screens}")
+        logger.debug(f"Getting training batch screen at index: {idx}/{self.n_screens}")
         return [scr[idx] for scr in self.screens]
     
 class TestData(TomoDataset):
@@ -154,7 +177,7 @@ class TestData(TomoDataset):
         return [gen.generate(self.n_screens, cut_out=self.cut_out, return_type="all") for gen in self.ps_gens]
     
     def get_screen_at(self, idx):
-        logger.debug(f"Test batch screens for index: {idx}/{self.n_screens}")
+        logger.debug(f"Getting test batch screen at index: {idx}/{self.n_screens}")
         return [scr[idx] for scr in self.screens]
 
 class ValidationData(TomoDataset):
@@ -174,78 +197,21 @@ class ValidationData(TomoDataset):
         return [scr[idx] for scr in self.screens]
 
 class Configure():
-    def __init__(self, model, settings, fixed_train=False, fixed_test=False, continue_training=False):
+    def __init__(self, settings):
         self.t = settings
-        self.fixed_test = fixed_test
-        self.fixed_train = fixed_train
-        self.continue_training = continue_training
-        
         self.rng = np.random.default_rng()
-        self.device = ml.initialise()
 
-        logger.info(f"Building model")
-
-        if self.fixed_train:
-            if self.fixed_test:
-                self.asterism_type = "fixed_asterism"
-            else: # self.static_test = False
-                self.asterism_type = "mixed_asterism"
-        else:
-            self.asterism_type = "variable_asterism"
-        self.network_definition = model
-        self.model = self.network_definition(self.t).to(self.device)
-
-        self.file_name = self.model.file_name
-        self.model_file = f"data/models/params/{self.file_name}_{self.asterism_type}.mdl"
-        self.model_name = self.model.name
-        
-        logger.info(f"Setting up {self.asterism_type} {self.model_name} model [{self.device}]")
-
-        logger.info(f"Configuring loss function and optimiser")
-        self.loss_fn = nn.MSELoss()
-        self.optimiser = torch.optim.AdamW(self.model.parameters(), lr=1e-03, weight_decay=1e-05)
         self.validation_size = self.t["validation_size"]
-        logger.info(f"Finished setting up {self.asterism_type} {self.model_name} model")
+        self.reset()
 
-    def train(self):
-        if self.continue_training:
-            logger.info(f"Loading state dict for continued training")
-            self.model.load_state_dict(torch.load(self.model_file))
-
-        logger.info(f"Building training data")
-        self.train_data = TrainData(self.t, rng=self.rng, fixed_asterism=self.fixed_train)
+    def reset(self):
+        logger.info(f"Building training and test data for next epoch")
+        self.train_data = TrainData(self.t, rng=self.rng)
         self.train_dataloader = self.train_data.get_dataloader()
-        self.train_results = []
         
-        logger.info(f"Building test data")
-        self.test_data = TestData(self.t, rng=self.rng, fixed_asterism=self.fixed_test)
+        self.test_data = TestData(self.t, rng=self.rng)
         self.test_dataloader = self.test_data.get_dataloader()
-        self.test_results = []
 
-        epochs = self.t["epochs"]
-        logger.info(f"Starting training model {self.model_name} for {epochs} epochs")
-
-        for i in range(epochs):
-            logger.info(f"Model {self.model_name} - training epoch {i + 1}/{epochs} <<<")
-            self.train_results.append(ml.train(self.train_dataloader, self.model, self.loss_fn, self.optimiser))
-            self.test_results.append(ml.test(self.test_dataloader, self.model, self.loss_fn))
-
-        logger.info(f"Completed training model {self.model_name} for {epochs} epochs")
-
-        logger.debug(f"Saving model state dict for model {self.model_name} to {self.model_file}")
-        torch.save(self.model.state_dict(), self.model_file)
-
-    def evaluate(self, dataloader):
-        logger.info(f"Rebuilding model {self.model_name} from definition: {self.device}")
-        self.model = self.network_definition(self.t).to(self.device)
-
-        logger.debug(f"Loading model state dict for model {self.model_name} from {self.model_file}")
-        self.model.load_state_dict(torch.load(self.model_file))
-
-        # switch pytorch to evaluation mode
-        self.model.eval()
-
-        basis = self.t["basis"]
-        logger.debug(f"Using basis function: {basis.name}")
-
-        return ml.test(dataloader, self.model, self.loss_fn)
+    def select(self, type):
+        self.train_data.select(type)
+        self.test_data.select(type)
