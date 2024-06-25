@@ -26,9 +26,7 @@ class TomoDataset(Dataset):
         self.cut_out = (settings["aperture_size"], settings["aperture_size"])
 
         self.rng = rng
-        self.n = self.get_size()
-        self.n_asterisms = self.n
-        self.n_screens = self.n
+        self.get_size()
         logger.info(f"Creating data set with {self.n} items, {self.n_asterisms} asterisms and {self.n_screens} screens")
 
         self.generate_asterisms()
@@ -79,11 +77,6 @@ class TomoDataset(Dataset):
         asterisms = [[beacon.Beacon(t, g) for t, g in zip(tht, gma)] 
                         for tht, gma in zip(self.star_theta, self.star_gamma)]
         
-        if self.n != self.n_asterisms:
-            logger.debug(f"Shuffling {self.n_asterisms} into {self.n} positions")
-            asterisms = np.array(int(self.n / self.n_asterisms) * asterisms)
-            self.rng.shuffle(asterisms)
-
         self.variable_asterisms = asterisms
         return 
 
@@ -94,19 +87,16 @@ class TomoDataset(Dataset):
         raise NotImplementedError
     
     def get_batch_size(self):
-        return self.get_size()
+        return self.n
     
     def __getitem__(self, idx):
-        scr_idx = idx
-        if self.n != self.n_screens:
-            scr_idx = idx % self.settings["mini_batch"]
-        logger.debug(f"Retrieving data at index {idx} [screen index: {scr_idx}]")
-        screens = self.get_screen_at(scr_idx)
-        var_asterism = self.variable_asterisms[idx]
-        fix_asterism = self.fixed_asterisms[idx]
+        ast_idx = idx % self.n_asterisms
+        scr_idx = int(idx / (self.n / self.n_screens))
 
-        var_asterism_coeffs = util.get_coeffs_for_asterism(var_asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
-        fix_asterism_coeffs = util.get_coeffs_for_asterism(fix_asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
+        logger.debug(f"Retrieving data at index {idx} [screen index: {scr_idx}, asterism index: {ast_idx}]")
+
+        screens = self.get_screen_at(scr_idx)
+
         target_coeffs = util.get_coeffs_for_cutout(self.target, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
 
         def coalesce(asterism_coeffs, asterism_angles):
@@ -121,18 +111,26 @@ class TomoDataset(Dataset):
             data = np.append(data, gamma, axis=2)
             return data
         
-        if self.output_type == MIXED:
-            X = coalesce(var_asterism_coeffs, fix_asterism)
-        elif self.output_type == FIXED:
+        var_asterism = self.variable_asterisms[ast_idx]
+        fix_asterism = self.fixed_asterisms[ast_idx]
+
+        if self.output_type == FIXED:
+            fix_asterism_coeffs = util.get_coeffs_for_asterism(fix_asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
             X = coalesce(fix_asterism_coeffs, fix_asterism)
-        else: # self.output_type == VARIABLE:
-            X = coalesce(var_asterism_coeffs, var_asterism)
+        else:
+            var_asterism_coeffs = util.get_coeffs_for_asterism(var_asterism, self.basis, screens, self.altitudes, self.D, self.metapupil_diameters)
+            if self.output_type == MIXED:
+                X = coalesce(var_asterism_coeffs, fix_asterism)
+            else: # self.output_type == VARIABLE:
+                X = coalesce(var_asterism_coeffs, var_asterism)
+
+        logger.debug(f"X: {X.shape}, target: {target_coeffs.shape}")
 
         return X, target_coeffs
     
     def get_dataloader(self):
-        logger.info(f"Loading dataloader, batch_size={self.get_size()}")
-        return DataLoader(self, batch_size=self.get_size())
+        logger.info(f"Loading dataloader, batch_size={self.get_batch_size()}")
+        return DataLoader(self, batch_size=self.get_batch_size())
     
     def select(self, output_type=VARIABLE):
         # Select how to build output data from asterisms and phase screens
@@ -140,18 +138,17 @@ class TomoDataset(Dataset):
     
 class TrainData(TomoDataset):
     def get_size(self):
-        n = self.settings["training_batch"] * self.settings["batches_per_epoch"]
-        logger.debug(f"Size of training batch: {n}")
-        return n
-    
-    def generate_asterisms(self):
-        self.n_asterisms = self.n
+        self.n = self.settings["training_batch"] * self.settings["batches_per_epoch"]
+        
         try:
-            self.n_screens = self.settings["mini_batch"] * self.settings["batches_per_epoch"]
+            self.n_screens = self.settings["training_screens"] * self.settings["batches_per_epoch"]
+            self.n_asterisms = self.settings["training_asterisms"] * self.settings["batches_per_epoch"]
         except KeyError:
             self.n_screens = self.n
-        logger.info(f"Training batch has {self.n_screens} phase screens and {self.n_asterisms} asterisms")
-        return super().generate_asterisms()
+            self.n_asterisms = self.n
+
+        logger.info(f"Training batch is size {self.n}; with {self.n_screens} phase screens and {self.n_asterisms} asterisms")
+        return
     
     def get_batch_size(self):
         logger.debug(f"Size of training batch: {self.settings['training_batch']}")
@@ -167,9 +164,21 @@ class TrainData(TomoDataset):
     
 class TestData(TomoDataset):
     def get_size(self):
-        n = self.settings["testing_batch"]
-        logger.debug(f"Size of testing batch: {n}")
-        return n
+        self.n = self.settings["testing_batch"]
+
+        try:
+            self.n_screens = self.settings["testing_screens"]
+            self.n_asterisms = self.settings["testing_asterisms"]
+        except KeyError:
+            self.n_screens = self.n
+            self.n_asterisms = self.n
+
+        logger.info(f"Testing batch is size {self.n}; with {self.n_screens} phase screens and {self.n_asterisms} asterisms")
+        return
+    
+    def get_batch_size(self):
+        logger.debug(f"Size of testing batch: {self.settings['testing_batch']}")
+        return self.settings["testing_batch"]
         
     def get_screens(self):
         logger.info(f"Building test batch of {self.n_screens} phase screens")
@@ -182,9 +191,11 @@ class TestData(TomoDataset):
 
 class ValidationData(TomoDataset):
     def get_size(self):
-        n = self.settings["validation_size"]
-        logger.debug(f"Size of validation batch: {n}")
-        return n
+        self.n = self.settings["validation_size"]
+        self.n_asterisms = self.n
+        self.n_screens = self.n
+        logger.debug(f"Size of validation batch: {self.n}")
+        return
     
     def get_screens(self):
         logger.info(f"Building validation batch of {self.n_screens} phase screens")

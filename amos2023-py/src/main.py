@@ -7,9 +7,13 @@ import shutil
 
 from ml import ml
 
+log.default_logging_level = log.logging.INFO
 logger = log.get_logger(__name__)
 
 N_BEST = 3
+
+def summarise(m):
+    print(ml.model_summary(ml.Trainer(m)))
 
 def main():
     log.setup_logger(logger)
@@ -17,6 +21,9 @@ def main():
     logger.info("Started")
 
     models = update_model_list()
+
+    for k, m in models.items():
+        summarise(m)
 
     models_todo = list(models.keys())
     models_trained = []

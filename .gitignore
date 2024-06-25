@@ -53,3 +53,4 @@ packages/
 *.hdf5
 *.dat
 *.pgf
+**/old/*

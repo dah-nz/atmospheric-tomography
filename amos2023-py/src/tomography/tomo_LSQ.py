@@ -42,8 +42,10 @@ class LSQ(tomography.Tomography):
 
         # print(metapupil_d)
 
+        @lru_cache(maxsize=256)
         def proj(b, l):
             a = altitudes[l]
+            # return self._projectionMatrix(b.position(a), mds[l]/self.D)
             sz = (szs[l], szs[l])
             L = []
 
@@ -122,56 +124,56 @@ class LSQ(tomography.Tomography):
         coeff_K = 1
         rng = np.random.default_rng()
 
-        if diameter > self.D:
-            print("A")
-            sz = (int(K * (self.aperture_size / self.D) * diameter + 1), int(K * (self.aperture_size / self.D) * diameter + 1))
-            for mode in range(self.n_modes):
-                coeff = np.zeros((self.n_modes))
-                coeff[mode] = coeff_K
-                W.append(coeff)
+        # if diameter > self.D:
+        #     print("A")
+        #     sz = (int(K * (self.aperture_size / self.D) * diameter + 1), int(K * (self.aperture_size / self.D) * diameter + 1))
+        #     for mode in range(self.n_modes):
+        #         coeff = np.zeros((self.n_modes))
+        #         coeff[mode] = coeff_K
+        #         W.append(coeff)
 
-                screen = self.basis.compose(sz, coeff)
-                pix_x = int((K * self.aperture_size / self.D) * (diameter / 2 + location[0]) + 0.5)
-                pix_y = int((K * self.aperture_size / self.D) * (diameter / 2 - location[1]) + 0.5)
+        #         screen = self.basis.compose(sz, coeff)
+        #         pix_x = int((K * self.aperture_size / self.D) * (diameter / 2 + location[0]) + 0.5)
+        #         pix_y = int((K * self.aperture_size / self.D) * (diameter / 2 - location[1]) + 0.5)
                 
-                r = K * self.aperture_size // 2
+        #         r = K * self.aperture_size // 2
 
-                screen = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
-                print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
+        #         screen = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
+        #         print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
 
-                l_modes = self.basis.decompose(screen)
-                # l_modes = np.pad(l_modes, (0, PADDING))
-                L.append(l_modes)
-        else:
-            print("B")
-            sz = (int(K * (self.aperture_size / diameter) * self.D + 1), int(K * (self.aperture_size / diameter) * self.D + 1))
-            for mode in range(self.n_modes):
-                coeff = np.zeros((self.n_modes))
-                coeff[mode] = coeff_K
-                W.append(coeff)
+        #         l_modes = self.basis.decompose(screen)
+        #         # l_modes = np.pad(l_modes, (0, PADDING))
+        #         L.append(l_modes)
+        # else:
+        #     print("B")
+        #     sz = (int(K * (self.aperture_size / diameter) * self.D + 1), int(K * (self.aperture_size / diameter) * self.D + 1))
+        #     for mode in range(self.n_modes):
+        #         coeff = np.zeros((self.n_modes))
+        #         coeff[mode] = coeff_K
+        #         W.append(coeff)
 
-                screen = self.basis.compose(sz, coeff)
+        #         screen = self.basis.compose(sz, coeff)
 
-                pix_x = int((K * self.aperture_size / diameter) * (self.D / 2 + location[0]) + 0.5)
-                pix_y = int((K * self.aperture_size / diameter) * (self.D / 2 - location[1]) + 0.5)
-                r = K * self.aperture_size // 2
+        #         pix_x = int((K * self.aperture_size / diameter) * (self.D / 2 + location[0]) + 0.5)
+        #         pix_y = int((K * self.aperture_size / diameter) * (self.D / 2 - location[1]) + 0.5)
+        #         r = K * self.aperture_size // 2
                 
-                screen = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
-                print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
+        #         screen = screen[pix_x-r:pix_x+r, pix_y-r:pix_y+r]
+        #         print("m: {}, size: {}, loc: {}, d: {}, D:{}, as: {}, px: {}, py: {}, r: {}, scr: {}".format(mode, sz, location, diameter, self.D, self.aperture_size, pix_x, pix_y, r, screen.shape))
 
-                l_modes = self.basis.decompose(screen)
-                # l_modes = np.pad(l_modes, (0, PADDING))
-                L.append(l_modes)
-        W = np.array(W)
-        L = np.array(L)
-        # P = np.matmul(L, np.linalg.pinv(W))
-        P = L
-        # print(P)
-        eps = 1e-12
-        P = (np.abs(P) > eps) * P
+        #         l_modes = self.basis.decompose(screen)
+        #         # l_modes = np.pad(l_modes, (0, PADDING))
+        #         L.append(l_modes)
+        # W = np.array(W)
+        # L = np.array(L)
+        # # P = np.matmul(L, np.linalg.pinv(W))
+        # P = L
+        # # print(P)
+        # eps = 1e-12
+        # P = (np.abs(P) > eps) * P
 
-        print(f"cond(W): {np.linalg.cond(W)}, cond(L): {np.linalg.cond(L)}, cond(P): {np.linalg.cond(P)}")
-        return P
+        # print(f"cond(W): {np.linalg.cond(W)}, cond(L): {np.linalg.cond(L)}, cond(P): {np.linalg.cond(P)}")
+        # return P
 
         screen = np.zeros((self.aperture_size, self.aperture_size))
 

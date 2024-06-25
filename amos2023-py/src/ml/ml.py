@@ -101,12 +101,12 @@ def display(rankings):
                     record = 0
 
         labels = {
-            "Variable Model (Training Loss)":           'r-',
-            "Variable Model (Test Loss)":               'r:',
-            "Fixed Model (Training Loss)":              'b-',
-            "Fixed Model (Test Loss)":                  'b:',
-            "Mixed Model (Training Loss)":              'g-',
-            "Mixed Model (Test Loss)":                  'g:',
+            "Variable Model (Training Loss)":           'r:',
+            "Variable Model (Test Loss)":               'r-',
+            "Fixed Model (Training Loss)":              'b:',
+            "Fixed Model (Test Loss)":                  'b-',
+            "Mixed Model (Training Loss)":              'g:',
+            "Mixed Model (Test Loss)":                  'g-',
             "Open Loop":                                'k-',
             "LSQ Tomography (Fixed Asterism)":          '--',
             "LSQ Tomography (Variable Asterism)":       '--',
@@ -116,7 +116,10 @@ def display(rankings):
         plt.figure()
         plt.title(f"{name} [{rank:.6f}]")
         for lbl, clr in labels.items():
-            plt.plot(data[lbl], clr, label=lbl)
+            y = data[lbl]
+            if "LSQ" in lbl or "Open" in lbl:
+                y = [np.mean(y)] * len(y)
+            plt.plot(y, clr, label=lbl)
         plt.legend()
         plt.xlabel("Epoch")
         plt.ylabel("Loss (MSE)")
@@ -124,7 +127,7 @@ def display(rankings):
         file_data[name] = data
         print(f"{name:20}: {rank:8.6f}")
     
-    openloop_label = 'Open Loop Comparison'
+    openloop_label = 'Open Loop'
     fixed_label = "LSQ Tomography (Fixed Asterism)"
     var_model_label = "Variable Model (Test Loss)"
 
@@ -135,7 +138,8 @@ def display(rankings):
         gain = np.mean(d[openloop_label])
         o = np.array(d[var_model_label]) / gain
         plt.plot(o, label=f"{name} [{rank:.6f}]")
-    plt.plot(np.array(d[openloop_label])/gain, "k:", label="Open Loop")
+    ol = np.array([1.0] * len(d[openloop_label]))
+    plt.plot(ol, "k:", label="Open Loop")
     plt.legend()
     plt.title("Test loss normalised to open loop output")
     plt.xlabel("Epoch")
@@ -149,7 +153,8 @@ def display(rankings):
         gain = np.mean(d[fixed_label])
         o = np.array(d[var_model_label]) / gain
         plt.plot(o, label=f"{name} [{rank:.6f}]")
-    plt.plot(np.array(d[fixed_label])/gain, "k:", label="Fixed LSQ")
+    fl = np.array([1.0] * len(d[fixed_label]))
+    plt.plot(fl, "k:", label="Fixed LSQ")
     plt.legend()
     plt.title("Test loss normalised to Fixed Asterism least squares output")
     plt.xlabel("Epoch")
@@ -212,8 +217,10 @@ class Trainer():
             tomo_loss.append(
                 self.loss_fn(torch.from_numpy(tomo_coeffs), torch.from_numpy(target_coeffs)).item()
             )
-                
-        return tomo_loss
+    
+        loss = np.mean(tomo_loss)
+        logger.info(f" -> testing loss: {loss:>7f}")
+        return loss
 
     def get_openloop_loss(self, dataloader):
         n = settings["testing_batch"]
@@ -227,7 +234,9 @@ class Trainer():
                 self.loss_fn(torch.from_numpy(self.openloop_coeffs), torch.from_numpy(target_coeffs)).item()
             )
         
-        return openloop_loss
+        loss = np.mean(openloop_loss)
+        logger.info(f" -> open loop loss: {loss:>7f}")
+        return loss
 
     def train_epoch(self, data):
         results = {
@@ -242,18 +251,18 @@ class Trainer():
                 model = v["model"]
                 logger.info(f"Training {model.name}. {k} asterism")
                 data.select(v["type"])
-                loss = ml.train(data.train_dataloader, model, self.loss_fn, self.optimiser)
-                v["train"] = loss
+                v["train"] = ml.train(data.train_dataloader, model, self.loss_fn, self.optimiser)
                 
                 logger.info(f"Testing {model.name}. {k} asterism")
-                loss = ml.test(data.test_dataloader, model, self.loss_fn)
-                v["test"] = loss
+                v["test"] = ml.test(data.test_dataloader, model, self.loss_fn)
 
                 logger.info(f"Running LSQ tomography. {k} asterism")
                 v["lsq"] = self.get_tomo_loss(data.test_dataloader)
 
         logger.info(f"Finding open loop loss")
         results["Open Loop"] = self.get_openloop_loss(data.test_dataloader)
+
+        data.reset()
 
         return results
 
@@ -304,7 +313,6 @@ def train(network):
     for i in range(settings["epochs"]):
         logger.info(f"Training network {network.__name__}, epoch {i+1}/{settings['epochs']}")
         results.append(trainer.train_epoch(data))
-        data.reset()
 
     logger.info("Model training complete")
     
@@ -325,16 +333,16 @@ def train(network):
 
     for epoch, data in enumerate(results):
         epochs.append(epoch)
-        model_var_train.append(np.mean(data["Variable"]["train"]))
-        model_var_test.append(np.mean(data["Variable"]["test"]))
-        model_mix_train.append(np.mean(data["Mixed"]["train"]))
-        model_mix_test.append(np.mean(data["Mixed"]["test"]))
-        model_fix_train.append(np.mean(data["Fixed"]["train"]))
-        model_fix_test.append(np.mean(data["Fixed"]["test"]))
-        open_loop.append(np.mean(data["Open Loop"]))
-        tomo_var.append(np.mean(data["Variable"]["lsq"]))
-        tomo_mix.append(np.mean(data["Mixed"]["lsq"]))
-        tomo_fix.append(np.mean(data["Fixed"]["lsq"]))
+        model_var_train.append(data["Variable"]["train"])
+        model_var_test.append(data["Variable"]["test"])
+        model_mix_train.append(data["Mixed"]["train"])
+        model_mix_test.append(data["Mixed"]["test"])
+        model_fix_train.append(data["Fixed"]["train"])
+        model_fix_test.append(data["Fixed"]["test"])
+        open_loop.append(data["Open Loop"])
+        tomo_var.append(data["Variable"]["lsq"])
+        tomo_mix.append(data["Mixed"]["lsq"])
+        tomo_fix.append(data["Fixed"]["lsq"])
     
     start_time = log.time
     data_file = f"./data/models/results/{_get_file_name(trainer.network.__name__)}.dat"

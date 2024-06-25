@@ -20,11 +20,13 @@ def train(dataloader, model, loss_fn, optimizer):
     training_loss = []
 
     for batch, (X, y) in enumerate(dataloader):
+        logger.debug(f"X: {X.shape}, y: {y.shape}")
+
         X, y = X.to(device), y.to(device)
 
         pred = model(X)
         loss = loss_fn(pred, y)
-
+        
         training_loss.append(loss.item())
 
         loss.backward()
@@ -35,7 +37,7 @@ def train(dataloader, model, loss_fn, optimizer):
 
         logger.info(f" -> training loss: {loss:>7f}")
 
-    return training_loss
+    return np.mean(training_loss)
 
 def test(dataloader, model, loss_fn):
     model.eval()
@@ -51,4 +53,4 @@ def test(dataloader, model, loss_fn):
             now = now.strftime("%H:%M:%S")
             logger.info(f" -> testing loss: {loss:>7f}")
 
-    return test_loss
+    return np.mean(test_loss)
