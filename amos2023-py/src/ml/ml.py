@@ -66,7 +66,7 @@ def compare(models):
 
     return sorted(results, key=lambda x: x[1])
 
-def display(rankings):
+def display(rankings=None):
     # Display the results of the model relative to each other and themselves.
     directory = "./data/models/results/*.dat"
     files = glob.glob(directory)
@@ -79,11 +79,16 @@ def display(rankings):
                 return l
         return None
            
-    for name, rank, file_name in rankings:
-        if file_name != "N/A":
-            model_data[name] = (rank, get(files, file_name))
-        else:
-            print(f"{name:20}: {rank:8.6f}")
+    if rankings is not None:
+        for name, rank, file_name in rankings:
+            if file_name != "N/A":
+                model_data[name] = (rank, get(files, file_name))
+            else:
+                print(f"{name:20}: {rank:8.6f}")
+    else:
+        for f in files:
+            name = "_".join(f.split("_")[:-2])
+            model_data[name] = ("NA", f)
     
     for name, (rank, path) in model_data.items():
         keys = []
@@ -118,7 +123,10 @@ def display(rankings):
         }
 
         plt.figure()
-        plt.title(f"{name} [{rank:.6f}]")
+        if rank != "NA":
+            plt.title(f"{name} [{rank:.6f}]")
+        else:
+            plt.title(f"{name}")
         for lbl, clr in labels.items():
             y = data[lbl]
             if "LSQ" in lbl or "Open" in lbl:
@@ -129,7 +137,8 @@ def display(rankings):
         plt.ylabel("Loss (MSE)")
 
         file_data[name] = data
-        print(f"{name:20}: {rank:8.6f}")
+        if rank != "NA":
+            print(f"{name:20}: {rank:8.6f}")
     
     openloop_label = 'Open Loop'
     fixed_label = "LSQ Tomography (Fixed Asterism)"
@@ -141,7 +150,8 @@ def display(rankings):
         rank = model_data[name][0]
         gain = np.mean(d[openloop_label])
         o = np.array(d[var_model_label]) / gain
-        plt.plot(o, label=f"{name} [{rank:.6f}]")
+        lbl = f"{name}" if rank == "NA" else f"{name} [{rank:.6f}]"
+        plt.plot(o, label=lbl)
     ol = np.array([1.0] * len(d[openloop_label]))
     plt.plot(ol, "k:", label="Open Loop")
     plt.legend()
@@ -156,7 +166,8 @@ def display(rankings):
         rank = model_data[name][0]
         gain = np.mean(d[fixed_label])
         o = np.array(d[var_model_label]) / gain
-        plt.plot(o, label=f"{name} [{rank:.6f}]")
+        lbl = f"{name}" if rank == "NA" else f"{name} [{rank:.6f}]"
+        plt.plot(o, label=lbl)
     fl = np.array([1.0] * len(d[fixed_label]))
     plt.plot(fl, "k:", label="Fixed LSQ")
     plt.legend()
