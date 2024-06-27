@@ -91,7 +91,7 @@ class TomoDataset(Dataset):
     
     def __getitem__(self, idx):
         ast_idx = idx % self.n_asterisms
-        scr_idx = int(idx / (self.n / self.n_screens))
+        scr_idx = int(idx /  (self.n / self.n_screens))
 
         logger.debug(f"Retrieving data at index {idx} [screen index: {scr_idx}, asterism index: {ast_idx}]")
 
@@ -129,8 +129,9 @@ class TomoDataset(Dataset):
         return X, target_coeffs
     
     def get_dataloader(self):
-        logger.info(f"Loading dataloader, batch_size={self.get_batch_size()}")
-        return DataLoader(self, batch_size=self.get_batch_size())
+        n = self.get_batch_size()
+        logger.info(f"Loading dataloader, batch_size={n}")
+        return DataLoader(self, batch_size=n, shuffle=True)
     
     def select(self, output_type=VARIABLE):
         # Select how to build output data from asterisms and phase screens
@@ -218,10 +219,7 @@ class Configure():
     def reset(self):
         logger.info(f"Building training and test data for next epoch")
         self.train_data = TrainData(self.t, rng=self.rng)
-        self.train_dataloader = self.train_data.get_dataloader()
-        
         self.test_data = TestData(self.t, rng=self.rng)
-        self.test_dataloader = self.test_data.get_dataloader()
 
     def select(self, type):
         self.train_data.select(type)

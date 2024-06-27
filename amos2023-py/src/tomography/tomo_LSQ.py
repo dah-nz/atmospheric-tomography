@@ -43,8 +43,9 @@ class LSQ(tomography.Tomography):
         # print(metapupil_d)
 
         @lru_cache(maxsize=256)
-        def proj(b, l):
+        def proj(t, g, l):
             a = altitudes[l]
+            b = beacon.Beacon(t, g, gamma_arcseconds=False)
             # return self._projectionMatrix(b.position(a), mds[l]/self.D)
             sz = (szs[l], szs[l])
             L = []
@@ -65,8 +66,8 @@ class LSQ(tomography.Tomography):
 
         layers = list(range(len(altitudes)))
 
-        A = np.concatenate([np.concatenate([proj(beacon, l) for beacon in beacons], 0) for l in layers], 1)
-        T = np.concatenate([proj(target, l) for l in layers], 1)
+        A = np.concatenate([np.concatenate([proj(beacon.theta, beacon.gamma, l) for beacon in beacons], 0) for l in layers], 1)
+        T = np.concatenate([proj(target.theta, target.gamma, l) for l in layers], 1)
         
         M = np.linalg.pinv(np.matmul(A, np.linalg.pinv(T)))
 

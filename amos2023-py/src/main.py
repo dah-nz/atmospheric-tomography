@@ -20,6 +20,8 @@ def main():
 
     logger.info("Started")
 
+    clear_previous()
+
     models = update_model_list()
 
     for k, m in models.items():
@@ -68,7 +70,25 @@ def update_model_list(existing=None):
     logger.debug(f"Model definition count: {n}")
 
     return existing
-    
+
+def clear_previous():
+    start_time = log.time
+    models = f"data/models/params/*.mdl"
+    files = glob.glob(models)
+    for file in files:
+        f = file.split('\\')
+        nm = f[1].split(".")
+        f2 = f"{f[0]}/old/{nm[0]}_{start_time}.{nm[1]}"
+        os.rename(file, f2)
+
+    results = f"data/models/results/*.dat"
+    files = glob.glob(results)
+    for file in files:
+        f = file.split('\\')
+        nm = f[1].split(".")
+        f2 = f"{f[0]}/old/{nm[0]}_{start_time}.{nm[1]}"
+        os.rename(file, f2)
+
 def clear(q, rankings):
     # Clear old models and results from the workspace directories
     # Does not change the values in q
@@ -88,22 +108,7 @@ def clear(q, rankings):
                 shutil.copyfile(def0, def1)
     else:
         logger.info(f"There are {n_models}/{N_BEST}. None are moved")
-        
-    models = f"data/models/params/*.mdl"
-    files = glob.glob(models)
-    for file in files:
-        f = file.split('\\')
-        nm = f[1].split(".")
-        f2 = f"{f[0]}/old/{nm[0]}_{start_time}.{nm[1]}"
-        os.rename(file, f2)
 
-    results = f"data/models/results/*.dat"
-    files = glob.glob(results)
-    for file in files:
-        f = file.split('\\')
-        nm = f[1].split(".")
-        f2 = f"{f[0]}/old/{nm[0]}_{start_time}.{nm[1]}"
-        os.rename(file, f2)
 
 if __name__ == "__main__":
     main()

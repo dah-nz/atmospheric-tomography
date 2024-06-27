@@ -15,18 +15,20 @@ def initialise():
     logger.info(f"Using {device} device")
     return device
 
-def train(dataloader, model, loss_fn, optimizer):
+def train(data, model, loss_fn, optimizer):
     model.train()
     training_loss = []
 
-    for batch, (X, y) in enumerate(dataloader):
+    train_data = data.get_dataloader()
+
+    for X, y in train_data:
         logger.debug(f"X: {X.shape}, y: {y.shape}")
 
         X, y = X.to(device), y.to(device)
 
         pred = model(X)
         loss = loss_fn(pred, y)
-        
+
         training_loss.append(loss.item())
 
         loss.backward()
@@ -39,11 +41,14 @@ def train(dataloader, model, loss_fn, optimizer):
 
     return np.mean(training_loss)
 
-def test(dataloader, model, loss_fn):
+def test(data, model, loss_fn):
     model.eval()
     test_loss = []
+
+    test_data = data.get_dataloader()
+
     with torch.no_grad():
-        for X, y in dataloader:
+        for X, y in test_data:
             X, y = X.to(device), y.to(device)
             pred = model(X)
             loss = loss_fn(pred, y).item()
@@ -52,5 +57,20 @@ def test(dataloader, model, loss_fn):
             now = datetime.now()
             now = now.strftime("%H:%M:%S")
             logger.info(f" -> testing loss: {loss:>7f}")
+
+    return np.mean(test_loss)
+
+def open_loop(data, loss_fn):
+    test_loss = []
+    test_data = data.get_dataloader()
+    for _, y in test_data:
+        y = y.to(device)
+        p = torch.zeros_like(y).to(device)
+        loss = loss_fn(p, y).item()
+        test_loss.append(loss)
+
+        now = datetime.now()
+        now = now.strftime("%H:%M:%S")
+        logger.info(f" -> open loop loss: {loss:>7f}")
 
     return np.mean(test_loss)

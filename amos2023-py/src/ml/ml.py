@@ -54,14 +54,15 @@ def compare(models):
 
     logger.info(f"Building validation dataset")
     validation_data = dataset.ValidationData(settings, rng=rng)
-    validation_loader = validation_data.get_dataloader()
 
     results = []
 
     logger.info(f"Comparing models: {','.join(list(models.keys()))}")
     for n, network in models.items():
         logger.info(f"Configuring model {n}")
-        results.append((n, evaluate(network, validation_loader), _get_file_name(network.__name__)))
+        results.append((n, evaluate(network, validation_data), _get_file_name(network.__name__)))
+
+    results.append(("Open Loop", evaluate_ol(network, validation_data), "N/A"))
 
     return sorted(results, key=lambda x: x[1])
 
@@ -79,7 +80,10 @@ def display(rankings):
         return None
            
     for name, rank, file_name in rankings:
-        model_data[name] = (rank, get(files, file_name))
+        if file_name != "N/A":
+            model_data[name] = (rank, get(files, file_name))
+        else:
+            print(f"{name:20}: {rank:8.6f}")
     
     for name, (rank, path) in model_data.items():
         keys = []
@@ -109,8 +113,8 @@ def display(rankings):
             "Mixed Model (Test Loss)":                  'g-',
             "Open Loop":                                'k-',
             "LSQ Tomography (Fixed Asterism)":          '--',
-            "LSQ Tomography (Variable Asterism)":       '--',
             "LSQ Tomography (Mixed Asterism)":          '--',
+            # "LSQ Tomography (Variable Asterism)":       '--',
         }
 
         plt.figure()
@@ -169,7 +173,7 @@ def model_summary(m):
             n = v
         s += f"{k},{n}\n"
     s += f"loss_fn,{m.loss_fn.__class__.__name__}\n"
-    s += f"optimiser,{m.optimiser.__class__.__name__}\n"
+    s += f"optimiser,{m.optimiser_var.__class__.__name__}\n"
     s += str(summary(m.model_var, input_size=(1, 3, settings["n_coeffs"], 3), verbose=0))
     return s
 
@@ -190,7 +194,12 @@ class Trainer():
         self.openloop_coeffs = np.zeros(settings["n_coeffs"])
         
         self.loss_fn = nn.MSELoss()
-        self.optimiser = torch.optim.AdamW(self.model_var.parameters(), lr=settings["learning_rate"], weight_decay=settings["weight_decay"])
+        self.set_optimisers()
+
+    def set_optimisers(self):
+        self.optimiser_var = torch.optim.AdamW(self.model_var.parameters(), lr=settings["learning_rate"], weight_decay=settings["weight_decay"])
+        self.optimiser_mix = torch.optim.AdamW(self.model_mix.parameters(), lr=settings["learning_rate"], weight_decay=settings["weight_decay"])
+        self.optimiser_fix = torch.optim.AdamW(self.model_fix.parameters(), lr=settings["learning_rate"], weight_decay=settings["weight_decay"])
 
     def process_data(self, X, y, i):
         data = X[i]
@@ -202,9 +211,10 @@ class Trainer():
         beacons = [beacon.Beacon(t, g, gamma_arcseconds=False) for t, g in zip(theta, gamma)]
         return target_coeffs, beacon_coeffs, beacons
     
-    def get_tomo_loss(self, dataloader):
+    def get_tomo_loss(self, data):
         n = settings["testing_batch"]
-        for X, y in dataloader:
+        test_data = data.get_dataloader()
+        for X, y in test_data:
             break
         X, y = X.numpy(), y.numpy()
         tomo_loss = []
@@ -222,9 +232,10 @@ class Trainer():
         logger.info(f" -> testing loss: {loss:>7f}")
         return loss
 
-    def get_openloop_loss(self, dataloader):
+    def get_openloop_loss(self, data):
         n = settings["testing_batch"]
-        for X, y in dataloader:
+        test_data = data.get_dataloader()
+        for X, y in test_data:
             break
         X, y = X.numpy(), y.numpy()
         openloop_loss = []
@@ -240,9 +251,9 @@ class Trainer():
 
     def train_epoch(self, data):
         results = {
-            "Variable"  : {"model": self.model_var, "train": [], "test": [], "lsq": [], "type": dataset.VARIABLE },
-            "Mixed"     : {"model": self.model_mix, "train": [], "test": [], "lsq": [], "type": dataset.MIXED },
-            "Fixed"     : {"model": self.model_fix, "train": [], "test": [], "lsq": [], "type": dataset.FIXED },
+            "Variable"  : {"model": self.model_var, "opti": self.optimiser_var, "train": [], "test": [], "lsq": [], "type": dataset.VARIABLE },
+            "Mixed"     : {"model": self.model_mix, "opti": self.optimiser_mix, "train": [], "test": [], "lsq": [], "type": dataset.MIXED },
+            "Fixed"     : {"model": self.model_fix, "opti": self.optimiser_fix, "train": [], "test": [], "lsq": [], "type": dataset.FIXED },
             "Open Loop" : []
         }
 
@@ -251,16 +262,20 @@ class Trainer():
                 model = v["model"]
                 logger.info(f"Training {model.name}. {k} asterism")
                 data.select(v["type"])
-                v["train"] = ml.train(data.train_dataloader, model, self.loss_fn, self.optimiser)
+
+                v["train"] = ml.train(data.train_data, model, self.loss_fn, v["opti"])
                 
                 logger.info(f"Testing {model.name}. {k} asterism")
-                v["test"] = ml.test(data.test_dataloader, model, self.loss_fn)
+                v["test"] = ml.test(data.test_data, model, self.loss_fn)
 
-                logger.info(f"Running LSQ tomography. {k} asterism")
-                v["lsq"] = self.get_tomo_loss(data.test_dataloader)
+                if k != "Variable":
+                    logger.info(f"Running LSQ tomography. {k} asterism")
+                    v["lsq"] = self.get_tomo_loss(data.test_data)
+                else:
+                    v['lsq'] = -1
 
         logger.info(f"Finding open loop loss")
-        results["Open Loop"] = self.get_openloop_loss(data.test_dataloader)
+        results["Open Loop"] = self.get_openloop_loss(data.test_data)
 
         data.reset()
 
@@ -276,27 +291,25 @@ class Trainer():
 
     def save_models(self):
         vf, mf, ff = self.get_model_names()
-        logger.debug(f"Saving model state dict for model {self.model_var.name} to {vf}")
+        logger.info(f"Saving model state dict for model {self.model_var.name} to {vf}")
         torch.save(self.model_var.state_dict(), vf)
 
-        logger.debug(f"Saving model state dict for model {self.model_mix.name} to {mf}")
+        logger.info(f"Saving model state dict for model {self.model_mix.name} to {mf}")
         torch.save(self.model_mix.state_dict(), mf)
 
-        logger.debug(f"Saving model state dict for model {self.model_fix.name} to {ff}")
+        logger.info(f"Saving model state dict for model {self.model_fix.name} to {ff}")
         torch.save(self.model_fix.state_dict(), ff)
 
     def load_models(self):
         vf, mf, ff = self.get_model_names()
-        logger.debug(f"Loading model state dict for model {self.model_var.name} from {vf}")
+        logger.info(f"Loading model state dict for model {self.model_var.name} from {vf}")
         self.model_var.load_state_dict(torch.load(vf))
 
-        logger.debug(f"Saving model state dict for model {self.model_mix.name} to {mf}")
-        self.model_var.load_state_dict(torch.load(mf))
+        logger.info(f"Loading model state dict for model {self.model_mix.name} from {mf}")
+        self.model_mix.load_state_dict(torch.load(mf))
 
-        logger.debug(f"Saving model state dict for model {self.model_fix.name} to {ff}")
-        self.model_var.load_state_dict(torch.load(ff))
-
-        
+        logger.info(f"Loading model state dict for model {self.model_fix.name} from {ff}")
+        self.model_fix.load_state_dict(torch.load(ff))
 
 def train(network):
     # Train a network on randomised data
@@ -376,10 +389,16 @@ def train(network):
 
     return
 
-def evaluate(network, dataloader):
+def evaluate(network, data):
     trainer = Trainer(network)
     trainer.load_models()
 
-    results = ml.test(dataloader, trainer.model_var, trainer.loss_fn)
+    results = ml.test(data, trainer.model_var, trainer.loss_fn)
+
+    return np.mean(results)
+
+def evaluate_ol(network, data):
+    trainer = Trainer(network)
+    results = ml.open_loop(data, trainer.loss_fn)
 
     return np.mean(results)
