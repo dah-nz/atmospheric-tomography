@@ -111,9 +111,12 @@ class Zernike(Basis):
         y = k/radius
 
         zernicoef = self.__zerni(x, y, order)
-        zernicoef *= sq_distance <= sq_radius
+        mask = sq_distance <= sq_radius
+        zernicoef *= mask
         zernicoef = zernicoef[0:(dim[0]), 0:(dim[1])]
 
+        # mask = mask[0:(dim[0]), 0:(dim[1])]
+        # print(f"{order}: var:{np.var(zernicoef, where=mask)}")
 
         return zernicoef
 

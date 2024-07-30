@@ -19,30 +19,31 @@
         10000
     ],
     "layer_conditions": [
-        7.00,
-        7.00,
-        7.00
+        0.07,
+        0.07,
+        0.07
     ],
     
     "basis_type": "zernike",
-    "n_coeffs": 16,
+    "n_coeffs": 32,  
 
-    "epochs": 64,
+    "epochs": 128,
 
-    "training_batch": 256,
-    "training_screens": 32,
-    "training_asterisms": 16,
-    "batches_per_epoch": 1,
+    "training_batch": 512,
+    "training_screens": 128,
+    "training_asterisms": 512,
+    "batches_per_epoch": 4,
 
-    "testing_batch": 64,
-    "testing_screens": 16,
-    "testing_asterisms": 8,
+    "testing_batch": 128,
+    "testing_screens": 128,
+    "testing_asterisms": 128,
 
-    "validation_size": 512,
+    "validation_size": 1024,
 
     "dropout_rate": 0.3,
     "LReLU_grad": 0.05,
 
+    "loss_function": "nn.MSELoss()",
     "learning_rate": 1e-3,
     "weight_decay": 1e-5
 }

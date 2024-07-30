@@ -79,6 +79,11 @@ def rmse(expected, actual):
     mse = np.mean(se)
     return np.sqrt(mse)
 
+def mse(expected, actual):
+    e = expected - actual
+    se = e * e
+    return np.mean(se)
+
 
 #   bounded(path, point)
 #   Determines if a point is bounded within the convex hull of a path

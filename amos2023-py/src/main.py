@@ -113,4 +113,9 @@ def clear(q, rankings):
 
 
 if __name__ == "__main__":
-    main()
+    args = sys.argv
+    if "--show" in args or '-s' in args:
+        ml.display()
+        plt.show()
+    else:
+        main()

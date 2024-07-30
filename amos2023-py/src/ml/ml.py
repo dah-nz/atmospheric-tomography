@@ -87,7 +87,7 @@ def display(rankings=None):
                 print(f"{name:20}: {rank:8.6f}")
     else:
         for f in files:
-            name = "_".join(f.split("_")[:-2])
+            name = "_".join(f.split("\\")[-1].split("_")[:-2])
             model_data[name] = ("NA", f)
     
     for name, (rank, path) in model_data.items():
@@ -204,7 +204,7 @@ class Trainer():
         self.target = beacon.Beacon(0, 0)
         self.openloop_coeffs = np.zeros(settings["n_coeffs"])
         
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = eval(settings['loss_function'])
         self.set_optimisers()
 
     def set_optimisers(self):
