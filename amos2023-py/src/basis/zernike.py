@@ -28,16 +28,7 @@ class Zernike(Basis):
             polynomial order (note that order 0 is piston (normally the 1st order Zernike))
         """
         # Add one to order as zernike function is 1 indexed
-        # Add one more to skip piston (DC) mode
-
-        size = size[0]
-
-        r = np.floor((2 ** 0.5) * size + 1)
-        s0 = int(r/2 - size/2 + 0.5)
-
-        r = (int(r), int(r))
-
-        return self.__zernike(r, order + 1)[s0:s0+size, s0:s0+size]
+        return self.__zernike(size, order + 1)
 
     def decompose(self, screen):
         offset = 1
@@ -53,7 +44,7 @@ class Zernike(Basis):
         for n in range(self.N + offset):
             z[n] = mask * np.float64(self.__zernike(screen.shape, n))
 
-        screen = mask * screen
+        # screen = mask * screen
 
         # Do 2D dot product of each basis function mode with the input phase screen
         return [np.sum(screen * z[n], dtype=np.float64)/np.sum(z[n] * z[n]) for n in range(offset, self.N + offset)]
@@ -96,10 +87,9 @@ class Zernike(Basis):
 
         """
         N = (min(dim) + 1) / 2
-        diameter = min(dim)
-        radius = diameter / 2
+        radius = min(dim) / 2
         sq_radius = radius ** 2
-
+        
         x = np.arange(-N, N)
         y = np.arange(-N, N)
 
@@ -112,11 +102,8 @@ class Zernike(Basis):
 
         zernicoef = self.__zerni(x, y, order)
         mask = sq_distance <= sq_radius
-        zernicoef *= mask
+        zernicoef = zernicoef * mask
         zernicoef = zernicoef[0:(dim[0]), 0:(dim[1])]
-
-        # mask = mask[0:(dim[0]), 0:(dim[1])]
-        # print(f"{order}: var:{np.var(zernicoef, where=mask)}")
 
         return zernicoef
 
