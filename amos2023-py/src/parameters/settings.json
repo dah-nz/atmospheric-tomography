@@ -25,20 +25,20 @@
     ],
     
     "basis_type": "zernike",
-    "n_coeffs": 32,  
+    "n_coeffs": 16,  
 
-    "epochs": 128,
+    "epochs": 64,
 
-    "training_batch": 512,
-    "training_screens": 128,
-    "training_asterisms": 512,
-    "batches_per_epoch": 4,
+    "training_batch": 256,
+    "training_screens": 64,
+    "training_asterisms": 256,
+    "batches_per_epoch": 1,
 
     "testing_batch": 128,
     "testing_screens": 128,
     "testing_asterisms": 128,
 
-    "validation_size": 1024,
+    "validation_size": 256,
 
     "dropout_rate": 0.3,
     "LReLU_grad": 0.05,

@@ -1,4 +1,5 @@
 import numpy as np
+import ml.dataset
 from util import log
 
 log.default_logging_level = log.logging.INFO
@@ -13,7 +14,7 @@ settings = test_file.load(file="settings.json", dir="./src/parameters/")
 
 # 1 - Reconstruction estimates
 
-D = 1.8
+D = 1.0
 n_modes = 32
 
 # load model
@@ -26,8 +27,7 @@ print(networks.keys())
 
 network = networks["MLNN1"]
 
-models = ml.ml.Trainer(network)
-models.load_models()
+models = ml.ml.Trainer(network, load=True)
 
 # set up LSQ
 
@@ -49,10 +49,11 @@ lsq = tomo_LSQ.LSQ(z, D, n_modes)
 # get layer data
 rng = np.random.default_rng()
 data = ml.dataset.TestData(ml.ml.settings, rng=rng)
+data.select(ml.dataset.FIXED)
 
 print("Index,MSE (O-Ideal),MSE (O-LSQ),MSE (O-ML),MSE (O-Open Loop),MSE (I-LSQ),MSE (I-ML),MSE (I-Open Loop),MSE Coeffs (LSQ),MSE Coeffs (ML),MSE Coeffs (OL)")
 import util
-mask = util.util.circle(32, 64)
+mask = util.util.circle(128, 256)
 
 def shiftandmask(screen):
     screen = mask * screen
@@ -61,7 +62,7 @@ def shiftandmask(screen):
 
 def generate_screens(idx):
     screens = data.get_screen_at(idx)
-    # return screens
+    return screens
     n_screens = []
 
     for i, screen in enumerate(screens):
@@ -69,7 +70,7 @@ def generate_screens(idx):
         n_screens.append(z.compose(screen.shape, coeffs))
     return n_screens
 
-for i in range(1):
+for i in range(128):
     # Cut out original target phase screen
     screens = generate_screens(i)
     target_screen = util.util.get_cutout(data.target, screens, data.altitudes, D, data.metapupil_diameters)
@@ -164,6 +165,38 @@ for i in range(1):
         axs[1, 4].imshow(best_recon-ml_recon, vmax=vmx, vmin=vmn)
         axs[1, 4].set_title("Ideal - ML WFE")
         axs[1, 4].axis("off")
+
+plt.show()
+quit()
+
+# Compare fixed, mixed and variable models
+validation_data = ml.dataset.ValidationData(settings, rng=rng)
+
+def get_batch_size():
+    return 1
+
+validation_data.get_batch_size = get_batch_size
+
+validation_data.select(ml.dataset.FIXED)
+
+ol_results = util.ml.open_loop(validation_data, models.loss_fn, mean=False)
+fix_results = util.ml.test(validation_data, models.model_fix, models.loss_fn, mean=False)
+mix_results = util.ml.test(validation_data, models.model_mix, models.loss_fn, mean=False)
+var_results = util.ml.test(validation_data, models.model_var, models.loss_fn, mean=False)
+
+from scipy.stats import ttest_ind
+
+print(    f"Fixed,{np.mean(fix_results)},{np.std(fix_results)}")
+print(    f"Mixed,{np.mean(mix_results)},{np.std(mix_results)}")
+print(      f"Var,{np.mean(var_results)},{np.std(var_results)}")
+print(f"Open Loop,{np.mean( ol_results)},{np.std( ol_results)}")
+print(f"""Students T-Tests\n
+    OL-Fix:  {ttest_ind(ol_results, fix_results)}\n
+    OL-Mix:  {ttest_ind(ol_results, mix_results)}\n
+    OL-Var:  {ttest_ind(ol_results, var_results)}\n
+    Fix-Mix: {ttest_ind(fix_results, mix_results)}\n
+    Fix-Var: {ttest_ind(fix_results, var_results)}\n
+    Mix-Var: {ttest_ind(mix_results, var_results)}""")
 
 plt.show()
     

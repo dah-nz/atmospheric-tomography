@@ -197,7 +197,7 @@ class ValidationData(TomoDataset):
         self.n_screens = self.n
         logger.debug(f"Size of validation batch: {self.n}")
         return
-    
+
     def get_screens(self):
         logger.info(f"Building validation batch of {self.n_screens} phase screens")
         self.ps_gens = None

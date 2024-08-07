@@ -189,13 +189,16 @@ def model_summary(m):
     return s
 
 class Trainer():
-    def __init__(self, network):
+    def __init__(self, network, load=False):
         self.device = ml.initialise()
         self.network = network
         logger.info(f"Building models for network {self.network.__name__}")
         self.model_var = self.network(settings).to(self.device)
         self.model_mix = self.network(settings).to(self.device)
         self.model_fix = self.network(settings).to(self.device)
+
+        if load:
+            self.load_models()
 
         self.tomo = tomo_LSQ.LSQ(settings["basis"],
                                  settings["D"],
@@ -302,24 +305,24 @@ class Trainer():
 
     def save_models(self):
         vf, mf, ff = self.get_model_names()
-        logger.info(f"Saving model state dict for model {self.model_var.name} to {vf}")
+        logger.info(f"Saving variable model state dict for model {self.model_var.name} to {vf}")
         torch.save(self.model_var.state_dict(), vf)
 
-        logger.info(f"Saving model state dict for model {self.model_mix.name} to {mf}")
+        logger.info(f"Saving mixed model state dict for model {self.model_mix.name} to {mf}")
         torch.save(self.model_mix.state_dict(), mf)
 
-        logger.info(f"Saving model state dict for model {self.model_fix.name} to {ff}")
+        logger.info(f"Saving fixed model state dict for model {self.model_fix.name} to {ff}")
         torch.save(self.model_fix.state_dict(), ff)
 
     def load_models(self):
         vf, mf, ff = self.get_model_names()
-        logger.info(f"Loading model state dict for model {self.model_var.name} from {vf}")
+        logger.info(f"Loading variable model state dict for model {self.model_var.name} from {vf}")
         self.model_var.load_state_dict(torch.load(vf))
 
-        logger.info(f"Loading model state dict for model {self.model_mix.name} from {mf}")
+        logger.info(f"Loading mixed model state dict for model {self.model_mix.name} from {mf}")
         self.model_mix.load_state_dict(torch.load(mf))
 
-        logger.info(f"Loading model state dict for model {self.model_fix.name} from {ff}")
+        logger.info(f"Loading fixed model state dict for model {self.model_fix.name} from {ff}")
         self.model_fix.load_state_dict(torch.load(ff))
 
 def train(network):
@@ -406,10 +409,14 @@ def evaluate(network, data):
 
     results = ml.test(data, trainer.model_var, trainer.loss_fn)
 
-    return np.mean(results)
+    logger.info(" -> Test results: {results}")
+
+    return results
 
 def evaluate_ol(network, data):
     trainer = Trainer(network)
     results = ml.open_loop(data, trainer.loss_fn)
 
-    return np.mean(results)
+    logger.info(" -> Training results: {results}")
+
+    return results
