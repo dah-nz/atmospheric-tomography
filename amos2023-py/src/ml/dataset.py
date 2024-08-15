@@ -27,12 +27,13 @@ class TomoDataset(Dataset):
 
         self.rng = rng
         self.get_size()
-        logger.info(f"Creating data set with {self.n} items, {self.n_asterisms} asterisms and {self.n_screens} screens")
+        logger.info(f"Creating data set with {self.n} items, {self.n_asterisms} asterisms and {self.n_screens} screens; n_modes={self.settings['n_coeffs']}")
 
         self.generate_asterisms()
 
         limit_star = [beacon.Beacon(0, settings["limiting_angle"]+1, gamma_arcseconds=True)]            # add one to limiting angle to add a little leeway for numerical differences pushing bounds slightly over the edges
         m, l = util.get_layer_shapes(self.altitudes, limit_star, self.D, settings["aperture_size"])
+        print(f">>>>>>>>>: {m}, {l}")
 
         self.metapupil_diameters = m
         self.layer_shapes = l
@@ -130,7 +131,7 @@ class TomoDataset(Dataset):
     
     def get_dataloader(self):
         n = self.get_batch_size()
-        logger.info(f"Loading dataloader, batch_size={n}")
+        logger.debug(f"Loading dataloader, batch_size={n}")
         return DataLoader(self, batch_size=n, shuffle=True)
     
     def select(self, output_type=VARIABLE):
@@ -183,7 +184,7 @@ class TestData(TomoDataset):
         
     def get_screens(self):
         logger.info(f"Building test batch of {self.n_screens} phase screens")
-        print("Building test batch")
+        print(f"Building test batch, size={self.cut_out}")
         return [gen.generate(self.n_screens, cut_out=self.cut_out, return_type="all") for gen in self.ps_gens]
     
     def get_screen_at(self, idx):
@@ -211,6 +212,7 @@ class ValidationData(TomoDataset):
 class Configure():
     def __init__(self, settings):
         self.t = settings
+        logger.info(f"Configure datasets with n_modes={self.t['n_coeffs']}")
         self.rng = np.random.default_rng()
 
         self.validation_size = self.t["validation_size"]

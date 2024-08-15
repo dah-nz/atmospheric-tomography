@@ -25,7 +25,7 @@
     ],
     
     "basis_type": "zernike",
-    "n_coeffs": 16,  
+    "n_coeffs": 16,
 
     "epochs": 64,
 
