@@ -57,7 +57,6 @@ class PhaseScreenGenerator():
         if isinstance(seeds, int):
             seeds = self.rng.integers(rng_min, rng_max, size=seeds)
 
-
         if cut_out is not None:
             screens = [self._get_raw(s) for s in seeds]
             self.find_scaling(cut_out, screens)

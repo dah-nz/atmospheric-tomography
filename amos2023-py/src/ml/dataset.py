@@ -208,6 +208,11 @@ class ValidationData(TomoDataset):
     def get_screen_at(self, idx):
         logger.debug(f"Validation batch screens for index: {idx}/{self.n_screens}")
         return [scr[idx] for scr in self.screens]
+    
+    def get_dataloader(self):
+        n = self.get_batch_size()
+        logger.debug(f"Loading dataloader, batch_size={n}")
+        return DataLoader(self, batch_size=n, shuffle=False)
 
 class Configure():
     def __init__(self, settings):
