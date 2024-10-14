@@ -1,0 +1,129 @@
+import numpy as np
+import matplotlib as mpl
+import scipy
+
+def azimuth2cart(altitude, theta, phi):
+    rho = altitude * np.tan(theta)
+    return pol2cart(rho, phi)
+
+def pol2cart(rho, phi):
+    x = rho * np.cos(phi)
+    y = rho * np.sin(phi)
+    return (x, y)
+
+def cart2pol(x, y):
+    rho = np.sqrt(x**2 + y**2)
+    phi = np.arctan2(y, x)
+    return (rho, phi)
+
+def arcsec2rad(t):
+    return np.radians(t / 60 / 60)
+
+def rad2arcsec(t):
+    return np.degrees(t) * 60 * 60
+
+# Shift data in 2D array in x and y directions
+def shift2darray(arr, x, y, fill_value=np.nan):
+    arr = np.roll(arr, x, 0)
+    arr = np.roll(arr, y, 1)
+    if x < 0:
+        arr[x:, :] = fill_value
+    elif x > 0:
+        arr[:x, :] = fill_value
+    if y < 0:
+        arr[:, y:] = fill_value
+    elif y > 0:
+        arr[:, :y] = fill_value
+    return arr
+
+_circle_cache = dict()
+
+def circle(dimension, radius=None, location=(0,0)):
+    """
+    Construct a circular mask at a location.
+
+    Parameters
+    -------------
+    dimension:      Size of mask (pixels)
+    radius:         Radius of circle, default is dimension / 2 (pixels)
+    location:       Cartesian location of center of the circle (pixels)
+
+    Returns
+    --------
+    mask with given parameters
+    """
+
+    if radius is None:
+        radius = dimension / 2
+
+    try:
+        return _circle_cache[(radius, dimension, location)]
+    except KeyError:
+        mask = np.zeros((dimension, dimension))
+        sq_radius = radius ** 2
+        N = (dimension + 1) / 2
+
+        x = np.arange(-N - location[0], N - location[0])
+        y = np.arange(-N - location[1], N - location[1])
+        [l, k] = np.meshgrid(x, y)
+        sq_distance = k ** 2 + l ** 2
+
+        mask = sq_distance <= sq_radius
+        mask = mask[0:dimension, 0:dimension]
+
+        _circle_cache[(radius, dimension, location)] = mask
+        return mask
+
+def cart2imagespace(image_dim, d, location):
+    """
+    Convert a cartesian value into a location within the image space.
+    Assumes the centre of the image is cartesian      (0,0), positive x is right, positive y is up.
+    Converts to image space, where the top left pixel (0,0), positive x is right, positive y is down.
+
+    Return the pixel location of the cartesian point.
+
+    Parameters
+    -------------
+    image_dim:      Size of image (pixels)
+    d:              Size of image (m)
+    location:       Cartesian location (m)
+
+    Returns
+    --------
+    tuple with x, y pixel location
+    """
+    center = image_dim / 2
+    x = center + ( location[0] * image_dim / d)# - 0.5
+    y = center + (-location[1] * image_dim / d)# - 0.5
+    return (int(x + 0.5), int(y + 0.5))
+
+def rmse(a, b, mask=None):
+    """
+    Calculate the root mean square error between a and b
+
+    Parameters
+    -------------
+    a:          First array
+    b:          Second array
+    mask:       Mask to determine sections of a and b to perform error calculation over
+    """
+    if mask is not None:
+        rms = np.sqrt(np.sum((mask * (a - b)) ** 2) / np.sum(mask))
+        return rms
+    else:
+        return np.sqrt(((a - b) ** 2).mean())
+
+def mse(a, b, mask=None):
+    """
+    Calculate the mean square error between a and b
+
+    Parameters
+    -------------
+    a:          First array
+    b:          Second array
+    mask:       Mask to determine sections of a and b to perform error calculation over
+    """
+    if mask is not None:
+        return np.sum((mask * (a - b)) ** 2) / np.sum(mask)
+    else:
+        return ((a - b) ** 2).mean()

@@ -1,0 +1,112 @@
+import torch
+
+import log
+
+from ml import models, runner
+from tomography import beacon, tomography
+
+logger = log.get_logger(__name__)
+log.setup_logger(logger, to_console=True)
+
+device = "cpu"
+
+def initialise():
+    # Sets up cuda for torch
+    global device
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info(f"Using {device} device")
+    return device
+
+# def summary(settings, model):
+#     s = ""
+#     for k, v in settings.items():
+#         if type(v) not in [int, float, list, str]:
+#             n = v.__class__.__name__
+#         else:
+#             n = v
+#         s += f"{k},{n}\n"
+#     s += f"loss_fn,{model.loss_fn.__class__.__name__}\n"
+#     s += f"optimiser,{model.optimiser_fix.__class__.__name__}\n"
+#     s += str(torchinfo.summary(model.model_fix, input_size=(1, 3, cfg.n_coeffs, 3), verbose=0))
+#     return s
+
+class Trainer():
+    def __init__(self, cfg, load=False):
+        self.device = initialise()
+        
+        logger.info(f"Building models for networks {cfg.model_names}, with n_modes={cfg.n_coeffs}")
+        
+        # Set up machine learning models and functions
+        self.models = {k: eval(f"models.{k}(cfg).to(self.device)") for k in cfg.model_names}
+        self.optimisers = {k: torch.optim.AdamW(m.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay) for k, m in self.models.items()}
+        self.loss_fn = cfg.loss_function
+
+        self.model_file_names = [cfg.get_file_name(m.name) for k, m in self.models.items()]
+
+        # if load:
+        #     self.load_models()
+
+        # Set up different tomography methods
+        self.tomo = {t: (eval(f"tomography.{t}(cfg.basis, cfg.D, cfg.n_coeffs, cfg.altitudes, cfg.aperture_size)"), s) for t, s in cfg.tomo_methods.items()}
+
+        self.regime = cfg.regime
+        self.target = beacon.Beacon(0, 0)
+
+        self.runners = []
+        for k in self.models.keys():
+            model = self.models[k]
+            opti = self.optimisers[k]
+            self.runners.append(runner.ModelRunner(model, self.loss_fn, opti))
+
+        for k, (algo, fixed_asterisms_only) in self.tomo.items():
+            self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, fixed_asterisms_only))
+
+        self.runners.append(runner.OpenLoopRunner(self.loss_fn))
+    
+    def _run_epoch(self, data, func="train"):
+        results = {}
+
+        for r in self.runners:
+            results[r.name] = []
+
+        for r in self.runners:
+            if func == "train":
+                logger.info(f"{r.name}: Training")
+                results[r.name].append(r.train(data))
+            else:
+                logger.info(f"{r.name}: Testing")
+                results[r.name].append(r.test(data))
+
+        return results
+    
+    def train(self, data):
+        return self._run_epoch(data, func="train")
+
+    def test(self, data):
+        return self._run_epoch(data, func="test")
+    
+    def get_file_names(self, epoch=-1, prefix="", suffix=""):
+        base_file_names = self.model_file_names
+        file_names = []
+        
+        for file in base_file_names:
+            if epoch >= 0:
+                file_names.append(f"data/models/parameters/{prefix}_{file}_{suffix}_e{epoch}.mdl")
+            else:
+                file_names.append(f"data/models/parameters/{prefix}_{file}_{suffix}.mdl")
+
+        return file_names
+
+    def save_models(self, epoch=-1, prefix="", suffix=""):
+        files = self.get_file_names(epoch, prefix, suffix)
+
+        for (name, model), ff in zip(self.models.items(), files):
+            logger.info(f"Saving fixed model state dict for model {name} to {ff}")
+            torch.save(model.state_dict(), ff)
+
+    def load_models(self, epoch=-1, prefix="", suffix=""):
+        files = self.get_file_names(epoch, prefix, suffix)
+
+        for (name, model), ff in zip(self.models.items(), files):
+            logger.info(f"Loading fixed model state dict for model {name} from {ff}")
+            model.load_state_dict(torch.load(ff))

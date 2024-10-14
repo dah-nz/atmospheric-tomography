@@ -1,0 +1,22 @@
+from torch import nn
+from ml.network import Network
+
+class MLNN_baseline(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(512, 2048),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 512),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_coeffs)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_relu_stack(x)
