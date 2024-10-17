@@ -13,6 +13,8 @@ def run_tests():
     test_beacons()
     test_leastsquares()
 
+    plt.show()
+
 def test_leastsquares():
 
     rng = np.random.default_rng()
@@ -88,8 +90,6 @@ def test_leastsquares():
     sns.relplot(data=df, x="gamma", y="cond_p", col="altitude", hue="layer_pixels",
                 facet_kws={'sharey': False})
 
-    plt.show()
-
 def test_beacons():
     # check positions are valid
     pos_fig = plt.figure()
@@ -131,5 +131,4 @@ def test_beacons():
     phs += run_test(0, 0)
     ax = co_fig.gca()
     ax.imshow(phs, alpha=0.3, aspect="equal")
-
-    plt.show()
+    
