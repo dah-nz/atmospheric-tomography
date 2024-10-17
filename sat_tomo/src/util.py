@@ -62,6 +62,7 @@ def circle(dimension, radius=None, location=(0,0)):
         mask = np.zeros((dimension, dimension))
         sq_radius = radius ** 2
         N = (dimension + 1) / 2
+        # N = (dimension / 2)
 
         x = np.arange(-N - location[0], N - location[0])
         y = np.arange(-N - location[1], N - location[1])
@@ -74,7 +75,7 @@ def circle(dimension, radius=None, location=(0,0)):
         _circle_cache[(radius, dimension, location)] = mask
         return mask
 
-def cart2imagespace(image_dim, d, location):
+def cart2imagespace(image_dim, d, location, dtype=int):
     """
     Convert a cartesian value into a location within the image space.
     Assumes the centre of the image is cartesian      (0,0), positive x is right, positive y is up.
@@ -95,7 +96,8 @@ def cart2imagespace(image_dim, d, location):
     center = image_dim / 2
     x = center + ( location[0] * image_dim / d)# - 0.5
     y = center + (-location[1] * image_dim / d)# - 0.5
-    return (int(x + 0.5), int(y + 0.5))
+    
+    return (dtype(x), dtype(y))
 
 def rmse(a, b, mask=None):
     """

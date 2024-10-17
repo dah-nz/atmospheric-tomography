@@ -53,29 +53,33 @@ class Trainer():
         self.target = beacon.Beacon(0, 0)
 
         self.runners = []
+        self.trainers = []
         for k in self.models.keys():
             model = self.models[k]
             opti = self.optimisers[k]
-            self.runners.append(runner.ModelRunner(model, self.loss_fn, opti))
+            self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis))
 
         for k, (algo, fixed_asterisms_only) in self.tomo.items():
-            self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, fixed_asterisms_only))
+            self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, fixed_asterisms_only))
 
-        self.runners.append(runner.OpenLoopRunner(self.loss_fn))
+        self.runners.append(runner.OpenLoopRunner(self.loss_fn, cfg.basis))
+        self.runners.append(runner.FittingErrorRunner(self.loss_fn, cfg.basis))
     
     def _run_epoch(self, data, func="train"):
         results = {}
 
-        for r in self.runners:
-            results[r.name] = []
-
-        for r in self.runners:
-            if func == "train":
+        if func == "train":
+            for r in self.trainers:
                 logger.info(f"{r.name}: Training")
-                results[r.name].append(r.train(data))
-            else:
+                results[r.name] = r.train(data)
+        else:
+            for r in self.trainers:
                 logger.info(f"{r.name}: Testing")
-                results[r.name].append(r.test(data))
+                results[r.name] = r.test(data)
+
+            for r in self.runners:
+                logger.info(f"{r.name}: Running")
+                results[r.name] = r.test(data)
 
         return results
     

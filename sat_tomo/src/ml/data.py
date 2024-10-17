@@ -89,15 +89,16 @@ class TomographyData(Dataset):
         asterism = self.asterisms[ast_idx]
 
         target_coeffs = self.target.cutout_coeffs(self.basis, self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
+        target_screen = self.target.total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         
         asterism_coeffs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters)
         X = self.pack(asterism_coeffs, asterism)
         
         logger.debug(f"X: {X.shape}, target: {target_coeffs.shape}")
 
-        return X, target_coeffs
+        return X, target_coeffs, target_screen
     
-    def get_dataloader(self, shuffle=True):
+    def get_dataloader(self, shuffle=False):
         logger.debug(f"Loading dataloader, batch_size={self.n}")
         return DataLoader(self, batch_size=self.n, shuffle=shuffle)
 

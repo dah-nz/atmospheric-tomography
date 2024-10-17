@@ -43,9 +43,11 @@ class Beacon():
         ----------
         altitude: float     Altitude of layer (metres)
         """
-        return util.azimuth2cart(altitude, self.gamma, self.theta)
+        pos = util.azimuth2cart(altitude, self.gamma, self.theta)
+        # print(pos, altitude, self.gamma, self.theta)
+        return pos 
     
-    def cutout(self, diameter, layer_altitude, phase_screen, phase_screen_size):
+    def cutout(self, diameter, layer_altitude, phase_screen, phase_screen_size, remove_piston=False, full_phase=False):
         """
         Get the beacon wavefront projection on a layer at an altitude for optical simulation
 
@@ -55,6 +57,9 @@ class Beacon():
         layer_altitude: float       Layer altitude (metres)
         phase_screen: 2d array      Phase screen at layer - fully covers the metapupil at the layer
         phase_screen_size: float    Size of phase screen extent (largest dimension) (metres)
+
+        remove_piston: bool         Return the cutout with no piston offset (default = False)
+        full_phase: bool            Return the cutout as the only non-zero part of a full size screen (deafult = False)
 
         Return
         ------
@@ -68,29 +73,49 @@ class Beacon():
         screen_dim = max(phase_screen.shape)
 
         # print(screen_dim, phase_screen_size, pos)
-        pix_x, pix_y = util.cart2imagespace(screen_dim, phase_screen_size, pos)
+        pix_x, pix_y = util.cart2imagespace(screen_dim, phase_screen_size, pos, dtype=float)
 
         cut_out_dim = screen_dim * (diameter / phase_screen_size)
-        r = int(cut_out_dim / 2 + 0.5)
+        # r = int(cut_out_dim / 2 + 0.5)
+        r = cut_out_dim / 2.0
 
         # print(pix_x, pix_y, r, cut_out_dim)
 
-        # x0 = max(0, pix_x-r)
-        # y0 = max(0, pix_y-r)
+        x0 = int(pix_x - r + 0.5)
+        y0 = int(pix_y - r + 0.5)
 
-        # x1 = min(screen_dim, pix_x+r)
-        # y1 = min(screen_dim, pix_y+r)
-
-        # print(x0, x1, y0, y1)
-
-        phase = phase_screen[pix_y-r:pix_y+r, pix_x-r:pix_x+r]
-
-        if self.aperture_mask:
-            # print(self.aperture_mask.shape, phase.shape, phase_screen.shape)
-            return phase * self.aperture_mask
+        if self.aperture_mask is None:
+            x1 = x0 + int(cut_out_dim)
+            y1 = y0 + int(cut_out_dim)
         else:
+            x1 = x0 + self.aperture_mask.shape[0]
+            y1 = y0 + self.aperture_mask.shape[0]
+
+        if y0 < 0 or x0 < 0:
+            print(pos, pix_x, pix_y, r, cut_out_dim, screen_dim, phase_screen_size, x0, x1, y0, y1)
+            quit()
+
+        phase = phase_screen[y0:y1, x0:x1]
+
+
+        if self.aperture_mask is not None:
+            # print(self.aperture_mask.shape, phase.shape, phase_screen.shape)
+            if remove_piston:
+                phase = (phase - np.average(phase, weights=self.aperture_mask)) * self.aperture_mask
+            else:
+                phase = phase * self.aperture_mask
+        elif remove_piston:
             # print(phase.shape, phase_screen.shape)
-            return phase        
+            phase = phase - np.average(phase)
+
+        # print(phase.shape)
+
+        if full_phase:
+            base = np.zeros_like(phase_screen)
+            base[y0:y1, x0:x1] = phase
+            return base
+
+        return phase 
 
     def total_cutout(self, diameter, layer_altitudes, layer_screens, layer_sizes):
         """
@@ -111,11 +136,15 @@ class Beacon():
         try:
             cutouts = np.array([self.cutout(diameter, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, layer_sizes)])
         except ValueError as err:
-            print(diameter, layer_altitudes, layer_screens, layer_sizes)
+            print(diameter, layer_altitudes, layer_screens.shape, layer_sizes)
             raise err
 
         cutout = np.sum(cutouts, 0)
-        return cutout - np.average(cutout)
+        if self.aperture_mask is not None:
+            cutout = (cutout - np.average(cutout, weights=self.aperture_mask)) * self.aperture_mask
+        else:
+            cutout = cutout - np.average(cutout)
+        return cutout
     
     def cutout_coeffs(self, basis, diameter, layer_altitudes, layer_screens, layer_sizes):
         """

@@ -15,9 +15,9 @@ class Config():
 
         self.D =                    1.8 # metres
         self.aperture_size =        64 # pixels
-        self.layer_conditions =     [0.05, 0.05, 0.05] # metres
+        self.layer_conditions =     [0.07, 0.07, 0.07] # metres
         self.altitudes =            [1000, 5000, 10000] # metres
-        self.fixed_asterism_angle = 30 # arcseconds
+        self.fixed_asterism_angle = 15 # arcseconds
         self.asterism_magnitude =   14 # M
 
         self.model_names = ['MLNN_baseline']
@@ -25,26 +25,24 @@ class Config():
 
         #   Name                Fixed asterisms only
         self.tomo_methods = {
-            "LeastSquares":     True,
-            "GLAO":             False,
-            "Average":          False,
-            "ScaledAverage":    False
+            "LeastSquares":     False,
+            "GLAO":             False
             }
 
-        TRAINING_SIZE = 128
-        TEST_SIZE = 64
+        TRAINING_SIZE = 64
+        TEST_SIZE = 8
         #   num epochs, screens per epoch, training batch size, testing_batch_size
         self.regime = [
-            ( 1,  4, TRAINING_SIZE, TEST_SIZE),
-            ( 1,  8, TRAINING_SIZE, TEST_SIZE),
-            ( 1, 16, TRAINING_SIZE, TEST_SIZE),
-            ( 1, 32, TRAINING_SIZE, TEST_SIZE),
-            ( 1, 64, TRAINING_SIZE, TEST_SIZE)]
-            # ( 8,  4, TRAINING_SIZE, TEST_SIZE),
-            # (12,  8, TRAINING_SIZE, TEST_SIZE),
+            # ( 8, 16, TRAINING_SIZE, TEST_SIZE),
             # (12, 16, TRAINING_SIZE, TEST_SIZE),
-            # (16, 32, TRAINING_SIZE, TEST_SIZE),
-            # (16, 64, TRAINING_SIZE, TEST_SIZE)]
+            # (12, 16, TRAINING_SIZE, TEST_SIZE),
+            # (16, 16, TRAINING_SIZE, TEST_SIZE),
+            # (16, 16, TRAINING_SIZE, TEST_SIZE)]
+            ( 8,  4, TRAINING_SIZE, TEST_SIZE),
+            (12,  8, TRAINING_SIZE, TEST_SIZE),
+            (12, 16, TRAINING_SIZE, TEST_SIZE),
+            (16, 32, TRAINING_SIZE, TEST_SIZE),
+            (16, 32, TRAINING_SIZE, TEST_SIZE)]
 
         self.LReLU_grad = 0.01
         self.dropout_rate = 0.3

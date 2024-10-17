@@ -124,6 +124,8 @@ class Zernike(Basis):
             coef = coef / (np.prod(np.arange(1, s + 1)) * np.prod(np.arange(1, smaxk - s + 1)) * np.prod(np.arange(1, smax - s + 1)))
             p = (n - 2 * s)
             Rnm = Rnm + coef * (r ** p)
+            # if (r == 0).any():
+            #     print(coef, r, p)
 
         if m == 0:
             z = np.sqrt(n + 1) * Rnm

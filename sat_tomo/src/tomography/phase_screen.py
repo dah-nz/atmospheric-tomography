@@ -36,6 +36,7 @@ class PhaseScreenGenerator():
         self.D = D
         self.r0 = r0
         self.size = size
+        self.mask = util.circle(self.size)
         # self.cache = {}
 
     def _at(self):
@@ -54,6 +55,10 @@ class PhaseScreenGenerator():
         if cut_out is not None:
             screens = [self._get_raw() for _ in range(n)]
             k = self.find_scaling(cut_out, screens)
+            screens = [scr - np.average(scr, weights=self.mask) * self.mask * k for scr in screens]
+        else:
+            screens = [self._get_raw() for _ in range(n)]
+            screens = [scr - np.average(scr, weights=self.mask) * self.mask * k for scr in screens]
 
         return [np.float32(scr) * k for scr in screens]
 
