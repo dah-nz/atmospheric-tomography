@@ -22,7 +22,7 @@ def train(data, model, loss_fn, optimizer, mean=True):
     train_data = data.get_dataloader()
 
     for X, y in train_data:
-        logger.debug(f"X: {X.shape}, y: {y.shape}")
+        logger.info(f"X: {X.shape}, y: {y.shape}")
 
         X, y = X.to(device), y.to(device)
 

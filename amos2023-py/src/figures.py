@@ -1,6 +1,8 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import ml.dataset
 from util import log
+
 
 log.default_logging_level = log.logging.INFO
 logger = log.get_logger(__name__)
@@ -11,11 +13,34 @@ from parameters import test as test_file
 settings = test_file.load(file="settings.json", dir="./src/parameters/")
 
 # Code to generate figures for papers/thesis
+D = settings["D"]
+n_modes = settings["n_coeffs"]
+
+# Layer footprints
+from tomography import beacon
+from util.util import get_layer_shapes, pol2cart
+
+altitudes = settings["layer_altitudes"] 
+fixed_angle = settings["fixed_asterism_angle"]
+asterism = np.array([beacon.Beacon(t, fixed_angle) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)])
+
+mds, pxs = get_layer_shapes(altitudes, asterism, D, 256)
+
+def getCircle(radius, n_points, centre=(0,0), angle=2*np.pi):
+    circle = [pol2cart(radius, t/n_points*angle) for t in range(n_points + 1)]
+    return [x + centre[0] for x, y in circle], [y + centre[1] for x, y in circle] 
+
+fig, axs = plt.subplots(1, 3)
+for i, (altitude, md) in enumerate(zip(altitudes, mds)):
+    x, y = getCircle(md/2, 64)
+    axs[i].plot(y, x)
+    for b in asterism:
+        c = b.position(altitude)
+        x, y = getCircle(D/2, 64, c)
+        axs[i].plot(y, x)
 
 # 1 - Reconstruction estimates
 
-D = 1.0
-n_modes = 32
 
 # load model
 import ml
@@ -53,7 +78,7 @@ data.select(ml.dataset.FIXED)
 
 print("Index,MSE (O-Ideal),MSE (O-LSQ),MSE (O-ML),MSE (O-Open Loop),MSE (I-LSQ),MSE (I-ML),MSE (I-Open Loop),MSE Coeffs (LSQ),MSE Coeffs (ML),MSE Coeffs (OL)")
 import util
-mask = util.util.circle(128, 256)
+mask = util.util.circle(settings["aperture_size"] / 2, settings["aperture_size"])
 
 def shiftandmask(screen):
     screen = mask * screen
@@ -70,7 +95,7 @@ def generate_screens(idx):
         n_screens.append(z.compose(screen.shape, coeffs))
     return n_screens
 
-for i in range(128):
+for i in range(3):
     # Cut out original target phase screen
     screens = generate_screens(i)
     target_screen = util.util.get_cutout(data.target, screens, data.altitudes, D, data.metapupil_diameters)
@@ -93,6 +118,7 @@ for i in range(128):
     mse_lsq_coeffs = util.util.mse(target_coeffs, lsq_coeffs)
 
     # run ML reconstruction
+
     import torch
     mdl = models.model_fix
     with torch.no_grad():
@@ -102,6 +128,8 @@ for i in range(128):
         pred = mdl(X)
 
     pred = pred.to("cpu").numpy()[0]
+    # pred = np.zeros_like(lsq_coeffs)
+
     ml_recon = z.compose(data.cut_out, pred)
     ml_recon = shiftandmask(ml_recon)
     mse_ml = util.util.mse(target_screen, ml_recon)
@@ -116,9 +144,8 @@ for i in range(128):
 
     print(f"{i},{mse_best},{mse_lsq},{mse_ml},{mse_ol},{mse_i_lsq},{mse_i_ml},{mse_i_ol},{mse_lsq_coeffs},{mse_ml_coeffs},{mse_ol_coeffs}")
 
-    if i % 8 == 0:
-        import matplotlib.pyplot as plt
-
+    # if i % 8 == 0:
+    if i % 1 == 0:
         vmx = np.amax(target_screen)
         vmn = np.amin(target_screen)
 

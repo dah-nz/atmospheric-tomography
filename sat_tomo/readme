@@ -1,0 +1,22 @@
+Machine learning approach for atmospheric tomography for satellite imaging
+
+To achieve atmospheric tomography for a moving satellite against a static background starfield,
+we need to simulate the atmospheric phase screens and retrieve satellite data.
+
+This is a clean up of my last 18 months of work, with the intention of adding a robust testing regime to ensure confidence.
+I have recently run into times when the results were not robust and I was never sure if it was my code or the algorithms themselves.
+
+Data preparation
+ - Phase screens
+ - Satellite and starfield information
+ - Model configurations
+
+Simulation
+ - Running tomography
+ - Training models
+ - Save results and constituent model states
+
+Data visualisation
+ - Show statistics and graphs
+
+

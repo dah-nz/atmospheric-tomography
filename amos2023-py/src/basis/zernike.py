@@ -13,7 +13,7 @@ class Zernike(Basis):
     out(grid, order)    Return nth-order Zernike polynomial on a grid
     """
     def __init__(self, max_coeffs):
-        super().__init__(max_coeffs, "Zernike", mask=True)
+        super().__init__(max_coeffs, "Zernike", mask=False)
 
     @lru_cache(maxsize=64)
     def out(self, size, order):
@@ -44,7 +44,7 @@ class Zernike(Basis):
         for n in range(self.N + offset):
             z[n] = mask * np.float64(self.__zernike(screen.shape, n))
 
-        # screen = mask * screen
+        screen = mask * screen
 
         # Do 2D dot product of each basis function mode with the input phase screen
         return [np.sum(screen * z[n], dtype=np.float64)/np.sum(z[n] * z[n]) for n in range(offset, self.N + offset)]
@@ -88,21 +88,22 @@ class Zernike(Basis):
         """
         N = (min(dim) + 1) / 2
         radius = min(dim) / 2
-        sq_radius = radius ** 2
+        # sq_radius = radius ** 2
         
-        x = np.arange(-N, N)
-        y = np.arange(-N, N)
+        x = np.arange(-N, N-1)
+        y = np.arange(-N, N-1)
 
         [l, k] = np.meshgrid(x, y)
 
-        sq_distance = k ** 2 + l ** 2
+        # sq_distance = k ** 2 + l ** 2
 
         x = l/radius
         y = k/radius
 
         zernicoef = self.__zerni(x, y, order)
-        mask = sq_distance <= sq_radius
-        zernicoef = zernicoef * mask
+        circle(radius, min(dim))
+        # mask = sq_distance <= sq_radius
+        zernicoef = zernicoef * circle(radius, min(dim))
         zernicoef = zernicoef[0:(dim[0]), 0:(dim[1])]
 
         return zernicoef

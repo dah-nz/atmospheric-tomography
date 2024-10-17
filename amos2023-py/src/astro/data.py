@@ -4,7 +4,7 @@ import scipy
 
 from util import log
 
-# FAKE_DATA = False
+FAKE_DATA = True
 
 logger = log.get_logger(__name__)
 log.setup_logger(logger)
@@ -12,17 +12,17 @@ log.setup_logger(logger)
 cache = {}
 
 def load_asterism_data(mag, n=None, limit=0, rng=None):
-    # if FAKE_DATA:
-    #     data = np.array([])
-    #     if n is None:
-    #         n = 4000000
-    #     while data.shape[0] < 3 * n:
-    #         rv = scipy.stats.f.rvs(dfn=4.020191395386492, dfd=22.268375991917118, loc=-0.25540424058542954, scale=131.00472358386284, size=(3 * n))
-    #         rv = rv[rv > 0]
-    #         rv = rv[rv < limit]
-    #         data = np.concatenate((data, rv))
-    #     data = data[:3*n]
-    #     return data.reshape((-1, 3))
+    if FAKE_DATA:
+        data = np.array([])
+        if n is None:
+            n = 4000000
+        while data.shape[0] < 3 * n:
+            rv = scipy.stats.f.rvs(dfn=4.020191395386492, dfd=22.268375991917118, loc=-0.25540424058542954, scale=131.00472358386284, size=(3 * n))
+            rv = rv[rv > 0]
+            rv = rv[rv < limit]
+            data = np.concatenate((data, rv))
+        data = data[:3*n]
+        return data.reshape((-1, 3))
     
     data = []
     # Stars 1, 2, 3
