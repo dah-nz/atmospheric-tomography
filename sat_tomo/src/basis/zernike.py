@@ -1,5 +1,6 @@
 from functools import lru_cache
 import numpy as np
+import scipy
 
 from basis.basis import Basis
 from util import circle
@@ -104,6 +105,9 @@ class Zernike(Basis):
 
         return zernicoef
 
+    def zerni(self, x, y, j):
+        return self.__zerni(x, y, j)
+
     def __zerni(self, x, y, j):
         Rnm = 0
         n = 0
@@ -124,8 +128,8 @@ class Zernike(Basis):
             coef = coef / (np.prod(np.arange(1, s + 1)) * np.prod(np.arange(1, smaxk - s + 1)) * np.prod(np.arange(1, smax - s + 1)))
             p = (n - 2 * s)
             Rnm = Rnm + coef * (r ** p)
-            # if (r == 0).any():
-            #     print(coef, r, p)
+            if (r == 0).any() and p < 0:
+                print(coef, r, p)
 
         if m == 0:
             z = np.sqrt(n + 1) * Rnm

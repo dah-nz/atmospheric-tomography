@@ -59,7 +59,7 @@ class Beacon():
         phase_screen_size: float    Size of phase screen extent (largest dimension) (metres)
 
         remove_piston: bool         Return the cutout with no piston offset (default = False)
-        full_phase: bool            Return the cutout as the only non-zero part of a full size screen (deafult = False)
+        full_phase: bool            Return the cutout as the only non-zero part of a full size screen (default = False)
 
         Return
         ------
@@ -91,12 +91,11 @@ class Beacon():
             x1 = x0 + self.aperture_mask.shape[0]
             y1 = y0 + self.aperture_mask.shape[0]
 
-        if y0 < 0 or x0 < 0:
+        if y0 < 0 or x0 < 0 or x1 > screen_dim or y1 > screen_dim:
             print(pos, pix_x, pix_y, r, cut_out_dim, screen_dim, phase_screen_size, x0, x1, y0, y1)
             quit()
 
         phase = phase_screen[y0:y1, x0:x1]
-
 
         if self.aperture_mask is not None:
             # print(self.aperture_mask.shape, phase.shape, phase_screen.shape)
@@ -133,11 +132,11 @@ class Beacon():
         total wavefront phase screen, summed across all altitudes, with any resultant offset (piston mode) removed.
             
         """
-        try:
-            cutouts = np.array([self.cutout(diameter, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, layer_sizes)])
-        except ValueError as err:
-            print(diameter, layer_altitudes, layer_screens.shape, layer_sizes)
-            raise err
+        # try:
+        cutouts = np.array([self.cutout(diameter, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, layer_sizes)])
+        # except ValueError as err:
+        #     print(diameter, layer_altitudes, layer_screens.shape, layer_sizes)
+        #     raise err
 
         cutout = np.sum(cutouts, 0)
         if self.aperture_mask is not None:

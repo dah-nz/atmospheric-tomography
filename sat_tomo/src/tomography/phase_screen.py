@@ -60,6 +60,8 @@ class PhaseScreenGenerator():
             screens = [self._get_raw() for _ in range(n)]
             screens = [scr - np.average(scr, weights=self.mask) * self.mask * k for scr in screens]
 
+        print(k)
+
         return [np.float32(scr) * k for scr in screens]
 
 
@@ -98,7 +100,8 @@ class PhaseScreenGenerator():
         self._exp_sigma = self._expected_sigma()
         self._est_sigma = self._estimated_sigma(cut_out_size, screens, min(len(screens), 20))
 
-        self.k = self._exp_sigma / self._est_sigma
+        self.k = np.sqrt(self._exp_sigma / self._est_sigma)
+        print(self.k, self._exp_sigma, self._est_sigma)
         return self.k
 
     def _expected_sigma(self):
@@ -110,7 +113,8 @@ class PhaseScreenGenerator():
         ----------
             sigma (rads)
         """
-        return np.sqrt(1.0299*(self.D/self.r0)**(5/3))
+        # return np.sqrt(1.0299*(self.D/self.r0)**(5/3))
+        return 1.0299*(self.D/self.r0)**(5/3)
 
     def _estimated_sigma(self, cut_out_size, screens, N=20):
         """
@@ -142,7 +146,8 @@ class PhaseScreenGenerator():
                     y0 = self.rng.integers(0, y_max)
                 else:
                     y0 = 0
-                sigma.append(util.rmse(screen[x0:x0+size, y0:y0+size], z, mask=mask))
+                # sigma.append(util.rmse(screen[x0:x0+size, y0:y0+size], z, mask=mask))
+                sigma.append(util.mse(screen[x0:x0+size, y0:y0+size], z, mask=mask))
 
         return np.mean(sigma)
 
@@ -161,6 +166,7 @@ class Atmosphere():
         self.generators = [PhaseScreenGenerator(s, self.D, r0, self.rng) for s, r0 in zip(self.layer_shapes, self.layer_r0)]
         self.n = n
         self.screens = [gen.generate(self.n, cut_out=self.cut_out) for gen in self.generators]
+
     def __len__(self):
         return self.n
     def __getitem__(self, idx):

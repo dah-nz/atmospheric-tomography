@@ -94,8 +94,8 @@ def cart2imagespace(image_dim, d, location, dtype=int):
     tuple with x, y pixel location
     """
     center = image_dim / 2
-    x = center + ( location[0] * image_dim / d)# - 0.5
-    y = center + (-location[1] * image_dim / d)# - 0.5
+    x = center + ( location[0] * image_dim / d)
+    y = center + (-location[1] * image_dim / d)
     
     return (dtype(x), dtype(y))
 
@@ -129,3 +129,7 @@ def mse(a, b, mask=None):
         return np.sum((mask * (a - b)) ** 2) / np.sum(mask)
     else:
         return ((a - b) ** 2).mean()
+    
+def array_centroid(x):
+    xis, yis = np.nonzero(x)
+    return xis.mean(), yis.mean()

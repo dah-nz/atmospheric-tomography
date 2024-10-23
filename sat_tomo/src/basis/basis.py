@@ -25,9 +25,13 @@ class Basis():
         phase:
             Phase screen created from set of basis functions and coefficients       
         """
-        if type(size) is int:
-            size = (size, size)
-        phase = np.zeros(size, dtype=np.float64)
+        try:
+            if type(size) is int:
+                size = (size, size)
+            phase = np.zeros(size, dtype=np.float64)
+        except TypeError:
+            size = (int(size), int(size))
+            phase = np.zeros(size, dtype=np.float64)
         for m, c in enumerate(coefficients):
             phase += np.float64(c * self.out(size, m))
 

@@ -1,6 +1,7 @@
 import numpy as np
 from functools import lru_cache
-from tomography import beacon
+from tomography import beacon, projection
+from basis import zernike
 
 import matplotlib.pyplot as plt
 import util
@@ -62,58 +63,171 @@ class Tomography():
         return get_layer_shapes(beacons, self.altitudes, self.D, self.aperture_size)
     
     @lru_cache(maxsize=256)
-    def projection_matrix(self, theta, gamma, altitude, layer_size, layer_pixels):
+    def projection_matrix(self, theta, gamma, altitude, layer_size, layer_pixels, grid_not_pix=True):
         global proj_data
         # split beacon into theta and gamma to make the caching a bit easier
-        b = beacon.Beacon(theta, gamma) #, aperture_mask=util.circle(self.aperture_size))
+        b = beacon.Beacon(theta, gamma, aperture_mask=util.circle(self.aperture_size))
         p = (layer_pixels, layer_pixels)
 
-        def get_single(n, i):
-            A = np.zeros(n)
-            A[i] = 1.0
-            return A
-        coeffs = [get_single(self.n_modes, i) for i in range(self.n_modes)]
-        # coeffs = []
-        for _ in range(50):#self.n_modes):
-            coeffs.append(np.random.normal(size=self.n_modes))
-        cutout_coeffs = []
+        # fig, axs = plt.subplots(2, 4)
+        # fig.suptitle("Constituent Matrices for Projection Matrix")
 
-        for cos in coeffs:
-            scr = self.basis.compose(p, cos)
-            co = b.cutout(self.D, altitude, scr, layer_size, remove_piston=True)
-            cutout_coeffs.append(self.basis.decompose(co))
-            
-        coeffs = np.array(coeffs)
-        cutout_coeffs = np.array(cutout_coeffs)
+        if grid_not_pix:
+            location = b.position(altitude)
+            location = (location[0] / (layer_size / 2), location[1] / (layer_size / 2))
+            diameter = self.D / layer_size
+            # diameter = 1 - np.sqrt(location[0] ** 2 + location[1] ** 2)
+            # diameter1 = self.aperture_size / layer_pixels
+            # print(f"{self.D:.3f}, {layer_size:.3f}, {self.D/layer_size:.3f}")
 
-        B = np.linalg.pinv(coeffs)
-        P = np.matmul(cutout_coeffs.T, B.T)
+            P = projection.projectionMatrix(location, diameter, self.n_modes).T
 
-        eps = 1e-12
-        P = (np.abs(P) > eps) * P
+        else:
+            def get_single(n, i):
+                A = np.zeros(n)
+                A[i] = 1.0
+                return A
+            coeffs = [get_single(self.n_modes, i) for i in range(self.n_modes)]
+            # # coeffs = []
+            for _ in range(1):#self.n_modes):
+                coeffs.append(np.random.normal(size=self.n_modes))
+            cutout_coeffs = []
+
+            for i, cos in enumerate(coeffs):
+                scr = self.basis.compose(p, cos)
+                co = b.cutout(self.D, altitude, scr, layer_size) #, remove_piston=True)
+                cutout_coeffs.append(self.basis.decompose(co))
+                # if i == self.n_modes:
+                #     b1 = b.cutout(self.D, altitude, scr, layer_size, full_phase=True)
+                #     axs[1, 0].imshow(scr)
+                #     axs[1, 0].set_title("Screen")
+                #     axs[1, 1].imshow(b1)
+                #     axs[1, 1].set_title("Cutout Position")
+                #     axs[1, 2].imshow(scr - b1)
+                #     axs[1, 2].set_title("Cutout Diff")
+                #     xm, ym = util.array_centroid(scr)
+                #     axs[1, 2].plot([0, scr.shape[1]], [xm, xm], 'k:')
+                #     axs[1, 2].plot([ym, ym], [0, scr.shape[0]], 'k:')
+                #     axs[1, 2].plot([0, scr.shape[1]], [xm, xm], 'k:')
+                #     axs[1, 2].plot([ym, ym], [0, scr.shape[0]], 'k:')
+                #     xb, yb = util.array_centroid(b1)
+                #     axs[1, 2].plot([yb, yb], [0, scr.shape[1]], 'r:')
+                #     axs[1, 2].plot([0, scr.shape[0]], [xb, xb], 'r:')
+                #     axs[1, 2].plot([yb, yb], [0, scr.shape[1]], 'r:')
+                #     axs[1, 2].plot([0, scr.shape[0]], [xb, xb], 'r:')
+                #     axs[1, 3].imshow(co)
+                #     axs[1, 3].set_title("Cutout")
+
+
+                
+            coeffs = np.array(coeffs).T
+            cutout_coeffs = np.array(cutout_coeffs).T
+
+            eps = 1e-8
+            B = np.linalg.pinv(coeffs, rcond=eps)
+            P = np.matmul(cutout_coeffs, B)
+
+        #     axs[0, 0].imshow(coeffs)
+        #     axs[0, 0].set_title("Metapupil Coeffs ($W$)")
+        #     axs[0, 1].imshow(cutout_coeffs)
+        #     axs[0, 1].set_title("Aperture Coeffs ($L$)")
+        #     axs[0, 2].imshow(B)
+        #     axs[0, 2].set_title(f"$W^\\dagger$, eps={eps}")
+        # axs[0, 3].imshow(P)
+        # axs[0, 3].set_title("$A = LW^\\dagger$")
+        # fig.tight_layout(pad=1.02)
+
+
+        # print(coeffs)
+        # print(cutout_coeffs)
+
+
+        # P = (np.abs(P) > eps) * P
 
         # print(f"Cond - B:{np.linalg.cond(B)}, cutout_coeffs: {np.linalg.cond(cutout_coeffs)}, P: {np.linalg.cond(P)}")
         # c = np.linalg.cond(cutout_coeffs)
         # if c > 100000:
         #     print(f"cond: {c:.1f}; cond_P: {np.linalg.cond(P):.2f}; theta: {theta:.2f}; gamma: {gamma:.1f}; altitude: {altitude}; size: {layer_size:.2f}; pixels: {layer_pixels}")
 
-        proj_data["cond_cc"]      .append(np.linalg.cond(cutout_coeffs))
-        proj_data["cond_p"]       .append(np.linalg.cond(P))
-        proj_data["cond_b"]       .append(np.linalg.cond(B))
-        proj_data["altitude"]     .append(altitude)
-        proj_data["theta"]        .append(theta)
-        proj_data["gamma"]        .append(gamma)
-        proj_data["layer_size"]   .append(layer_size)
-        proj_data["layer_pixels"] .append(layer_pixels)
+        # proj_data["cond_cc"]      .append(np.linalg.cond(A))
+        # proj_data["cond_p"]       .append(np.linalg.cond(P))
+        # proj_data["cond_b"]       .append(np.linalg.cond(B))
+        # proj_data["altitude"]     .append(altitude)
+        # proj_data["theta"]        .append(theta)
+        # proj_data["gamma"]        .append(gamma)
+        # proj_data["layer_size"]   .append(layer_size)
+        # proj_data["layer_pixels"] .append(layer_pixels)
 
         return P
 
+    # # Get/generate grid of points to use in creating projection matrices
+    # @lru_cache(maxsize=256)
+    # def getGrid(self, N):
+    #     radius = [((n+1)/N)**0.3 for n in range(N)]
+    #     theta = [np.pi*np.pi*N*r for r in radius]
+    #     grid = [util.pol2cart(r, t) for r, t in zip(radius, theta)]
+    #     return grid
+
+    # # Translate points on a grid
+    # def translateGrid(self, grid, shift):
+    #     return [(x + shift[0], y - shift[1]) for x, y in grid]
+
+    # # Scale points on a grid
+    # def scaleGrid(self, grid, scale):
+    #     T = scale * np.identity(2)
+    #     return [np.matmul(T, g) for g in grid]
+
+    # # Generate projection matrix given a circular portion of a unit circle
+    # #   Inputs      location     - location of circular portion
+    # #               diameter     - relative diameter of circular portion (1 = same size as metapupil)
+    # #               nModes       - number of Zernike modes
+    # @lru_cache(maxsize=256)
+    # def projection_matrix2(self, theta, gamma, altitude, layer_size, layer_pixels):
+    #     global proj_data
+    #     location = beacon.Beacon(theta, gamma).position(altitude)
+    #     #  location, diameter, nModes):
+
+    #     nModes = self.n_modes
+    #     sz = (layer_size, layer_size)
+        
+    #     gridSize = 5 * nModes
+    #     unitGrid = self.getGrid(gridSize)
+
+    #     G = np.zeros((nModes, gridSize))
+    #     for j in range(nModes):
+    #         for i, (x, y) in enumerate(unitGrid):
+    #             G[j, i] = self.basis.at_point(x, y, sz, j + 1)
+    #     Ginv = np.linalg.pinv(G)
+
+    #     portGrid = self.scaleGrid(unitGrid, self.D)
+    #     portGrid = self.translateGrid(portGrid, location)
+
+    #     Y = np.zeros((nModes, gridSize))
+    #     for j in range(nModes):
+    #         for i, (x,y) in enumerate(portGrid):
+    #             Y[j, i] = self.basis.at_point(x, y, sz, j + 1)
+
+    #     P = np.matmul(Y, Ginv).T
+    #     eps = 1e-12
+    #     P = (np.abs(P) > eps) * P
+
+    #     proj_data["cond_cc"]      .append(None) #np.linalg.cond(cutout_coeffs))
+    #     proj_data["cond_p"]       .append(np.linalg.cond(P))
+    #     proj_data["cond_b"]       .append(None) #np.linalg.cond(B))
+    #     proj_data["altitude"]     .append(altitude)
+    #     proj_data["theta"]        .append(theta)
+    #     proj_data["gamma"]        .append(gamma)
+    #     proj_data["layer_size"]   .append(layer_size)
+    #     proj_data["layer_pixels"] .append(layer_pixels)
+
+    #     return P
+    
 
 class LeastSquares(Tomography):
     def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size)
 
-    def run(self, beacons, target, beacon_coeffs):
+    def run(self, beacons, target, beacon_coeffs, display=False, proj_grid=False):
         """
         Runs least squares tomography algorithm
 
@@ -134,16 +248,61 @@ class LeastSquares(Tomography):
         layers_sizes, layer_pixels = self.get_layer_shapes(beacons)
         beacon_coeffs = beacon_coeffs.flatten()
 
-        A = np.concatenate([np.concatenate([self.projection_matrix(bcn.theta, bcn._gamma_arcsec, a, s, p) for bcn in beacons], 0) for a, s, p in zip(self.altitudes, layers_sizes, layer_pixels)], 1)
+
+        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=proj_grid)
+
+        T = self.t_mat(target, layers_sizes, layer_pixels, grid=proj_grid)
+
+        eps = 1e-6
+        M = np.matmul(T, np.linalg.pinv(A, rcond=eps))
+        # fig, axs = plt.subplots(1, 2)
+        # axs[0].imshow(M)
         
-        T = np.concatenate([self.projection_matrix(target.theta, target._gamma_arcsec, a, s, p) for a, s, p in zip(self.altitudes, layers_sizes, layer_pixels)], 1)
-        
-        M = np.linalg.pinv(np.matmul(A, np.linalg.pinv(T)))
+        # M = np.linalg.pinv(np.matmul(A, np.linalg.pinv(T, rcond=eps)), rcond=eps)
+        # axs[1].imshow(M)
 
         L = np.array(beacon_coeffs)
         target_coeffs = np.matmul(M, L)
 
+        if display:
+            fig, axs = plt.subplots(1, 3)
+            fig.suptitle("Tomography Matrices")
+            axs[0].imshow(A)
+            axs[0].set_title("$A$")
+            axs[1].imshow(T)
+            axs[1].set_title("$T$")
+            axs[2].imshow(M)
+            axs[2].set_title("$(AT^\\dagger)^\\dagger$")
+            fig.tight_layout(pad=1.02)
+
+            fig, axs = plt.subplots(1, 2)
+            axs[1].imshow(np.expand_dims(target_coeffs, axis=1))
+            axs[1].set_title("$W_t = (AT^\\dagger)^\\dagger L$")
+            axs[0].imshow(np.expand_dims(L, axis=1))
+            axs[0].set_title("$L$")
+            fig.tight_layout(pad=1.02)
+
         return target_coeffs
+    
+    def a_mat(self, bcns, szs, pxs, grid=False):
+        # return self.projection_matrix(bcns, self.altitudes, szs, pxs)
+        concat = np.concatenate
+        proj = self.projection_matrix
+        alts = self.altitudes
+        A = concat([concat([proj(bcn.theta, bcn._gamma_arcsec, a, s, p, grid) for bcn in bcns], 0) for a, s, p in zip(alts, szs, pxs)], 1)
+        # plt.figure()
+        # plt.imshow(A)
+        return A
+    
+    def t_mat(self, tgt, szs, pxs, grid=False):
+        # return self.projection_matrix([tgt], self.altitudes, szs, pxs)
+        concat = np.concatenate
+        proj = self.projection_matrix
+        alts = self.altitudes
+        T = concat([proj(tgt.theta, tgt._gamma_arcsec, a, s, p, grid) for a, s, p in zip(alts, szs, pxs)], 1)
+        # plt.figure()
+        # plt.imshow(T)
+        return T
     
 # class GLAO(Tomography):
 #     def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256):
@@ -291,6 +450,11 @@ def get_layer_shapes(beacons, altitudes, diameter, aperture_size):
     """
     layer_sizes = get_metapupil_diameters(altitudes, beacons, diameter)
     layer_pixels = [int(d/diameter * aperture_size + 1) for d in layer_sizes]
+
+    # for s, p, a in zip(layer_sizes, layer_pixels, altitudes):
+    #     print(f"sz: {s:.3f}, px: {p}, alt: {a}")
+    # print(f"d: {diameter}, beacons: {beacons}")
+
     return layer_sizes, layer_pixels
 
 def get_coeffs_for_asterism(asterism, basis, diameter, layer_screens, layer_altitudes, layer_sizes):
@@ -315,3 +479,4 @@ def get_coeffs_for_asterism(asterism, basis, diameter, layer_screens, layer_alti
     except AttributeError:
         coeffs = [np.array([b.cutout_coeffs(basis, diameter, layer_altitudes, layer_screens, layer_sizes) for b in a]) for a in asterism]
     return coeffs
+
