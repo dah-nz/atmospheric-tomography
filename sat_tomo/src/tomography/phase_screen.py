@@ -60,8 +60,6 @@ class PhaseScreenGenerator():
             screens = [self._get_raw() for _ in range(n)]
             screens = [scr - np.average(scr, weights=self.mask) * self.mask * k for scr in screens]
 
-        print(k)
-
         return [np.float32(scr) * k for scr in screens]
 
 
@@ -101,7 +99,7 @@ class PhaseScreenGenerator():
         self._est_sigma = self._estimated_sigma(cut_out_size, screens, min(len(screens), 20))
 
         self.k = np.sqrt(self._exp_sigma / self._est_sigma)
-        print(self.k, self._exp_sigma, self._est_sigma)
+        # print(self.k, self._exp_sigma, self._est_sigma)
         return self.k
 
     def _expected_sigma(self):
@@ -128,7 +126,7 @@ class PhaseScreenGenerator():
         """
         size = min(cut_out_size)
         mask = np.array(util.circle(size))
-        z = np.zeros_like(mask)
+        # z = np.zeros_like(mask)
 
         sigma = []
 
@@ -147,7 +145,7 @@ class PhaseScreenGenerator():
                 else:
                     y0 = 0
                 # sigma.append(util.rmse(screen[x0:x0+size, y0:y0+size], z, mask=mask))
-                sigma.append(util.mse(screen[x0:x0+size, y0:y0+size], z, mask=mask))
+                sigma.append(np.var(screen[x0:x0+size, y0:y0+size], where=mask))
 
         return np.mean(sigma)
 

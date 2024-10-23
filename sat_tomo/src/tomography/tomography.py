@@ -89,8 +89,8 @@ class Tomography():
                 return A
             coeffs = [get_single(self.n_modes, i) for i in range(self.n_modes)]
             # # coeffs = []
-            for _ in range(1):#self.n_modes):
-                coeffs.append(np.random.normal(size=self.n_modes))
+            # for _ in range(self.n_modes):
+            #     coeffs.append(np.random.normal(size=self.n_modes))
             cutout_coeffs = []
 
             for i, cos in enumerate(coeffs):
@@ -123,7 +123,7 @@ class Tomography():
             coeffs = np.array(coeffs).T
             cutout_coeffs = np.array(cutout_coeffs).T
 
-            eps = 1e-8
+            eps = 1e-4
             B = np.linalg.pinv(coeffs, rcond=eps)
             P = np.matmul(cutout_coeffs, B)
 
@@ -253,34 +253,75 @@ class LeastSquares(Tomography):
 
         T = self.t_mat(target, layers_sizes, layer_pixels, grid=proj_grid)
 
-        eps = 1e-6
-        M = np.matmul(T, np.linalg.pinv(A, rcond=eps))
+        eps = 1e-3
+        A_inv = np.linalg.pinv(A, rcond=eps)
+        M0 = np.matmul(T, A_inv)
         # fig, axs = plt.subplots(1, 2)
         # axs[0].imshow(M)
         
-        # M = np.linalg.pinv(np.matmul(A, np.linalg.pinv(T, rcond=eps)), rcond=eps)
+        T_inv = np.linalg.pinv(T, rcond=eps)
+        M1 = np.linalg.pinv(np.matmul(A, T_inv), rcond=eps)
+
+        # M = (M0 + M1) / 2
+        # M = 0.35 * M1 + 0.65 * M0
+        M = M1
+
+
         # axs[1].imshow(M)
 
         L = np.array(beacon_coeffs)
         target_coeffs = np.matmul(M, L)
 
         if display:
-            fig, axs = plt.subplots(1, 3)
+            r = np.linalg.matrix_rank
+            c = np.linalg.cond
+            print(f"rank A: {r(A)}; rank T: {r(T)}; rank TA+: {r(M0)}; rank (AT+)+: {r(M1)}; rank mix: {r(M)}")
+            print(f"cond A: {c(A)}; cond T: {c(T)}")
+            fig, axs = plt.subplots(3, 2)
             fig.suptitle("Tomography Matrices")
-            axs[0].imshow(A)
-            axs[0].set_title("$A$")
-            axs[1].imshow(T)
-            axs[1].set_title("$T$")
-            axs[2].imshow(M)
-            axs[2].set_title("$(AT^\\dagger)^\\dagger$")
+            axs[0, 0].imshow(A)
+            axs[0, 0].set_title("$A$")
+            axs[0, 1].imshow(T)
+            axs[0, 1].set_title("$T$")
+            # axs[0, 2].imshow(np.matmul(A, A_inv))
+            # axs[0, 2].set_title("$AA^\\dagger$")
+            # axs[0, 3].imshow(np.matmul(A_inv, A))
+            # axs[0, 3].set_title("$A^\\dagger A$")
+            axs[1, 0].imshow(A_inv)
+            axs[1, 0].set_title("$A^\\dagger$")
+            axs[1, 1].imshow(T_inv)
+            axs[1, 1].set_title("$T^\\dagger$")
+            # axs[1, 2].imshow(np.matmul(T, T_inv))
+            # axs[1, 2].set_title("$TT^\\dagger$")
+            # axs[1, 3].imshow(np.matmul(T_inv, T))
+            # axs[1, 3].set_title("$T^\\dagger T$")
+            # axs[2, 2].imshow(M)
+            # axs[2, 2].set_title("$\\frac{TA^\\dagger + (AT^\\dagger)^\\dagger}{2}$")
+            axs[2, 0].imshow(M0)
+            axs[2, 0].set_title("$TA^\\dagger$")
+            axs[2, 1].imshow(M1)
+            axs[2, 1].set_title("$(AT^\\dagger)^\\dagger$")
             fig.tight_layout(pad=1.02)
 
-            fig, axs = plt.subplots(1, 2)
-            axs[1].imshow(np.expand_dims(target_coeffs, axis=1))
-            axs[1].set_title("$W_t = (AT^\\dagger)^\\dagger L$")
-            axs[0].imshow(np.expand_dims(L, axis=1))
-            axs[0].set_title("$L$")
-            fig.tight_layout(pad=1.02)
+            with open("test.out", "w") as f:
+                for k, m in {"M":M, "TA+":M0, "(AT+)+":M1}.items():
+                    U, S, V = np.linalg.svd(m)
+                    f.write(f"{k}\n")
+                    np.savetxt(f, m, fmt='%.4f')
+                    f.write(f"U_({k})\n")
+                    np.savetxt(f, U, fmt='%.4f')
+                    f.write(f"S_({k})\n")
+                    np.savetxt(f, S, fmt='%.4f')
+                    f.write(f"V_({k})\n")
+                    np.savetxt(f, V, fmt='%.4f')
+            # print(f"Condition: M0: {np.linalg.cond(M0)}; M1: {np.linalg.cond(M1)}; M: {np.linalg.cond(M)}")
+
+            # fig, axs = plt.subplots(1, 2)
+            # axs[1].imshow(np.expand_dims(target_coeffs, axis=1))
+            # axs[1].set_title("$W_t = (AT^\\dagger)^\\dagger L$")
+            # axs[0].imshow(np.expand_dims(L, axis=1))
+            # axs[0].set_title("$L$")
+            # fig.tight_layout(pad=1.02)
 
         return target_coeffs
     

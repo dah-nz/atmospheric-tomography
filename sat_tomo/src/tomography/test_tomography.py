@@ -22,14 +22,14 @@ def run_tests():
 def test_leastsquares():
     rng = np.random.default_rng(seed=1)
 
-    alts = [1000, 10000] #[1000, 5000, 10000]
+    alts = [1000, 5000, 10000] #[1000, 5000, 10000]
     r0_total = 0.07
-    r0 = [r0_total / (len(alts) ** (1/2)) for _ in alts] #[0.05, 0.05, 0.05]
-    # r0 = [0.07, 0.07]
+    r0 = [r0_total * (len(alts) ** (1/2)) for _ in alts] #[0.05, 0.05, 0.05]
+    # r0 = [r0_total for _ in alts]
 
     D = 1.8
     N = 16
-    N_TESTS = N ** len(alts)
+    N_TESTS = 256 # N ** len(alts)
 
     ap = 64
     nagle = 10 # asterism angle
@@ -100,8 +100,8 @@ def test_leastsquares():
         glao_coeffs = glao.run(beacons, target, asterism_coeffs)
         glao_recon = bss.compose(ap, glao_coeffs)
 
-        lsp_coeffs = lsq.run(beacons, target, asterism_coeffs)
-        lsg_coeffs = lsq.run(beacons, target, asterism_coeffs, proj_grid=True)
+        lsp_coeffs = lsq.run(beacons, target, asterism_coeffs, display=update_outputs)
+        lsg_coeffs = lsq.run(beacons, target, asterism_coeffs, proj_grid=True, display=update_outputs)
         lsp_recon = bss.compose(ap, lsp_coeffs)
         lsg_recon = bss.compose(ap, lsg_coeffs)
 
@@ -111,15 +111,17 @@ def test_leastsquares():
         if update_outputs:
             plt.figure()
             plt.title(f"Output Coefficients. Test {j+1}")
-            plt.plot(lsp_coeffs, label="LSQ (Pix)")
+            # plt.plot(lsp_coeffs, label="LSQ (Pix)")
             plt.plot(lsg_coeffs, label="LSQ (Grid)")
             plt.plot(glao_coeffs, label="GLAO")
             plt.plot(actual_coeffs, label="Actual")
             [plt.plot(ast, label=f"GS{i+1}") for i, ast in enumerate(asterism_coeffs)]
             plt.legend()
 
-        recons = [lsg_recon, lsp_recon, glao_recon, fitting, target_screen]
-        lbls = ["LSQ (Grid)", "LSQ (Pix)", "GLAO", "Fitting", "Screen"]
+        # recons = [lsg_recon, lsp_recon, glao_recon, fitting, target_screen]
+        # lbls = ["LSQ (Grid)", "LSQ (Pix)", "GLAO", "Fitting", "Screen"]
+        recons = [lsg_recon, glao_recon, fitting, target_screen]
+        lbls = ["LSQ (Grid)", "GLAO", "Fitting", "Screen"]
         mx = np.amax(recons)
         mn = np.amin(recons)
 

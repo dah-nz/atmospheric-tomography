@@ -21,10 +21,10 @@ del_rad = 1
 @lru_cache(maxsize=256)
 def getGrid(N):
     # rng = np.random.default_rng()
-    radius = [((n+0.98)/N)**0.3 for n in range(N)]
+    radius = [((n+1)/N)**0.3 for n in range(N)]
     theta = [np.pi*np.pi*N*r for r in radius]
     # radius = rng.uniform(0.0, 1.0, N)
-    # radius = [r**0.35 for r in radius]
+    # radius = [r**0.3 for r in radius]
     # theta = rng.uniform(0.0, 2*np.pi, N)
     grid = [pol2cart(r, t) for r, t in zip(radius, theta)]
     return grid
@@ -50,7 +50,7 @@ def projectionMatrix(location, diameter, nModes, display=False):
     # except KeyError:
     #     global g_matrices
         # print(location)
-    gridSize = 2 * nModes
+    gridSize = 6 * nModes
     unitGrid = getGrid(gridSize)
     eps = 1e-12
 
