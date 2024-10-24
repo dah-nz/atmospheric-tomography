@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.signal
 import util
 
 class Beacon():
@@ -47,7 +48,7 @@ class Beacon():
         # print(pos, altitude, self.gamma, self.theta)
         return pos 
     
-    def cutout(self, diameter, layer_altitude, phase_screen, phase_screen_size, remove_piston=False, full_phase=False):
+    def cutout(self, diameter, layer_altitude, phase_screen, phase_screen_size, remove_piston=False, full_phase=False, interp=False):
         """
         Get the beacon wavefront projection on a layer at an altitude for optical simulation
 
@@ -60,6 +61,7 @@ class Beacon():
 
         remove_piston: bool         Return the cutout with no piston offset (default = False)
         full_phase: bool            Return the cutout as the only non-zero part of a full size screen (default = False)
+        interp: bool                Make each pixel in the output an interpolation between the surrounding pixels of the phase screen.
 
         Return
         ------
@@ -79,23 +81,50 @@ class Beacon():
         # r = int(cut_out_dim / 2 + 0.5)
         r = cut_out_dim / 2.0
 
-        # print(pix_x, pix_y, r, cut_out_dim)
+        interp = False
 
-        x0 = int(pix_x - r + 0.5)
-        y0 = int(pix_y - r + 0.5)
+        if not interp:
+            x0 = int(pix_x - r + 0.5)
+            y0 = int(pix_y - r + 0.5)
+            
+            if self.aperture_mask is None:
+                x1 = x0 + int(cut_out_dim)
+                y1 = y0 + int(cut_out_dim)
+            else:
+                x1 = x0 + self.aperture_mask.shape[0]
+                y1 = y0 + self.aperture_mask.shape[0]
 
-        if self.aperture_mask is None:
-            x1 = x0 + int(cut_out_dim)
-            y1 = y0 + int(cut_out_dim)
-        else:
-            x1 = x0 + self.aperture_mask.shape[0]
-            y1 = y0 + self.aperture_mask.shape[0]
+            if y0 < 0 or x0 < 0 or x1 > screen_dim or y1 > screen_dim:
+                print(pos, pix_x, pix_y, r, cut_out_dim, screen_dim, phase_screen_size, x0, x1, y0, y1)
+                quit()
 
-        if y0 < 0 or x0 < 0 or x1 > screen_dim or y1 > screen_dim:
-            print(pos, pix_x, pix_y, r, cut_out_dim, screen_dim, phase_screen_size, x0, x1, y0, y1)
-            quit()
+            phase = phase_screen[y0:y1, x0:x1]
+        else: # interp
+            xf, x0 = np.modf(pix_x - r)
+            yf, y0 = np.modf(pix_y - r)
 
-        phase = phase_screen[y0:y1, x0:x1]
+            x0, y0 = int(x0), int(y0)
+
+            if self.aperture_mask is None:
+                x1 = x0 + int(cut_out_dim) + 1
+                y1 = y0 + int(cut_out_dim) + 1
+            else:
+                x1 = x0 + self.aperture_mask.shape[0] + 1
+                y1 = y0 + self.aperture_mask.shape[0] + 1
+
+            filter = np.array([[(1 - xf) * (1 - yf), (1 - xf) * (yf)],[(xf) * (1 - yf), xf * yf]])
+
+            phase = scipy.signal.convolve2d(phase_screen[y0:y1, x0:x1], filter, mode='valid')
+
+            # if y0 < 0 or x0 < 0 or x1 > screen_dim - 1 or y1 > screen_dim - 1:
+            #     print(pos, pix_x, pix_y, r, cut_out_dim, screen_dim, phase_screen_size, x0, x1, y0, y1)
+            #     quit()
+            
+            # phase = (1 - xf) * (1 - yf) * phase_screen[x0:x1, y0:y1] + \
+            #         (1 - xf) * (yf) * phase_screen[x0:x1, y0+1:y1+1] + \
+            #         (xf) * (1 - yf) * phase_screen[x0+1:x1+1, y0:y1] + \
+            #         (xf) * (yf) * phase_screen[x0+1:x1+1, y0+1:y1+1]
+
 
         if self.aperture_mask is not None:
             # print(self.aperture_mask.shape, phase.shape, phase_screen.shape)
@@ -133,7 +162,7 @@ class Beacon():
             
         """
         # try:
-        cutouts = np.array([self.cutout(diameter, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, layer_sizes)])
+        cutouts = np.array([self.cutout(diameter, a, l, d, interp=False) for a, l, d in zip(layer_altitudes, layer_screens, layer_sizes)])
         # except ValueError as err:
         #     print(diameter, layer_altitudes, layer_screens.shape, layer_sizes)
         #     raise err

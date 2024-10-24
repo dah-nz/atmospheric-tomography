@@ -22,7 +22,7 @@ def run_tests():
 def test_leastsquares():
     rng = np.random.default_rng(seed=1)
 
-    alts = [1000, 5000, 10000] #[1000, 5000, 10000]
+    alts = [1000, 10000] #[1000, 5000, 10000]
     r0_total = 0.07
     r0 = [r0_total * (len(alts) ** (1/2)) for _ in alts] #[0.05, 0.05, 0.05]
     # r0 = [r0_total for _ in alts]
@@ -100,8 +100,9 @@ def test_leastsquares():
         glao_coeffs = glao.run(beacons, target, asterism_coeffs)
         glao_recon = bss.compose(ap, glao_coeffs)
 
-        lsp_coeffs = lsq.run(beacons, target, asterism_coeffs, display=update_outputs)
-        lsg_coeffs = lsq.run(beacons, target, asterism_coeffs, proj_grid=True, display=update_outputs)
+        lsp_coeffs, A_lsp = lsq.run(beacons, target, asterism_coeffs, display=update_outputs)
+        lsg_coeffs, A_lsg = lsq.run(beacons, target, asterism_coeffs, proj_grid=True, display=update_outputs)
+
         lsp_recon = bss.compose(ap, lsp_coeffs)
         lsg_recon = bss.compose(ap, lsg_coeffs)
 
@@ -117,6 +118,15 @@ def test_leastsquares():
             plt.plot(actual_coeffs, label="Actual")
             [plt.plot(ast, label=f"GS{i+1}") for i, ast in enumerate(asterism_coeffs)]
             plt.legend()
+
+            fig, axs = plt.subplots(1, 3)
+            norm = colors.Normalize(vmin=min(np.amin(A_lsp), np.amin(A_lsg)), vmax=max(np.amax(A_lsp), np.amax(A_lsg)))
+            axs[0].set_title("$A_{pixels}$")
+            axs[0].imshow(A_lsp, norm=norm)
+            axs[1].set_title("$A_{grid}$")
+            axs[1].imshow(A_lsg, norm=norm)
+            axs[2].set_title("Difference ($A_{pixels} - A_{grid}$)")
+            axs[2].imshow(A_lsp - A_lsg)
 
         # recons = [lsg_recon, lsp_recon, glao_recon, fitting, target_screen]
         # lbls = ["LSQ (Grid)", "LSQ (Pix)", "GLAO", "Fitting", "Screen"]
