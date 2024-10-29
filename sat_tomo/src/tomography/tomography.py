@@ -4,6 +4,7 @@ from tomography import beacon, projection
 from basis import zernike
 
 import matplotlib.pyplot as plt
+from matplotlib import colors
 import util
 
 proj_data = {
@@ -63,7 +64,7 @@ class Tomography():
         return get_layer_shapes(beacons, self.altitudes, self.D, self.aperture_size)
     
     @lru_cache(maxsize=256)
-    def projection_matrix(self, theta, gamma, altitude, layer_size, layer_pixels, grid_not_pix=True):
+    def projection_matrix(self, theta, gamma, altitude, layer_size, layer_pixels, grid_not_pix=True, display=False):
         global proj_data
         # split beacon into theta and gamma to make the caching a bit easier
         b = beacon.Beacon(theta, gamma, aperture_mask=util.circle(self.aperture_size))
@@ -80,15 +81,16 @@ class Tomography():
             # diameter1 = self.aperture_size / layer_pixels
             # print(f"{self.D:.3f}, {layer_size:.3f}, {self.D/layer_size:.3f}")
 
-            P = projection.projectionMatrix(location, diameter, self.n_modes).T
+            P = projection.projectionMatrix(location, diameter, self.n_modes, display)
 
         # if not grid_not_pix:
         else:
             def get_single(n, i):
                 A = np.zeros(n)
-                A[i] = 1.0
+                A[i] = 100.0
                 return A
             coeffs = [get_single(self.n_modes, i) for i in range(self.n_modes)]
+            # coeffs.append([1.0] * self.n_modes)
 
             cutout_coeffs = []
 
@@ -99,10 +101,24 @@ class Tomography():
                 
             coeffs = np.array(coeffs).T
             cutout_coeffs = np.array(cutout_coeffs).T
+            cutout_coeffs = np.triu(cutout_coeffs)
 
             eps = 1e-4
             B = np.linalg.pinv(coeffs, rcond=eps)
             P = np.matmul(cutout_coeffs, B)
+
+
+
+            if display:
+                fig, axs = plt.subplots(1, 4)
+                axs[0].set_title("Metapupil")
+                axs[0].imshow(coeffs)
+                axs[1].set_title("Subpupil")
+                axs[1].imshow(cutout_coeffs)
+                axs[2].set_title("Metapupil$^\\dagger$")
+                axs[2].imshow(B)
+                axs[3].set_title("P")
+                axs[3].imshow(P)
 
             # P = (P0 + P) / 2
 
@@ -133,12 +149,17 @@ class LeastSquares(Tomography):
         layers_sizes, layer_pixels = self.get_layer_shapes(beacons)
         beacon_coeffs = beacon_coeffs.flatten()
 
+        eps = 1e-6
 
-        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=proj_grid)
+        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=proj_grid) #, display=display)
 
-        T = self.t_mat(target, layers_sizes, layer_pixels, grid=proj_grid)
+        T = self.t_mat(target, layers_sizes, layer_pixels, grid=proj_grid) #, display=display)
 
-        eps = 1e-3
+        # lambdaI = np.ones((A.shape[0], A.shape[0]))
+        # lambdaI = np.triu(lambdaI)
+        # A_lmd = np.matmul(lambdaI, A)
+        # M0 = np.matmul(M0, lambdaI)
+
         A_inv = np.linalg.pinv(A, rcond=eps)
         M0 = np.matmul(T, A_inv)
 
@@ -147,7 +168,7 @@ class LeastSquares(Tomography):
 
         # M = (M0 + M1) / 2
         # M = 0.35 * M1 + 0.65 * M0
-        M = M1
+        M = M0
 
         L = np.array(beacon_coeffs)
         target_coeffs = np.matmul(M, L)
@@ -177,9 +198,10 @@ class LeastSquares(Tomography):
             # axs[1, 3].set_title("$T^\\dagger T$")
             # axs[2, 2].imshow(M)
             # axs[2, 2].set_title("$\\frac{TA^\\dagger + (AT^\\dagger)^\\dagger}{2}$")
-            axs[2, 0].imshow(M0)
+            norm = colors.Normalize(vmin=min(np.amin(M0), np.amin(M1)), vmax=max(np.amax(M0), np.amax(M1)))
+            axs[2, 0].imshow(M0, norm=norm)
             axs[2, 0].set_title("$TA^\\dagger$")
-            axs[2, 1].imshow(M1)
+            axs[2, 1].imshow(M1, norm=norm)
             axs[2, 1].set_title("$(AT^\\dagger)^\\dagger$")
             fig.tight_layout(pad=1.02)
 
@@ -195,20 +217,20 @@ class LeastSquares(Tomography):
                     f.write(f"V_({k})\n")
                     np.savetxt(f, V, fmt='%.4f')
 
-        return target_coeffs, A
+        return target_coeffs, A, T
     
-    def a_mat(self, bcns, szs, pxs, grid=False):
+    def a_mat(self, bcns, szs, pxs, grid=False, display=False):
         concat = np.concatenate
         proj = self.projection_matrix
         alts = self.altitudes
-        A = concat([concat([proj(bcn.theta, bcn._gamma_arcsec, a, s, p, grid) for bcn in bcns], 0) for a, s, p in zip(alts, szs, pxs)], 1)
+        A = concat([concat([proj(bcn.theta, bcn._gamma_arcsec, a, s, p, grid, display) for bcn in bcns], 0) for a, s, p in zip(alts, szs, pxs)], 1)
         return A
     
-    def t_mat(self, tgt, szs, pxs, grid=False):
+    def t_mat(self, tgt, szs, pxs, grid=False, display=False):
         concat = np.concatenate
         proj = self.projection_matrix
         alts = self.altitudes
-        T = concat([proj(tgt.theta, tgt._gamma_arcsec, a, s, p, grid) for a, s, p in zip(alts, szs, pxs)], 1)
+        T = concat([proj(tgt.theta, tgt._gamma_arcsec, a, s, p, grid, display) for a, s, p in zip(alts, szs, pxs)], 1)
         return T
     
   

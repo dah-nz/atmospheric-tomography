@@ -81,7 +81,7 @@ class Beacon():
         # r = int(cut_out_dim / 2 + 0.5)
         r = cut_out_dim / 2.0
 
-        interp = False
+        # interp = False
 
         if not interp:
             x0 = int(pix_x - r + 0.5)
@@ -114,17 +114,7 @@ class Beacon():
 
             filter = np.array([[(1 - xf) * (1 - yf), (1 - xf) * (yf)],[(xf) * (1 - yf), xf * yf]])
 
-            phase = scipy.signal.convolve2d(phase_screen[y0:y1, x0:x1], filter, mode='valid')
-
-            # if y0 < 0 or x0 < 0 or x1 > screen_dim - 1 or y1 > screen_dim - 1:
-            #     print(pos, pix_x, pix_y, r, cut_out_dim, screen_dim, phase_screen_size, x0, x1, y0, y1)
-            #     quit()
-            
-            # phase = (1 - xf) * (1 - yf) * phase_screen[x0:x1, y0:y1] + \
-            #         (1 - xf) * (yf) * phase_screen[x0:x1, y0+1:y1+1] + \
-            #         (xf) * (1 - yf) * phase_screen[x0+1:x1+1, y0:y1] + \
-            #         (xf) * (yf) * phase_screen[x0+1:x1+1, y0+1:y1+1]
-
+            phase = scipy.signal.convolve2d(phase_screen[y0:y1, x0:x1], filter.T, mode='valid')
 
         if self.aperture_mask is not None:
             # print(self.aperture_mask.shape, phase.shape, phase_screen.shape)

@@ -22,17 +22,17 @@ def run_tests():
 def test_leastsquares():
     rng = np.random.default_rng(seed=1)
 
-    alts = [1000, 10000] #[1000, 5000, 10000]
+    alts = [1000, 5000, 10000] #[1000, 5000, 10000]
     r0_total = 0.07
     r0 = [r0_total * (len(alts) ** (1/2)) for _ in alts] #[0.05, 0.05, 0.05]
     # r0 = [r0_total for _ in alts]
 
     D = 1.8
     N = 16
-    N_TESTS = 256 # N ** len(alts)
+    N_TESTS = 1000 # N ** len(alts)
 
     ap = 64
-    nagle = 10 # asterism angle
+    nagle = 5 # asterism angle
 
     bss = zernike.Zernike(N)
     data = {
@@ -84,11 +84,11 @@ def test_leastsquares():
 
         target = beacon.Beacon(0, 0, aperture_mask=mask)
 
-        theta = np.linspace(0, 2*np.pi, 3, endpoint=False) # rng.uniform(0, np.pi * 2, size=3) # 
-        # theta = rng.uniform(0, np.pi * 2, size=3) # 
+        # theta = np.linspace(0, 2*np.pi, 3, endpoint=False) # rng.uniform(0, np.pi * 2, size=3) # 
+        theta = rng.uniform(0, np.pi * 2, size=3) # 
 
-        gamma = [nagle, nagle, nagle] # rng.uniform(0, 15, size=3)
-        # gamma = rng.uniform(1, nagle, size=3)
+        # gamma = [nagle, nagle, nagle] # rng.uniform(0, 15, size=3)
+        gamma = rng.uniform(1, nagle, size=3)
 
         beacons = [beacon.Beacon(theta[i], gamma[i], aperture_mask=mask) for i in range(3)]
 
@@ -100,8 +100,8 @@ def test_leastsquares():
         glao_coeffs = glao.run(beacons, target, asterism_coeffs)
         glao_recon = bss.compose(ap, glao_coeffs)
 
-        lsp_coeffs, A_lsp = lsq.run(beacons, target, asterism_coeffs, display=update_outputs)
-        lsg_coeffs, A_lsg = lsq.run(beacons, target, asterism_coeffs, proj_grid=True, display=update_outputs)
+        lsp_coeffs, A_lsp, T_lsp = lsq.run(beacons, target, asterism_coeffs, display=update_outputs)
+        lsg_coeffs, A_lsg, T_lsg = lsq.run(beacons, target, asterism_coeffs, proj_grid=True, display=update_outputs)
 
         lsp_recon = bss.compose(ap, lsp_coeffs)
         lsg_recon = bss.compose(ap, lsg_coeffs)
@@ -119,14 +119,36 @@ def test_leastsquares():
             [plt.plot(ast, label=f"GS{i+1}") for i, ast in enumerate(asterism_coeffs)]
             plt.legend()
 
-            fig, axs = plt.subplots(1, 3)
+            eps = 1e-6
+            fig, axs = plt.subplots(2, 3)
             norm = colors.Normalize(vmin=min(np.amin(A_lsp), np.amin(A_lsg)), vmax=max(np.amax(A_lsp), np.amax(A_lsg)))
-            axs[0].set_title("$A_{pixels}$")
-            axs[0].imshow(A_lsp, norm=norm)
-            axs[1].set_title("$A_{grid}$")
-            axs[1].imshow(A_lsg, norm=norm)
-            axs[2].set_title("Difference ($A_{pixels} - A_{grid}$)")
-            axs[2].imshow(A_lsp - A_lsg)
+            axs[0, 0].set_title("$A_{pixels}$")
+            axs[0, 0].imshow(A_lsp, norm=norm)
+            axs[0, 1].set_title("$A_{grid}$")
+            axs[0, 1].imshow(A_lsg, norm=norm)
+            axs[0, 2].set_title("Difference ($A_{pixels} - A_{grid}$)")
+            axs[0, 2].imshow(A_lsp - A_lsg)
+            axs[1, 0].set_title("$A_{pixels}^\\dagger$")
+            axs[1, 0].imshow(np.linalg.pinv(A_lsp, rcond=eps))
+            axs[1, 1].set_title("$A_{grid}^\\dagger$")
+            axs[1, 1].imshow(np.linalg.pinv(A_lsg, rcond=eps))
+            axs[1, 2].set_title("Difference ($A_{pixels}^\\dagger - A_{grid}^\\dagger$)")
+            axs[1, 2].imshow(np.linalg.pinv(A_lsp, rcond=eps) - np.linalg.pinv(A_lsg, rcond=eps))
+
+            fig, axs = plt.subplots(2, 3)
+            norm = colors.Normalize(vmin=min(np.amin(T_lsp), np.amin(T_lsg)), vmax=max(np.amax(T_lsp), np.amax(T_lsg)))
+            axs[0, 0].set_title("$T_{pixels}$")
+            axs[0, 0].imshow(T_lsp, norm=norm)
+            axs[0, 1].set_title("$T_{grid}$")
+            axs[0, 1].imshow(T_lsg, norm=norm)
+            axs[0, 2].set_title("Difference ($T_{pixels} - T_{grid}$)")
+            axs[0, 2].imshow(T_lsp - T_lsg)
+            axs[1, 0].set_title("$T_{pixels}^\\dagger$")
+            axs[1, 0].imshow(np.linalg.pinv(T_lsp, rcond=eps))
+            axs[1, 1].set_title("$T_{grid}^\\dagger$")
+            axs[1, 1].imshow(np.linalg.pinv(T_lsg, rcond=eps))
+            axs[1, 2].set_title("Difference ($T_{pixels}^\\dagger - T_{grid}^\\dagger$)")
+            axs[1, 2].imshow(np.linalg.pinv(T_lsp, rcond=eps) - np.linalg.pinv(T_lsg, rcond=eps))
 
         # recons = [lsg_recon, lsp_recon, glao_recon, fitting, target_screen]
         # lbls = ["LSQ (Grid)", "LSQ (Pix)", "GLAO", "Fitting", "Screen"]
@@ -228,10 +250,14 @@ def test_leastsquares():
         print(f"Average {k}: {np.mean(l)}")
     
     plt.figure()
-    plt.hist(errors["tgt:fit"], density=True, histtype="step", label="Target:Fitting")
-    plt.hist(errors["tgt:glao"], density=True, histtype="step", label="Target:GLAO")
-    plt.hist(errors["tgt:lsp"], density=True, histtype="step", label="Target:LSQ (Pix)")
-    plt.hist(errors["tgt:lsg"], density=True, histtype="step", label="Target:LSQ (Grid)")
+    mn = np.amin(errors["tgt:glao"])
+    mx = np.amax(errors["tgt:glao"])
+    nbins = 25
+
+    plt.hist(errors["tgt:fit"], bins=nbins, density=True, histtype="step", label="Target:Fitting", range=(mn, mx))
+    plt.hist(errors["tgt:glao"], bins=nbins, density=True, histtype="step", label="Target:GLAO", range=(mn, mx))
+    plt.hist(errors["tgt:lsp"], bins=nbins, density=True, histtype="step", label="Target:LSQ (Pix)", range=(mn, mx))
+    plt.hist(errors["tgt:lsg"], bins=nbins, density=True, histtype="step", label="Target:LSQ (Grid)", range=(mn, mx))
     plt.ylabel("Density")
     plt.xlabel("MSE (rads²)")
     plt.title(f"Results over {N_TESTS}. Baseline: A = LW†")

@@ -50,7 +50,7 @@ def projectionMatrix(location, diameter, nModes, display=False):
     # except KeyError:
     #     global g_matrices
         # print(location)
-    gridSize = 6 * nModes
+    gridSize = 2 * nModes
     unitGrid = getGrid(gridSize)
     eps = 1e-12
 
@@ -61,13 +61,12 @@ def projectionMatrix(location, diameter, nModes, display=False):
             g = [util.pol2cart(rad,t/n_points*(2*np.pi)) for t in range(n_points + 1)]
             axes.plot([pos[0] + x for x,_ in g], [pos[1] + y for _,y in g], dsp, **kwargs)
 
-        plt.figure()
-        plt.axis('equal')
+        fig, axs = plt.subplots(2, 2)
+        axs[0, 1].axis('equal')
         X = [x for x,_ in unitGrid]
         Y = [y for _,y in unitGrid]
-        plt.scatter(X, Y, c='k', label=f"meta: p = ({location[0]:.3f}, {location[1]:.3f})")
-        ax = plt.gca()
-        plotcirc(ax, (0, 0), 1, "k:")
+        axs[0, 1].scatter(X, Y, c='k', label=f"meta: p = ({location[0]:.3f}, {location[1]:.3f})")
+        plotcirc(axs[0, 1], (0, 0), 1, "k:")
         # plt.plot([0, 1], [location[0], location[0]], "k:")
         # plt.plot([location[1], location[1]], [0, 1], "k:")
     # try:
@@ -84,20 +83,30 @@ def projectionMatrix(location, diameter, nModes, display=False):
     if display:
         X = [x for x,_ in portGrid]
         Y = [y for _,y in portGrid]
-        plt.scatter(X, Y, c='r', label=f"sub: d={diameter:.3f}")
-        plt.plot([location[0], location[0]], [-1, 1], "b:")
-        plt.plot([-1, 1], [location[1], location[1]], "b:")
-        plt.plot([0, 0], [-1, 1], "c:")
-        plt.plot([-1, 1], [0, 0], "c:")
-        plotcirc(ax, location, diameter, "b:")
-        plt.legend()
+
+        axs[0, 1].scatter(X, Y, c='r', label=f"sub: d={diameter:.3f}")
+        axs[0, 1].plot([location[0], location[0]], [-1, 1], "b:")
+        axs[0, 1].plot([-1, 1], [location[1], location[1]], "b:")
+        axs[0, 1].plot([0, 0], [-1, 1], "c:")
+        axs[0, 1].plot([-1, 1], [0, 0], "c:")
+        plotcirc(axs[0, 1], location, diameter, "b:")
+        axs[0, 1].legend()
+
         
     Y = np.zeros((nModes, gridSize))
     for j in range(nModes):
         for i, (x,y) in enumerate(portGrid):
             Y[j, i] = z.zerni(x, y, j + 1)
 
-    P = np.matmul(Y, Ginv)
+    P = np.matmul(Y, Ginv).T
+
+    if display:
+        axs[0, 0].set_title("$P$")
+        axs[0, 0].imshow(P)
+        axs[1, 0].set_title("$Y$")
+        axs[1, 0].imshow(Y)
+        axs[1, 1].set_title("$G^\\dagger$")
+        axs[1, 1].imshow(Ginv)
 
     # P = (np.abs(P) > eps) * P
         # _cache_PROJ_MATRICES[(location, diameter, nModes)] = P
