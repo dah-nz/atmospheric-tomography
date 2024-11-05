@@ -15,7 +15,7 @@ def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True):
 
     return results
 
-def add_to(results, epoch, stage, model, screens, asterism, type, loss):
+def append_results(results, epoch, stage, model, screens, asterism, type, loss):
     results["Epoch"].append(epoch)
     results["Stage"].append(stage)
     results["Model"].append(model)
@@ -43,8 +43,6 @@ def run(cfg):
     }
 
     total_epochs = sum([r[0] for r in cfg.regime])
-    epoch_index = []
-    n_screens_at_epoch = []
 
     save_asterism_data = {"fixed": [], "variable": []}
 
@@ -52,8 +50,8 @@ def run(cfg):
         for e in range(n_epochs):
             epoch += 1
             log.info(f"Running Epoch {epoch}/{total_epochs} (Sub-epoch {e+1}/{n_epochs})")
-            atmosphere_train = phase_screen.Atmosphere(n_screens, cfg.altitudes, cfg.layer_conditions, cfg.D, cfg.aperture_size)
-            atmosphere_test = phase_screen.Atmosphere(testing_size, cfg.altitudes, cfg.layer_conditions, cfg.D, cfg.aperture_size)
+            atmosphere_train = phase_screen.Atmosphere(n_screens, cfg.altitudes, cfg.r0, cfg.D, cfg.aperture_size)
+            atmosphere_test = phase_screen.Atmosphere(testing_size, cfg.altitudes, cfg.r0, cfg.D, cfg.aperture_size)
 
             if 'fixed' in cfg.asterism_types:
                 log.info(f"Running fixed asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
@@ -65,8 +63,8 @@ def run(cfg):
                                  cfg.basis)
                 
                 for k, (l, r) in data.items():
-                    add_to(results, epoch, "Train", k, n_screens, "Fixed", "Coefficients", l)
-                    add_to(results, epoch, "Train", k, n_screens, "Fixed", "Reconstruction", r)
+                    append_results(results, epoch, "Train", k, n_screens, "Fixed", "Coefficients", l)
+                    append_results(results, epoch, "Train", k, n_screens, "Fixed", "Reconstruction", r)
 
                 data = run_epoch(fixed_trainer, 
                                  testing_size,
@@ -76,8 +74,8 @@ def run(cfg):
                                  train=False)
                 
                 for k, (l, r) in data.items():
-                    add_to(results, epoch, "Test", k, testing_size, "Fixed", "Coefficients", l)
-                    add_to(results, epoch, "Test", k, testing_size, "Fixed", "Reconstruction", r)
+                    append_results(results, epoch, "Test", k, testing_size, "Fixed", "Coefficients", l)
+                    append_results(results, epoch, "Test", k, testing_size, "Fixed", "Reconstruction", r)
                 
                 save_asterism_data["fixed"] += fixed_asterisms
 
@@ -93,8 +91,8 @@ def run(cfg):
                                  cfg.basis)
 
                 for k, (l, r) in data.items():
-                    add_to(results, epoch, "Train", k, n_screens, "Variable", "Coefficients", l)
-                    add_to(results, epoch, "Train", k, n_screens, "Variable", "Reconstruction", r)
+                    append_results(results, epoch, "Train", k, n_screens, "Variable", "Coefficients", l)
+                    append_results(results, epoch, "Train", k, n_screens, "Variable", "Reconstruction", r)
 
                 data = run_epoch(variable_trainer, 
                                  testing_size,
@@ -104,8 +102,8 @@ def run(cfg):
                                  train=False)
                 
                 for k, (l, r) in data.items():
-                    add_to(results, epoch, "Test", k, testing_size, "Variable", "Coefficients", l)
-                    add_to(results, epoch, "Test", k, testing_size, "Variable", "Reconstruction", r)
+                    append_results(results, epoch, "Test", k, testing_size, "Variable", "Coefficients", l)
+                    append_results(results, epoch, "Test", k, testing_size, "Variable", "Reconstruction", r)
 
                 variable_trainer.save_models(epoch, suffix="variable")
 

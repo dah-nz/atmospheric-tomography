@@ -1,6 +1,7 @@
 from functools import lru_cache
 import numpy as np
 import scipy
+import scipy.special
 
 from basis.basis import Basis
 from util import circle
@@ -174,3 +175,70 @@ class Zernike(Basis):
             z = np.sqrt(2 * (n + 1)) * Rnm * np.sin(m * theta)
         
         return z
+
+def covar(N):
+    """
+    function [cov] = covarZernike(i,j, D, r0)
+    %
+    if ((i < 2) | (j < 2))
+        error('Zernike polynomials greater than 2 please'); 
+        end
+    %
+    ni   = 0;
+    while (ni*(ni+1)/2 - i < 0)
+    ni = ni + 1;
+    end
+    ni = ni - 1;
+    mi = floor((i - ni*(ni+1)/2 - rem(ni,2))/2) * 2 + rem(ni,2);
+    % 
+    nj   = 0;
+    while (nj*(nj+1)/2 - j < 0)
+    nj = nj + 1;
+    end
+    nj = nj - 1;
+    mj = floor((j - nj*(nj+1)/2 - rem(nj,2))/2) * 2 + rem(nj,2);
+    %
+    if (i-floor(i/2)*2  == j-floor(j/2)*2)
+        if (mi == mj)
+        cov = (0.046/(2*pi))*(-1)^((ni+nj-2*mi)/2)*sqrt((ni+1)*(nj+1))*...  %0.0072
+        pi^(8/3)*gamma(14/3)*gamma((ni+nj-5/3)/2) /...
+        (gamma((ni-nj+17/3)/2)*gamma((nj-ni+17/3)/2) *...
+            gamma((ni+nj+23/3)/2));
+        else
+        cov = 0;
+        end
+    else
+        cov = 0;
+    end
+    cov = cov*(D/r0)^(5/3);
+    """
+    gamma = scipy.special.gamma
+
+    C = np.zeros((N, N))
+    for i in range(2, N+1):
+        for j in range(2, N+1):
+            
+            ni = 0
+            while ni * (ni + 1) / 2 - i < 0:
+                ni += 1
+            ni -= 1
+            mi = 2 * np.floor((i - ni * (ni + 1) / 2 - (ni % 2)) / 2) + (ni % 2)
+
+            nj = 0
+            while nj * (nj + 1) / 2 - j < 0:
+                nj += 1
+            nj -= 1
+            mj = 2 * np.floor((j - nj * (nj + 1) / 2 - (nj % 2)) / 2) + (nj % 2)
+
+            cov = 0.0
+            if i - 2 * np.floor(i / 2) == j - 2 * np.floor(j / 2):
+                if mi == mj:
+                    cov = (0.046/(2*np.pi))*(-1)**((ni+nj-2*mi)/2)*np.sqrt((ni+1)*(nj+1))* \
+	                np.pi**(8/3)*gamma(14/3)*gamma((ni+nj-5/3)/2) / \
+	                (gamma((ni-nj+17/3)/2)*gamma((nj-ni+17/3)/2) * \
+                    gamma((ni+nj+23/3)/2))
+
+            C[i-1, j-1] = cov
+
+    return C
+

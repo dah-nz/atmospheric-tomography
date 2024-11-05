@@ -50,7 +50,7 @@ def projectionMatrix(location, diameter, nModes, display=False):
     # except KeyError:
     #     global g_matrices
         # print(location)
-    gridSize = 2 * nModes
+    gridSize = 2 * nModes + 1
     unitGrid = getGrid(gridSize)
     eps = 1e-12
 

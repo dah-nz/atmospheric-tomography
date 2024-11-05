@@ -1,5 +1,8 @@
 import numpy as np
+
 from functools import lru_cache
+from sklearn.linear_model import RidgeCV
+
 from tomography import beacon, projection
 from basis import zernike
 
@@ -70,33 +73,23 @@ class Tomography():
         b = beacon.Beacon(theta, gamma, aperture_mask=util.circle(self.aperture_size))
         p = (layer_pixels, layer_pixels)
 
-        # fig, axs = plt.subplots(2, 4)
-        # fig.suptitle("Constituent Matrices for Projection Matrix")
-
         if grid_not_pix:
             location = b.position(altitude)
             location = (location[0] / (layer_size / 2), location[1] / (layer_size / 2))
             diameter = self.D / layer_size
-            # diameter = 1 - np.sqrt(location[0] ** 2 + location[1] ** 2)
-            # diameter1 = self.aperture_size / layer_pixels
-            # print(f"{self.D:.3f}, {layer_size:.3f}, {self.D/layer_size:.3f}")
-
             P = projection.projectionMatrix(location, diameter, self.n_modes, display)
-
-        # if not grid_not_pix:
         else:
             def get_single(n, i):
                 A = np.zeros(n)
                 A[i] = 100.0
                 return A
             coeffs = [get_single(self.n_modes, i) for i in range(self.n_modes)]
-            # coeffs.append([1.0] * self.n_modes)
 
             cutout_coeffs = []
 
             for i, cos in enumerate(coeffs):
                 scr = self.basis.compose(p, cos)
-                co = b.cutout(self.D, altitude, scr, layer_size, interp=True) #, remove_piston=True)
+                co = b.cutout(self.D, altitude, scr, layer_size, interp=True)
                 cutout_coeffs.append(self.basis.decompose(co))
                 
             coeffs = np.array(coeffs).T
@@ -106,8 +99,6 @@ class Tomography():
             eps = 1e-4
             B = np.linalg.pinv(coeffs, rcond=eps)
             P = np.matmul(cutout_coeffs, B)
-
-
 
             if display:
                 fig, axs = plt.subplots(1, 4)
@@ -120,15 +111,23 @@ class Tomography():
                 axs[3].set_title("P")
                 axs[3].imshow(P)
 
-            # P = (P0 + P) / 2
-
-        return P   
+        return P
 
 class LeastSquares(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size)
 
-    def run(self, beacons, target, beacon_coeffs, display=False, proj_grid=False):
+        self.eps = eps
+
+        self.C = zernike.covar(n_modes) * ((diameter/r0) ** (5/3))
+
+        # self.P = np.random.standard_normal((n_modes * 3, n_modes * 3))
+        # self.P_inv = np.linalg.pinv(self.P, rcond=self.eps)
+
+        # self.Q = np.random.standard_normal((n_modes, n_modes))
+        # self.Q_inv = np.linalg.pinv(self.Q, rcond=self.eps)
+
+    def run(self, beacons, target, beacon_coeffs, display=False, proj_grid=True, method="Ainv", start_angle=30, end_angle=60, angle_mix="ave"):
         """
         Runs least squares tomography algorithm
 
@@ -140,6 +139,25 @@ class LeastSquares(Tomography):
             an object that provides target position
         beacon_coeffs:
             list of coefficient arrays for each beacon that are used for calculating the target basis function coefficients
+        display:
+            will output internal values and matrices
+        proj_grid:
+            use Tokovonin grid to generate projection matrices, else use phase screen pixel-based approach.
+        method:
+            "Ainv":     use W = T A^+ L
+            "Tinv":     use W = (A T^+)^+ L
+            "K":        use W = T (A^T A + eK)^+ A^T L
+            "dotAT":    use angle between Ainv and Tinv to modulate output
+            "dotAK":    use angle between Ainv and K to modulate output
+            "dotTK":    use angle between Tinv and K to modulate output
+            "all":      mix all three approaches to modulate output
+        start_angle:    linear interpolation start angle for all - use dotAT below
+        end_angle:      linear interpolation end angle for all - use K above
+        angle_mix:
+            "ave":      use average of beacon angles
+            "max":      use maximum of beacon angles
+            "min":      use minimum of beacon angles
+            "med":      use median of beacon angles
 
         Returns
         -------
@@ -148,76 +166,103 @@ class LeastSquares(Tomography):
         """
         layers_sizes, layer_pixels = self.get_layer_shapes(beacons)
         beacon_coeffs = beacon_coeffs.flatten()
+        L = np.array(beacon_coeffs)
 
-        eps = 1e-6
+        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=proj_grid)
+        T = self.t_mat(target, layers_sizes, layer_pixels, grid=proj_grid)
 
-        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=proj_grid) #, display=display)
+        alphas = np.logspace(-10, 0, 20)
+        clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
+        alpha = clf.alpha_
 
-        T = self.t_mat(target, layers_sizes, layer_pixels, grid=proj_grid) #, display=display)
-
-        # lambdaI = np.ones((A.shape[0], A.shape[0]))
-        # lambdaI = np.triu(lambdaI)
-        # A_lmd = np.matmul(lambdaI, A)
-        # M0 = np.matmul(M0, lambdaI)
-
-        A_inv = np.linalg.pinv(A, rcond=eps)
+        A_inv = np.linalg.pinv(A, rcond=self.eps)
         M0 = np.matmul(T, A_inv)
 
-        T_inv = np.linalg.pinv(T, rcond=eps)
-        M1 = np.linalg.pinv(np.matmul(A, T_inv), rcond=eps)
+        T_inv = np.linalg.pinv(T, rcond=self.eps)
+        M1 = np.linalg.pinv(np.matmul(A, T_inv), rcond=self.eps)
+        
+        # M = M0 # np.sqrt(np.abs(M1 * M0))
+        C0 = np.matmul(M0, L)
+        C1 = np.matmul(M1, L)
 
-        # M = (M0 + M1) / 2
-        # M = 0.35 * M1 + 0.65 * M0
-        M = M0
+        r = util.cos_theta(C0, C1)
+        # print(r)
+        M = r * M0 + (1 - r) * M1
+        
+        target_coeffs = r * C0 + (1 - r) * C1
+        # target_coeffs = np.matmul(M, L)
 
-        L = np.array(beacon_coeffs)
-        target_coeffs = np.matmul(M, L)
+        K = np.zeros((A.shape[1], A.shape[1]))
+        N = self.n_modes
+
+        for i, _ in enumerate(layers_sizes):
+            K[i*N:(i+1)*N, i*N:(i+1)*N] = self.C
+        
+        epsilon = alpha # 0.0 # 0.001
+        W = np.matmul(np.matmul(np.linalg.pinv(np.matmul(A.T, A) + epsilon * K, rcond=self.eps), A.T), L)
+
+        C2 = np.matmul(T, W)
+
+        # r = util.cos_theta(target_coeffs, C2)
+        # r = 0.5
+        ave_angle = 0
+        for b in beacons:
+            ave_angle += b._gamma_arcsec
+        ave_angle /= len(beacons)
+
+        min_angle = 30
+        max_angle = 50
+        if ave_angle < min_angle:
+            r = 1.0
+        elif ave_angle > max_angle:
+            r = 0.0
+        else:
+            r = 1.0 - (ave_angle - min_angle) / (max_angle - min_angle)
+
+        target_coeffs = r * target_coeffs + (1 - r) * C2
 
         if display:
             r = np.linalg.matrix_rank
             c = np.linalg.cond
             print(f"rank A: {r(A)}; rank T: {r(T)}; rank TA+: {r(M0)}; rank (AT+)+: {r(M1)}; rank mix: {r(M)}")
-            print(f"cond A: {c(A)}; cond T: {c(T)}")
+            print(f"cond A: {c(A):.3f}; cond T: {c(T):.3f}; cond TA+: {c(M0):.3f}; cond (AT+)+: {c(M1):.3f}; cond mix: {c(M):.3f}")
             fig, axs = plt.subplots(3, 2)
             fig.suptitle("Tomography Matrices")
             axs[0, 0].imshow(A)
             axs[0, 0].set_title("$A$")
             axs[0, 1].imshow(T)
             axs[0, 1].set_title("$T$")
-            # axs[0, 2].imshow(np.matmul(A, A_inv))
-            # axs[0, 2].set_title("$AA^\\dagger$")
-            # axs[0, 3].imshow(np.matmul(A_inv, A))
-            # axs[0, 3].set_title("$A^\\dagger A$")
+
             axs[1, 0].imshow(A_inv)
             axs[1, 0].set_title("$A^\\dagger$")
             axs[1, 1].imshow(T_inv)
             axs[1, 1].set_title("$T^\\dagger$")
-            # axs[1, 2].imshow(np.matmul(T, T_inv))
-            # axs[1, 2].set_title("$TT^\\dagger$")
-            # axs[1, 3].imshow(np.matmul(T_inv, T))
-            # axs[1, 3].set_title("$T^\\dagger T$")
-            # axs[2, 2].imshow(M)
-            # axs[2, 2].set_title("$\\frac{TA^\\dagger + (AT^\\dagger)^\\dagger}{2}$")
+
             norm = colors.Normalize(vmin=min(np.amin(M0), np.amin(M1)), vmax=max(np.amax(M0), np.amax(M1)))
             axs[2, 0].imshow(M0, norm=norm)
             axs[2, 0].set_title("$TA^\\dagger$")
             axs[2, 1].imshow(M1, norm=norm)
             axs[2, 1].set_title("$(AT^\\dagger)^\\dagger$")
+
             fig.tight_layout(pad=1.02)
 
-            with open("test.out", "w") as f:
-                for k, m in {"M":M, "TA+":M0, "(AT+)+":M1}.items():
-                    U, S, V = np.linalg.svd(m)
-                    f.write(f"{k}\n")
-                    np.savetxt(f, m, fmt='%.4f')
-                    f.write(f"U_({k})\n")
-                    np.savetxt(f, U, fmt='%.4f')
-                    f.write(f"S_({k})\n")
-                    np.savetxt(f, S, fmt='%.4f')
-                    f.write(f"V_({k})\n")
-                    np.savetxt(f, V, fmt='%.4f')
+            # with open("test.out", "w") as f:
+            #     for k, m in {"M":M, "TA+":M0, "(AT+)+":M1}.items():
+            #         U, S, V = np.linalg.svd(m)
+            #         f.write(f"{k}\n")
+            #         np.savetxt(f, m, fmt='%.4f')
+            #         f.write(f"U_({k})\n")
+            #         np.savetxt(f, U, fmt='%.4f')
+            #         f.write(f"S_({k})\n")
+            #         np.savetxt(f, S, fmt='%.4f')
+            #         f.write(f"V_({k})\n")
+            #         np.savetxt(f, V, fmt='%.4f')
 
-        return target_coeffs, A, T
+            return target_coeffs, A, T
+        
+        else: # display == False
+            return target_coeffs
+        
     
     def a_mat(self, bcns, szs, pxs, grid=False, display=False):
         concat = np.concatenate
@@ -313,7 +358,7 @@ def get_layer_shapes(beacons, altitudes, diameter, aperture_size):
 
     return layer_sizes, layer_pixels
 
-def get_coeffs_for_asterism(asterism, basis, diameter, layer_screens, layer_altitudes, layer_sizes):
+def get_coeffs_for_asterism(asterism, basis, diameter, layer_screens, layer_altitudes, layer_sizes, tip_tilt=False):
     """
     Calculate coefficients for each beacon in an asterism
 
@@ -334,5 +379,14 @@ def get_coeffs_for_asterism(asterism, basis, diameter, layer_screens, layer_alti
         coeffs = np.array([b.cutout_coeffs(basis, diameter, layer_altitudes, layer_screens, layer_sizes) for b in asterism])
     except AttributeError:
         coeffs = [np.array([b.cutout_coeffs(basis, diameter, layer_altitudes, layer_screens, layer_sizes) for b in a]) for a in asterism]
+
+    # if tip_tilt:
+    #     tip_tilt = np.sum(coeffs, 0) / np.shape(coeffs)[0]
+    #     coeffs[:, :3] = coeffs[:, :3] * 0
+    #     return tip_tilt[:3], coeffs
+
     return coeffs
 
+def get_layer_variance_for_asterism(asterism, diameter, layer_altitudes, layer_screens, layer_sizes):
+   
+    return [np.mean([np.var(b.cutout(diameter, altitude, screen, size, remove_piston=True)) for b in asterism]) for altitude, screen, size in zip(layer_altitudes, layer_screens, layer_sizes)]

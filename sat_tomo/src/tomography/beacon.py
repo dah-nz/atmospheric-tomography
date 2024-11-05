@@ -181,7 +181,9 @@ class Beacon():
         coeffs:             Basis function coefficients for the total wavefront of each beacon in the asterism
         """
         cutout = self.total_cutout(diameter, layer_altitudes, layer_screens, layer_sizes)
-        return np.array(basis.decompose(cutout), dtype=np.float32)
+        out = np.array(basis.decompose(cutout), dtype=np.float32)
+        # out[0] = 0.
+        return out
     
     def to_vec(self):
         """
