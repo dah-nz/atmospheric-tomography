@@ -32,10 +32,12 @@ def build_star_map(stars, mag, location, time):
     """
     ra = []
     dec = []
+    mag_list = []
     for s in stars.data:
         if not mag or s[4] < mag:
             ra.append(s[0]) # + self.rng.normal(scale=s[1]/(1000 * 60 * 60)))
             dec.append(s[2]) # + self.rng.normal(scale=s[3]/(1000 * 60 * 60)))
+            mag_list.append(s[4]) 
     stars = SkyCoord(ra, dec, unit=u.deg, frame=ICRS)
     stars = stars.transform_to(GCRS)
     if time is not None and location is not None:
@@ -48,12 +50,13 @@ def build_star_map(stars, mag, location, time):
     # KDTree is built using cartesian unit vectors
     tree = sci.spatial.KDTree(stars_xyz)
     print(f"Star KD Tree complete [mag {mag}]")
-    return StarMap(tree, stars)
+    return StarMap(tree, stars, mag_list)
 
 class StarMap():
-    def __init__(self, tree, stars):
+    def __init__(self, tree, stars, mag=None):
         self.tree = tree
         self.stars = stars
+        self.mag = np.array(mag)
     def closest(self, p, n, key=None):
         """
         Find the nearest n stars to point p
@@ -73,9 +76,15 @@ class StarMap():
         _, indices = self.tree.query(p_xyz, n)
 
         if key is None:
-            return self.stars[indices]
+            if self.mag is None:
+                return self.stars[indices]
+            else:
+                return list(zip(self.stars[indices], self.mag[indices]))
         else:
-            return [key(p, s) for s in self.stars[indices]]
+            if self.mag is None:
+                return [key(p, s) for s in self.stars[indices]]
+            else:
+                return [(key(p, s), m) for s, m in zip(self.stars[indices], self.mag[indices])]
         
 def get_angles_between(p, s):
     p = SkyCoord(alt=p.alt, az=p.az, frame="altaz")
@@ -111,11 +120,14 @@ if __name__ == "__main__":
     time = dt.datetime.now(tz=dt.timezone.utc)
     tele = telescope.default_telescope()
     print("building map")
-    map = build_star_map(stars, mag=6, location=tele.location, time=time)
-    print("map completed")
-    direction = SkyCoord(0, 0, unit=u.deg, frame=ICRS)
+    maps = {}
+    for mag in [6, 8, 10, 12, 14]:
+        maps[mag] = build_star_map(stars, mag=mag, location=tele.location, time=time)
+        print(f"map completed for mag {mag}")
+    direction = SkyCoord(1, 0, unit=u.deg, frame=ICRS)
     direction = direction.transform_to(GCRS)
     direction = direction.transform_to(AltAz(obstime=time, location=tele.location))
     tele.set_target(direction, time)
-    print("finding closest")
-    print(map.closest(tele.orientation, 3, key=get_angles_between))
+    for mag, map in maps.items():
+        print(f"finding closest at mag {mag}")
+        print(map.closest(tele.orientation, 3, key=get_angles_between))

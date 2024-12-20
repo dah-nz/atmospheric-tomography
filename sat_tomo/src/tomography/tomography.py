@@ -114,33 +114,9 @@ class Tomography():
         return P
 
 class LeastSquares(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=True, method="Ainv", start_angle=30, end_angle=60, angle_mix="ave", display=False):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size)
-
-        self.eps = eps
-
-        self.C = zernike.covar(n_modes) * ((diameter/r0) ** (5/3))
-
-        # self.P = np.random.standard_normal((n_modes * 3, n_modes * 3))
-        # self.P_inv = np.linalg.pinv(self.P, rcond=self.eps)
-
-        # self.Q = np.random.standard_normal((n_modes, n_modes))
-        # self.Q_inv = np.linalg.pinv(self.Q, rcond=self.eps)
-
-    def run(self, beacons, target, beacon_coeffs, display=False, proj_grid=True, method="Ainv", start_angle=30, end_angle=60, angle_mix="ave"):
         """
-        Runs least squares tomography algorithm
-
-        Parameters
-        ----------
-        beacons:
-            list of AltAz objects that provide positions of beacons
-        target:
-            an object that provides target position
-        beacon_coeffs:
-            list of coefficient arrays for each beacon that are used for calculating the target basis function coefficients
-        display:
-            will output internal values and matrices
         proj_grid:
             use Tokovonin grid to generate projection matrices, else use phase screen pixel-based approach.
         method:
@@ -158,6 +134,32 @@ class LeastSquares(Tomography):
             "max":      use maximum of beacon angles
             "min":      use minimum of beacon angles
             "med":      use median of beacon angles
+        display:
+            will output internal values and matrices
+        """
+
+        self.eps = eps
+        self.C = zernike.covar(n_modes) * ((diameter/r0) ** (5/3))
+
+        self.proj_grid   = proj_grid
+        self.method      = method
+        self.start_angle = start_angle
+        self.end_angle   = end_angle
+        self.angle_mix   = angle_mix
+        self.display     = display
+
+    def run(self, beacons, target, beacon_coeffs):
+        """
+        Runs least squares tomography algorithm
+
+        Parameters
+        ----------
+        beacons:
+            list of AltAz objects that provide positions of beacons
+        target:
+            an object that provides target position
+        beacon_coeffs:
+            list of coefficient arrays for each beacon that are used for calculating the target basis function coefficients
 
         Returns
         -------
@@ -168,100 +170,109 @@ class LeastSquares(Tomography):
         beacon_coeffs = beacon_coeffs.flatten()
         L = np.array(beacon_coeffs)
 
-        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=proj_grid)
-        T = self.t_mat(target, layers_sizes, layer_pixels, grid=proj_grid)
+        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid)
+        T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid)
 
-        alphas = np.logspace(-10, 0, 20)
-        clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
-        alpha = clf.alpha_
+        fig, axs = plt.subplots(2, 3)
 
-        A_inv = np.linalg.pinv(A, rcond=self.eps)
-        M0 = np.matmul(T, A_inv)
+        svd_A = np.linalg.svd(A)
+        svd_T = np.linalg.svd(T)
 
-        T_inv = np.linalg.pinv(T, rcond=self.eps)
-        M1 = np.linalg.pinv(np.matmul(A, T_inv), rcond=self.eps)
+        # axs[0, 0].set_title("$V_A^T$")
+        # axs[0, 0].imshow(svd_A.Vh)
+        # axs[1, 0].set_title("$V_T^T$")
+        # axs[1, 0].imshow(svd_T.Vh)
+
+        # axs[0, 1].set_title("$V_A^T V_T$")
+        # axs[0, 1].imshow(np.matmul(svd_A.Vh, svd_T.Vh.T))
+        # axs[1, 1].set_title("$V_T^T V_A$")
+        # axs[1, 1].imshow(np.matmul(svd_T.Vh, svd_A.Vh.T))
+
+        # axs[0, 2].set_title("$(V_A^T V_T)^T$")
+        # axs[0, 2].imshow(np.matmul(svd_A.Vh, svd_T.Vh.T).T)
+        # axs[1, 2].set_title("$V_T^T V_A - (V_A^T V_T)^T$")
+        # axs[1, 2].imshow(np.matmul(svd_T.Vh, svd_A.Vh.T) - np.matmul(svd_A.Vh, svd_T.Vh.T).T)
+
+        self.alignment0 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh.T for cT in svd_T.Vh.T])
+        self.alignment1 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh for cT in svd_T.Vh])
+        self.alignment2 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh for cT in svd_T.Vh.T])
+        self.alignment3 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh.T for cT in svd_T.Vh])
+
+        if self.method in ["Ainv", "dotAT", "dotAK", "all"]:
+            A_inv = np.linalg.pinv(A, rcond=self.eps)
+            M0 = np.matmul(T, A_inv)
+            C_A = np.matmul(M0, L)
+            if self.method == "Ainv":
+                return C_A
+
+        if self.method in ["Tinv", "dotAT", "dotTK", "all"]:
+            T_inv = np.linalg.pinv(T, rcond=self.eps)
+            M1 = np.linalg.pinv(np.matmul(A, T_inv), rcond=self.eps)
+            C_T = np.matmul(M1, L)
+            if self.method == "Tinv":
+                return C_T
         
-        # M = M0 # np.sqrt(np.abs(M1 * M0))
-        C0 = np.matmul(M0, L)
-        C1 = np.matmul(M1, L)
-
-        r = util.cos_theta(C0, C1)
-        # print(r)
-        M = r * M0 + (1 - r) * M1
+        if self.method in ["K", "dotAK", "dotTK", "all"]:
+            alphas = np.logspace(-10, 0, 20)
+            clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
+            alpha = clf.alpha_
         
-        target_coeffs = r * C0 + (1 - r) * C1
-        # target_coeffs = np.matmul(M, L)
+            K = np.zeros((A.shape[1], A.shape[1]))
+            N = self.n_modes
 
-        K = np.zeros((A.shape[1], A.shape[1]))
-        N = self.n_modes
+            for i, _ in enumerate(layers_sizes):
+                K[i*N:(i+1)*N, i*N:(i+1)*N] = self.C
+            
+            epsilon = alpha # 0.0 # 0.001
+            W = np.matmul(np.matmul(np.linalg.pinv(np.matmul(A.T, A) + epsilon * K, rcond=self.eps), A.T), L)
 
-        for i, _ in enumerate(layers_sizes):
-            K[i*N:(i+1)*N, i*N:(i+1)*N] = self.C
+            C_K = np.matmul(T, W)
+
+            if self.method == "K":
+                return C_K
+
+        if self.method in ["dotAT", "all"]:
+            r = util.cos_theta(C_A, C_T)
+            C_AT = r * C_A + (1 - r) * C_T
+            if self.method == "dotAT":
+                return C_AT
+
+        if self.method == "dotAK":
+            r = util.cos_theta(C_A, C_K)
+            C_AK = r * C_A + (1 - r) * C_K
+            return C_AK
         
-        epsilon = alpha # 0.0 # 0.001
-        W = np.matmul(np.matmul(np.linalg.pinv(np.matmul(A.T, A) + epsilon * K, rcond=self.eps), A.T), L)
+        if self.method == "dotTK":
+            r = util.cos_theta(C_T, C_K)
+            C_TK = r * C_T + (1 - r) * C_K
+            return C_TK
 
-        C2 = np.matmul(T, W)
+        if self.method == "all":
+            angles = []
+            for b in beacons:
+                angles.append(b._gamma_arcsec)
+            
+            if self.angle_mix == "max":
+                angle = max(angles)
+            elif self.angle_mix == "min":
+                angle = min(angles)
+            elif self.angle_mix == "med":
+                angle = np.median(angles)
+            else: # angle_mix == "ave"
+                angle = np.mean(angles)
 
-        # r = util.cos_theta(target_coeffs, C2)
-        # r = 0.5
-        ave_angle = 0
-        for b in beacons:
-            ave_angle += b._gamma_arcsec
-        ave_angle /= len(beacons)
+            if angle < self.start_angle:
+                r = 1.0
+            elif angle > self.end_angle:
+                r = 0.0
+            else:
+                r = 1.0 - (angle - self.start_angle) / (self.end_angle - self.start_angle)
 
-        min_angle = 30
-        max_angle = 50
-        if ave_angle < min_angle:
-            r = 1.0
-        elif ave_angle > max_angle:
-            r = 0.0
-        else:
-            r = 1.0 - (ave_angle - min_angle) / (max_angle - min_angle)
+            C_ALL = r * C_AT + (1 - r) * C_K
 
-        target_coeffs = r * target_coeffs + (1 - r) * C2
-
-        if display:
-            r = np.linalg.matrix_rank
-            c = np.linalg.cond
-            print(f"rank A: {r(A)}; rank T: {r(T)}; rank TA+: {r(M0)}; rank (AT+)+: {r(M1)}; rank mix: {r(M)}")
-            print(f"cond A: {c(A):.3f}; cond T: {c(T):.3f}; cond TA+: {c(M0):.3f}; cond (AT+)+: {c(M1):.3f}; cond mix: {c(M):.3f}")
-            fig, axs = plt.subplots(3, 2)
-            fig.suptitle("Tomography Matrices")
-            axs[0, 0].imshow(A)
-            axs[0, 0].set_title("$A$")
-            axs[0, 1].imshow(T)
-            axs[0, 1].set_title("$T$")
-
-            axs[1, 0].imshow(A_inv)
-            axs[1, 0].set_title("$A^\\dagger$")
-            axs[1, 1].imshow(T_inv)
-            axs[1, 1].set_title("$T^\\dagger$")
-
-            norm = colors.Normalize(vmin=min(np.amin(M0), np.amin(M1)), vmax=max(np.amax(M0), np.amax(M1)))
-            axs[2, 0].imshow(M0, norm=norm)
-            axs[2, 0].set_title("$TA^\\dagger$")
-            axs[2, 1].imshow(M1, norm=norm)
-            axs[2, 1].set_title("$(AT^\\dagger)^\\dagger$")
-
-            fig.tight_layout(pad=1.02)
-
-            # with open("test.out", "w") as f:
-            #     for k, m in {"M":M, "TA+":M0, "(AT+)+":M1}.items():
-            #         U, S, V = np.linalg.svd(m)
-            #         f.write(f"{k}\n")
-            #         np.savetxt(f, m, fmt='%.4f')
-            #         f.write(f"U_({k})\n")
-            #         np.savetxt(f, U, fmt='%.4f')
-            #         f.write(f"S_({k})\n")
-            #         np.savetxt(f, S, fmt='%.4f')
-            #         f.write(f"V_({k})\n")
-            #         np.savetxt(f, V, fmt='%.4f')
-
-            return target_coeffs, A, T
+            return C_ALL
         
-        else: # display == False
-            return target_coeffs
+        raise NotImplementedError
         
     
     def a_mat(self, bcns, szs, pxs, grid=False, display=False):

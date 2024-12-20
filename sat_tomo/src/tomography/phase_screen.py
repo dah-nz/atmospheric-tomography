@@ -159,7 +159,8 @@ class Atmosphere():
         self.cut_out = (aperture_size, aperture_size)
         self.altitudes = layer_altitudes
         self.r0 = r0
-        self.layer_r0 = [r0 * (len(layer_altitudes) ** (1/2)) for _ in layer_altitudes]
+        # self.layer_r0 = [r0 * (len(layer_altitudes) ** (1/2)) for _ in layer_altitudes]
+        self.layer_r0 = [r0 for _ in layer_altitudes]
         self.D = D
         self.rng = rng
         self.generators = [PhaseScreenGenerator(s, self.D, r0, self.rng) for s, r0 in zip(self.layer_shapes, self.layer_r0)]
