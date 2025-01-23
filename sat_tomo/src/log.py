@@ -4,26 +4,22 @@ import sys
 from datetime import datetime
 
 time = datetime.now()
+time_str = time.strftime("%Y%m%d_%H%M%S")
+
 default_logging_level = logging.INFO
 
+fstring = "%(asctime)s:%(levelname)s:%(name)s:%(funcName)s :: %(message)s"
+logging.basicConfig(filename=f"logs/{time_str}.log", level=default_logging_level, format=fstring)
+
 def get_logger(name):
+    logger = logging.getLogger(name)
+    logger
+    
     return logging.getLogger(name)
 
-def setup_logger(logger, level=default_logging_level, to_console=False, start_time=None):
-    fstring = "%(asctime)s:%(levelname)s:%(name)s:%(funcName)s :: %(message)s"
+def setup_logger(logger, level=default_logging_level, to_console=False):
 
-    if start_time is None:
-        start_time = time
-
-    try:
-        time_str = start_time.strftime("%Y%m%d_%H%M%S")
-    except AttributeError:
-        time_str = start_time
-
-    
-    logging.basicConfig(filename=f"logs/{time_str}.log",
-                        level=level,
-                        format=fstring)
+    logger.setLevel(level)
     
     if to_console == True:
         handler = logging.StreamHandler(sys.stdout)

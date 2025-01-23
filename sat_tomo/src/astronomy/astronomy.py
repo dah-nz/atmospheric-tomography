@@ -111,10 +111,10 @@ def get_dec(vec):
 def to_ra_dec(vec, non_negative_ra=False):
     return np.array([get_ra(vec, non_negative_ra), get_dec(vec)])
 
-if __name__ == "__main__":
+def main():
     import telescope
     import datetime as dt
-    import joblib
+    
     stars = StarData()
     print("stars complete")
     time = dt.datetime.now(tz=dt.timezone.utc)
@@ -131,3 +131,6 @@ if __name__ == "__main__":
     for mag, map in maps.items():
         print(f"finding closest at mag {mag}")
         print(map.closest(tele.orientation, 3, key=get_angles_between))
+
+if __name__ == "__main__":
+    main()
