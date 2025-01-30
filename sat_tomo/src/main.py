@@ -11,6 +11,8 @@ import astronomy.astronomy
 import astronomy.telescope
 import astronomy.satellite
 
+import display
+
 if __name__ == "__main__":
     log = logging.get_logger(__name__)
     logging.setup_logger(log, level=logging.logging.INFO, to_console=True)
@@ -42,21 +44,7 @@ if __name__ == "__main__":
 
     if cfg.display_asterisms:
         print("Displaying asterism data")
-        # astronomy.satellite.clean_maps()
-
-        for magnitude in range(6, 14 + 1):
-            angles = astronomy.satellite.load_map(magnitude)
-
-            magnitudes = []
-            arcseconds = []
-
-            for angle in angles:
-                for (a, _), m in angle:
-                    arcseconds.append(a)
-                    magnitudes.append(m)
-
-            plt.scatter(magnitude, arcseconds)
-        # print(angles[0])
+        display.asterisms()
 
     if cfg.train_models:
         log.info(" > Start model training < ")
