@@ -508,7 +508,7 @@ def clean_maps():
                 new_set = []
                 for a in set:
                     a1, a2, mag = a[0][0], a[0][1], a[1]
-                    new_set.append(((a1, a2), mag))
+                    new_set.append((a1, a2, mag))
                 new_angles.append(new_set)
             except TypeError:
                 pass

@@ -173,7 +173,7 @@ class LeastSquares(Tomography):
         A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid)
         T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid)
 
-        fig, axs = plt.subplots(2, 3)
+        # fig, axs = plt.subplots(2, 3)
 
         svd_A = np.linalg.svd(A)
         svd_T = np.linalg.svd(T)

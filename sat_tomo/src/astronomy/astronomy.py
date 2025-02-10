@@ -84,7 +84,7 @@ class StarMap():
             if self.mag is None:
                 return [key(p, s) for s in self.stars[indices]]
             else:
-                return [(key(p, s), m) for s, m in zip(self.stars[indices], self.mag[indices])]
+                return [tuple(list(key(p, s)) + [m]) for s, m in zip(self.stars[indices], self.mag[indices])]
         
 def get_angles_between(p, s):
     p = SkyCoord(alt=p.alt, az=p.az, frame="altaz")

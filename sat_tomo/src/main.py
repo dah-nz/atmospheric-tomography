@@ -10,6 +10,7 @@ import training
 import astronomy.astronomy
 import astronomy.telescope
 import astronomy.satellite
+import astronomy.asterisms
 
 import display
 
@@ -43,7 +44,10 @@ if __name__ == "__main__":
         sats.build()
 
     if cfg.display_asterisms:
+        # print("Cleaning old data")
+        # astronomy.satellite.clean_maps()
         print("Displaying asterism data")
+        data = astronomy.asterisms.load_data(cfg.magnitude)
         display.asterisms()
 
     if cfg.train_models:
@@ -65,7 +69,3 @@ if __name__ == "__main__":
                     facet_kws={'sharey': "row", 'sharex': True})
         
     plt.show()
-
-# Build KD trees for star distances using star map
-def build_star_maps():
-    from astronomy.astronomy import build_maps

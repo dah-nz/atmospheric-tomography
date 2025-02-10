@@ -1,3 +1,5 @@
+import os, inspect
+
 import pandas as pd
 
 from ml import ml, data
@@ -26,7 +28,7 @@ def append_results(results, epoch, stage, model, screens, asterism, type, loss):
 
 def run(cfg):
     log = logging.get_logger(__name__)
-    logging.setup_logger(log, start_time=cfg.start_time, to_console=True)
+    logging.setup_logger(log, to_console=True)
     
     fixed_trainer = ml.Trainer(cfg)
     variable_trainer = ml.Trainer(cfg)
@@ -42,22 +44,27 @@ def run(cfg):
         "Loss": [],
     }
 
+    directory = "data/models"
+    os.makedirs(f"{directory}/{cfg.start_time}")
+    os.makedirs(f"{directory}/{cfg.start_time}/parameters")
+    os.makedirs(f"{directory}/{cfg.start_time}/definitions")
+
     total_epochs = sum([r[0] for r in cfg.regime])
 
     save_asterism_data = {"fixed": [], "variable": []}
 
-    for n_epochs, n_screens, training_size, testing_size in cfg.regime:
+    for n_epochs, n_screens in cfg.regime:
         for e in range(n_epochs):
             epoch += 1
             log.info(f"Running Epoch {epoch}/{total_epochs} (Sub-epoch {e+1}/{n_epochs})")
-            atmosphere_train = phase_screen.Atmosphere(n_screens, cfg.altitudes, cfg.r0, cfg.D, cfg.aperture_size)
-            atmosphere_test = phase_screen.Atmosphere(testing_size, cfg.altitudes, cfg.r0, cfg.D, cfg.aperture_size)
+            atmosphere_train = phase_screen.Atmosphere(n_screens, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+            atmosphere_test = phase_screen.Atmosphere(cfg.testing_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
 
             if 'fixed' in cfg.asterism_types:
                 log.info(f"Running fixed asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
                 fixed_asterisms = asterisms.generate_fixed_asterisms(cfg.fixed_asterism_angle)
                 data = run_epoch(fixed_trainer, 
-                                 training_size, 
+                                 cfg.training_size, 
                                  fixed_asterisms, 
                                  atmosphere_train, 
                                  cfg.basis)
@@ -67,25 +74,26 @@ def run(cfg):
                     append_results(results, epoch, "Train", k, n_screens, "Fixed", "Reconstruction", r)
 
                 data = run_epoch(fixed_trainer, 
-                                 testing_size,
+                                 cfg.testing_size,
                                  fixed_asterisms,
                                  atmosphere_test,
                                  cfg.basis,
                                  train=False)
                 
                 for k, (l, r) in data.items():
-                    append_results(results, epoch, "Test", k, testing_size, "Fixed", "Coefficients", l)
-                    append_results(results, epoch, "Test", k, testing_size, "Fixed", "Reconstruction", r)
+                    append_results(results, epoch, "Test", k, cfg.testing_size, "Fixed", "Coefficients", l)
+                    append_results(results, epoch, "Test", k, cfg.testing_size, "Fixed", "Reconstruction", r)
                 
-                save_asterism_data["fixed"] += fixed_asterisms
+                save_asterism_data["fixed"] += (epoch, fixed_asterisms)
 
-                fixed_trainer.save_models(epoch, suffix="fixed")
+                fixed_trainer.save_models(epoch, suffix="fixed", dir=f"{directory}/{cfg.start_time}")
+                fixed_trainer.save_models(epoch, suffix="fixed", dir=f"{directory}/current")
             
             if 'variable' in cfg.asterism_types:
                 log.info(f"Running variable asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
-                variable_asterisms = asterisms.generate_variable_asterisms(training_size + testing_size, cfg.asterism_magnitude)
+                variable_asterisms = asterisms.generate_variable_asterisms(cfg.training_size + cfg.testing_size, cfg.magnitude)
                 data = run_epoch(variable_trainer,
-                                 training_size, 
+                                 cfg.training_size, 
                                  variable_asterisms, 
                                  atmosphere_train, 
                                  cfg.basis)
@@ -95,34 +103,39 @@ def run(cfg):
                     append_results(results, epoch, "Train", k, n_screens, "Variable", "Reconstruction", r)
 
                 data = run_epoch(variable_trainer, 
-                                 testing_size,
+                                 cfg.testing_size,
                                  variable_asterisms,
                                  atmosphere_test,
                                  cfg.basis,
                                  train=False)
                 
                 for k, (l, r) in data.items():
-                    append_results(results, epoch, "Test", k, testing_size, "Variable", "Coefficients", l)
-                    append_results(results, epoch, "Test", k, testing_size, "Variable", "Reconstruction", r)
+                    append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Coefficients", l)
+                    append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Reconstruction", r)
 
-                variable_trainer.save_models(epoch, suffix="variable")
+                variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/{cfg.start_time}")
+                variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/current")
 
-                save_asterism_data["variable"] += variable_asterisms
+                save_asterism_data["variable"] += (epoch, variable_asterisms)
 
     df = pd.DataFrame.from_dict(results, orient="columns")
 
-    with open("asterisms_variable.txt", "w") as f:
-        for l in save_asterism_data["variable"]:
-            f.write(f"{l}\n")
+    for dir in [f"{directory}/current", f"{directory}/{cfg.start_time}"]:
+        with open(f"{dir}/asterisms_variable.txt", "w") as f:
+            for l in save_asterism_data["variable"]:
+                f.write(f"{l}\n")
 
-    with open("asterisms_fixed.txt", "w") as f:
-        for l in save_asterism_data["fixed"]:
-            f.write(f"{l}\n")
+        with open(f"{dir}/asterisms_fixed.txt", "w") as f:
+            for l in save_asterism_data["fixed"]:
+                f.write(f"{l}\n")
 
-    with open("data/models/results/results.csv", "w") as f:
-        df.to_csv(f, sep=",")
+        with open(f"{dir}/results.csv", "w") as f:
+            df.to_csv(f, sep=",")
 
-    with open(f"data/models/results/old/results_{cfg.start_time}.csv", "w") as f:
-        df.to_csv(f, sep=",")
+        for k, m in fixed_trainer.models.items():
+            name = m.__class__.__name__
+            source = inspect.getsource(m.__class__)
+            with open(f"{dir}/definitions/{name}.def", "w") as f:
+                f.write(source)
 
     return df

@@ -6,7 +6,7 @@ from datetime import datetime
 
 class AltitudeExtendAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        # Get the existing number of arguments from another argument
+        # Get the number of layers from the layers argument
         n_layers = getattr(namespace, 'layers', None)
         
         # Validate the number of provided arguments
@@ -30,7 +30,7 @@ class Config():
 
         parser = argparse.ArgumentParser(prog='main.py',
                                      description="Runs different elements of the atmoshperic tomography simulator")
-    
+        
         parser.add_argument('-m', '--magnitude', action='store', default=14, type=int, help='Limiting magnitude of background stars')
         parser.add_argument('-b', '--build_star_map', action='store_true', help='Build star maps')
         parser.add_argument('-s', '--satellites', action='store_true', help="Calculate satellite passes from fresh TLEs")
@@ -53,8 +53,6 @@ class Config():
         parser.add_argument('--loss_function', action='store', default='mse_loss', help="ML training loss function")
         parser.add_argument('--learning_rate', action='store', default=1e-3, help="ML training AdamW learning rate")
         parser.add_argument('--weight_decay', action='store', default=1e-5, help="ML training AdamW weight decay")
-        parser.add_argument('--directory', action='store', type=str, help="Directory to save output")
-        parser.add_argument('--asterism_types', action='extend', nargs="*", type=str, help='Types of asterisms to train')
 
         parser.add_argument('--num_sats', action='store', default=500, help="Number of satellites to calculate asterisms from")
         parser.add_argument('--sat_del_t', action='store', default=30, help="Time delta between satellite location checks (s)")
@@ -62,6 +60,11 @@ class Config():
 
         parser.add_argument('--display_asterisms', action='store_true', help="Display data about asterisms")
         parser.add_argument('--display_training', action='store_true', help="Display results of training")
+
+        parser.add_argument('--fixed_off', action='store_true', help='Turn off fixed asterism training')
+        parser.add_argument('--variable_off', action='store_true', help='Turn off variable asterism training')
+        parser.add_argument('--lsq_off', action='store_true', help='Turn off Least Squares tomography')
+        parser.add_argument('--glao_off', action='store_true', help='Turn off GLAO tomography')
 
         try:
             args = parser.parse_args()
@@ -78,14 +81,25 @@ class Config():
         for k, v in vars(args).items():
             if not k.startswith("__"):
                 setattr(self, k, v)
+        #   Name                Fixed asterisms only
+        self.tomo_methods = {
+            "LeastSquares":     True,
+            "GLAO":             False
+            }
+
+        if self.lsq_off:
+            self.tomo_methods.pop('LeastSquares')
+        if self.glao_off:
+            self.tomo_methods.pop("GLAO")
         
         self.basis = basis.select(self.basis_function, self.num_modes)
 
-        #   Name                Fixed asterisms only
-        self.fixed_asterisms_only = {
-            "LeastSquares":     False,
-            "GLAO":             False
-            }
+        self.asterism_types = ['fixed', 'variable']
+
+        if self.fixed_off:
+            self.asterism_types.remove('fixed')
+        if self.variable_off:
+            self.asterism_types.remove('variable')
 
         # regime is [(num epochs, screens per epoch)]
         match self.regime:
@@ -103,6 +117,5 @@ class Config():
             case _: #mse_loss
                 self.loss_function = nn.MSELoss()
 
-
     def get_file_name(self, name):
-        return f"{name}_{self.basis_type}_{self.n_coeffs}_{self.r0}_{self.fixed_asterism_angle}_{self.D}"
+        return f"{name}_{type(self.basis).__name__}_{self.num_modes}_{self.r0}_{self.fixed_asterism_angle}_{self.diameter}"

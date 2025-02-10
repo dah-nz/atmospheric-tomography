@@ -34,20 +34,13 @@ class Trainer():
     def __init__(self, cfg, load=False):
         self.device = initialise()
         
-        logger.info(f"Building models for networks {cfg.model_names}, with n_modes={cfg.n_coeffs}")
+        logger.info(f"Building models for networks {cfg.train_models}, with n_modes={cfg.num_modes}")
         
         # Set up machine learning models and functions
-        self.models = {k: eval(f"models.{k}(cfg).to(self.device)") for k in cfg.model_names}
+        self.models = {k: eval(f"models.{k}(cfg).to(self.device)") for k in cfg.train_models}
+        self.model_file_names = [cfg.get_file_name(k) for k in cfg.train_models]
         self.optimisers = {k: torch.optim.AdamW(m.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay) for k, m in self.models.items()}
         self.loss_fn = cfg.loss_function
-
-        self.model_file_names = [cfg.get_file_name(m.name) for k, m in self.models.items()]
-
-        # if load:
-        #     self.load_models()
-
-        # Set up different tomography methods
-        self.tomo = {t: (eval(f"tomography.{t}(cfg.basis, cfg.D, cfg.n_coeffs, cfg.altitudes, cfg.aperture_size)"), s) for t, s in cfg.tomo_methods.items()}
 
         self.regime = cfg.regime
         self.target = beacon.Beacon(0, 0)
@@ -59,8 +52,11 @@ class Trainer():
             opti = self.optimisers[k]
             self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis))
 
-        for k, (algo, fixed_asterisms_only) in self.tomo.items():
-            self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, fixed_asterisms_only))
+        if len(cfg.tomo_methods) > 0:
+            # Set up different tomography methods
+            self.tomo = {t: (eval(f"tomography.{t}(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size)"), s) for t, s in cfg.tomo_methods.items()}
+            for k, (algo, fixed_asterisms_only) in self.tomo.items():
+                self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, fixed_asterisms_only))
 
         self.runners.append(runner.OpenLoopRunner(self.loss_fn, cfg.basis))
         self.runners.append(runner.FittingErrorRunner(self.loss_fn, cfg.basis))
@@ -89,27 +85,36 @@ class Trainer():
     def test(self, data):
         return self._run_epoch(data, func="test")
     
-    def get_file_names(self, epoch=-1, prefix="", suffix=""):
+    def get_file_names(self, epoch=-1, prefix="", suffix="", dir=None):
         base_file_names = self.model_file_names
         file_names = []
+
+        if prefix != "":
+            prefix += '_'
+
+        if suffix != "":
+            suffix = '_' + suffix
+
+        if dir is None:
+            dir = "data/models"
         
         for file in base_file_names:
             if epoch >= 0:
-                file_names.append(f"data/models/parameters/{prefix}_{file}_{suffix}_e{epoch}.mdl")
+                file_names.append(f"{dir}/parameters/{prefix}{file}{suffix}_e{epoch}.mdl")
             else:
-                file_names.append(f"data/models/parameters/{prefix}_{file}_{suffix}.mdl")
+                file_names.append(f"{dir}/parameters/{prefix}{file}{suffix}.mdl")
 
         return file_names
 
-    def save_models(self, epoch=-1, prefix="", suffix=""):
-        files = self.get_file_names(epoch, prefix, suffix)
+    def save_models(self, epoch=-1, prefix="", suffix="", dir=None):
+        files = self.get_file_names(epoch, prefix, suffix, dir)
 
         for (name, model), ff in zip(self.models.items(), files):
             logger.info(f"Saving fixed model state dict for model {name} to {ff}")
             torch.save(model.state_dict(), ff)
 
-    def load_models(self, epoch=-1, prefix="", suffix=""):
-        files = self.get_file_names(epoch, prefix, suffix)
+    def load_models(self, epoch=-1, prefix="", suffix="", dir=None):
+        files = self.get_file_names(epoch, prefix, suffix, dir)
 
         for (name, model), ff in zip(self.models.items(), files):
             logger.info(f"Loading fixed model state dict for model {name} from {ff}")

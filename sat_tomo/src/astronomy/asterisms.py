@@ -39,6 +39,8 @@ def load_data(mag, n=None, limit=0, rng=None, quick_load=False):
 
         if time_since_update.days >= SATELLITE_UPDATE_FREQUENCY:
             satellite.build_statellite_map()
+
+            # Saves time updated only if the satellite map build completes.
             with open("data/satellites/time.updated", "wb") as f:
                 joblib.dump(time_now, f)
 
@@ -53,7 +55,14 @@ def load_data(mag, n=None, limit=0, rng=None, quick_load=False):
     
         with open(filename, 'rb') as f:
             logger.info(f'Opening file "{filename}"')
-            data = np.array(joblib.load(f))
+            data = joblib.load(f)
+
+        try:
+            data = np.array(data)
+        except ValueError:
+            print(data[:5])
+            print(data[-5:])
+            quit()
 
         if limit > 0:
             data = data[data[:, 2, 0] <= limit, :]

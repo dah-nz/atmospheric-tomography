@@ -19,7 +19,7 @@ class Beacon():
         A mask of the telescope aperture
     
     """
-    def __init__(self, theta, gamma, arcseconds=True, aperture_mask=None):
+    def __init__(self, theta, gamma, magnitude=None, arcseconds=True, aperture_mask=None):
 
         # Gamma needs to be in radians, but is more human readable in arcseconds for this use case
         self.arcseconds = arcseconds
@@ -32,6 +32,7 @@ class Beacon():
 
         self.theta = theta
         self.aperture_mask = aperture_mask
+        self.magnitude = magnitude
 
     def __repr__(self):
         return f"<Beacon(t: {self.theta}, g: {self._gamma_arcsec}\" ({self.gamma} rads))>"

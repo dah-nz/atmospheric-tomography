@@ -19,4 +19,4 @@ def generate_variable_asterisms(n, magnitude=14, limiting_angle=120, rng=None):
 
     asterism_data = asterisms.load_data(magnitude, n=n, limit=limiting_angle, rng=rng, quick_load=True)
     
-    return [[beacon.Beacon(t, g) for g, t in asterism] for asterism in asterism_data]
+    return [[beacon.Beacon(t, g, magnitude=m) for g, t, m in asterism] for asterism in asterism_data]

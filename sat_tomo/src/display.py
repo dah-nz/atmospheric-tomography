@@ -16,7 +16,7 @@ def asterisms():
         pairs = []
 
         for angle in angles:
-            for (a, _), m in angle:
+            for a, _, m in angle:
                 pairs.append((a, m))
 
         indices = np.random.choice(range(len(pairs)), 1000)
