@@ -38,6 +38,7 @@ class Config():
         parser.add_argument('-t', '--train_models', action='extend', nargs="*", type=str, help='Train ML models')
         parser.add_argument('-e', '--epochs', action='store', default=64, type=int, help="Number of training epochs")
         parser.add_argument('-D', '--diameter', action='store', default=1.8, help="Set telescope diameter (m)")
+        parser.add_argument('--directory', action='store', default='C:/Code/PhD/Data', help="Directory to save data to")
         parser.add_argument('--aperture_size', action='store', default=64, type=int, help="Set aperture size (pixels)")
         parser.add_argument('--r0', action='store', default=0.07, help="Set total Fried parameter across all layers (m)")
         parser.add_argument('--layers', action='store', default=3, type=int, help="Number of layers")
@@ -53,6 +54,7 @@ class Config():
         parser.add_argument('--loss_function', action='store', default='mse_loss', help="ML training loss function")
         parser.add_argument('--learning_rate', action='store', default=1e-3, help="ML training AdamW learning rate")
         parser.add_argument('--weight_decay', action='store', default=1e-5, help="ML training AdamW weight decay")
+        parser.add_argument('--save_frequency', action='store', default=4, type=int, help='Frequency to save intermediary model parameters')
 
         parser.add_argument('--num_sats', action='store', default=500, help="Number of satellites to calculate asterisms from")
         parser.add_argument('--sat_del_t', action='store', default=30, help="Time delta between satellite location checks (s)")
@@ -100,18 +102,29 @@ class Config():
             self.asterism_types.remove('fixed')
         if self.variable_off:
             self.asterism_types.remove('variable')
+        
+        max_screens = min(self.testing_size, self.training_size)
 
         # regime is [(num epochs, screens per epoch)]
         match self.regime:
             case 'screen_scaling':
                 n = 8
-                self.regime = [(int(self.epochs / n), 2)]
+                scaling_factor = 1.44
+                self.regime = [(n, 2)]
                 sum = self.regime[-1][0]
                 while sum < self.epochs:
-                    self.regime.append((self.regime[-1][0], self.regime[-1][1] * 2))
+                    self.regime.append((self.regime[-1][0], min(max_screens, int(self.regime[-1][1] * scaling_factor + 0.5))))
+                    sum += self.regime[-1][0]
+            case 'linear_scaling':
+                n = 8
+                linear_factor = 10
+                self.regime = [(n, 2)]
+                sum = self.regime[-1][0]
+                while sum < self.epochs:
+                    self.regime.append((self.regime[-1][0], min(max_screens, int(self.regime[-1][1] + linear_factor))))
                     sum += self.regime[-1][0]
             case _: #default
-                self.regime = [(self.epochs, 128)]
+                self.regime = [(self.epochs, max_screens)]
 
         match self.loss_function:
             case _: #mse_loss

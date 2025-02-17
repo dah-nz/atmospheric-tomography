@@ -58,7 +58,7 @@ if __name__ == "__main__":
         log.info(" > Model training complete <")
 
     if cfg.display_training:
-        with open("data/models/results/results.csv", "r") as f:
+        with open(f"{cfg.directory}/current/results.csv", "r") as f:
             df = pd.read_csv(f)
 
         df = df.sort_values(by="Stage")

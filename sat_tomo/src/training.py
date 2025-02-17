@@ -1,4 +1,4 @@
-import os, inspect
+import os, inspect, shutil
 
 import pandas as pd
 
@@ -44,10 +44,14 @@ def run(cfg):
         "Loss": [],
     }
 
-    directory = "data/models"
+    directory = cfg.directory
     os.makedirs(f"{directory}/{cfg.start_time}")
     os.makedirs(f"{directory}/{cfg.start_time}/parameters")
     os.makedirs(f"{directory}/{cfg.start_time}/definitions")
+
+    os.makedirs(f"{directory}/current", exist_ok=True)
+    os.makedirs(f"{directory}/current/parameters", exist_ok=True)
+    os.makedirs(f"{directory}/current/definitions", exist_ok=True)
 
     total_epochs = sum([r[0] for r in cfg.regime])
 
@@ -86,8 +90,9 @@ def run(cfg):
                 
                 save_asterism_data["fixed"] += (epoch, fixed_asterisms)
 
-                fixed_trainer.save_models(epoch, suffix="fixed", dir=f"{directory}/{cfg.start_time}")
-                fixed_trainer.save_models(epoch, suffix="fixed", dir=f"{directory}/current")
+                if (epoch - 1) % cfg.save_frequency == 0:
+                    fixed_trainer.save_models(epoch, suffix="fixed", dir=f"{directory}/{cfg.start_time}")
+                    fixed_trainer.save_models(epoch, suffix="fixed", dir=f"{directory}/current")
             
             if 'variable' in cfg.asterism_types:
                 log.info(f"Running variable asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
@@ -113,10 +118,17 @@ def run(cfg):
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Coefficients", l)
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Reconstruction", r)
 
-                variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/{cfg.start_time}")
-                variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/current")
+                if (epoch - 1) % cfg.save_frequency == 0:
+                    variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/{cfg.start_time}")
+                    variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/current")
 
                 save_asterism_data["variable"] += (epoch, variable_asterisms)
+
+    # Save final model
+    fixed_trainer.save_models(suffix="fixed", dir=f"{directory}/{cfg.start_time}")
+    fixed_trainer.save_models(suffix="fixed", dir=f"{directory}/current")
+    variable_trainer.save_models(suffix="variable", dir=f"{directory}/{cfg.start_time}")
+    variable_trainer.save_models(suffix="variable", dir=f"{directory}/current")
 
     df = pd.DataFrame.from_dict(results, orient="columns")
 
@@ -137,5 +149,8 @@ def run(cfg):
             source = inspect.getsource(m.__class__)
             with open(f"{dir}/definitions/{name}.def", "w") as f:
                 f.write(source)
+
+    shutil.make_archive(f'{directory}/{cfg.start_time}', 'zip', f'{directory}/{cfg.start_time}')
+    shutil.rmtree(f'{directory}/{cfg.start_time}')
 
     return df

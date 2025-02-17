@@ -31,6 +31,8 @@ def default_unpack(X, y, i):
     beacons = [beacon.Beacon(t, g, arcseconds=False) for t, g in zip(theta, gamma)]
     return target_coeffs, beacon_coeffs, beacons
 
+
+
 class TomographyData(Dataset):
     """
     Pytorch dataset wrapper. Stores the phase screen and asterism data for training machine learning models.

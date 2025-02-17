@@ -128,7 +128,7 @@ class FittingErrorRunner(Runner):
                 recon = torch.from_numpy(self.basis.compose(s0.shape, y0))
                 recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
 
-        logger.info(f" -> {self.name} loss: {np.mean(recon_data):>7f}")
+        logger.info(f" -> {self.name} recon loss: {np.mean(recon_data):>7f}")
 
         return (None, np.sqrt(np.mean(recon_data)))
 
