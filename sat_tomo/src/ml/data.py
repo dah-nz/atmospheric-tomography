@@ -31,14 +31,12 @@ def default_unpack(X, y, i):
     beacons = [beacon.Beacon(t, g, arcseconds=False) for t, g in zip(theta, gamma)]
     return target_coeffs, beacon_coeffs, beacons
 
-
-
 class TomographyData(Dataset):
     """
     Pytorch dataset wrapper. Stores the phase screen and asterism data for training machine learning models.
 
     """
-    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, limiting_angle=120, rng=None, packing_function=None):
+    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, limiting_angle=120, rng=None, packing_function=None, unpacking_function=None):
         """
         Set up Tomography Dataset
 
@@ -76,12 +74,20 @@ class TomographyData(Dataset):
             self.pack = default_pack
         else:
             self.pack = packing_function
+
+        if unpacking_function is None:
+            self.unpack = default_unpack
+        else:
+            self.unpack = packing_function
         
     def __len__(self):
         return self.n
     
     def set_packing_func(self, fmt_fn):
         self.pack = fmt_fn
+
+    def set_unpacking_func(self, fmt_fn):
+        self.unpack = fmt_fn
     
     def __getitem__(self, idx):
         ast_idx = idx % len(self.asterisms)
@@ -94,11 +100,17 @@ class TomographyData(Dataset):
         target_screen = self.target.total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         
         asterism_coeffs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters)
+        glao_coeffs = np.sum(asterism_coeffs, 0) / np.shape(asterism_coeffs)[0]
+
+        asterism_coeffs = [asterism_coeffs[i, :] - glao_coeffs for i in range(asterism_coeffs.shape[0])]
+
         X = self.pack(asterism_coeffs, asterism)
         
         logger.debug(f"X: {X.shape}, target: {target_coeffs.shape}")
 
-        return X, target_coeffs, target_screen
+        diff = target_coeffs - glao_coeffs
+
+        return X, target_coeffs, target_screen, glao_coeffs, diff
     
     def get_dataloader(self, shuffle=False):
         logger.debug(f"Loading dataloader, batch_size={self.n}")

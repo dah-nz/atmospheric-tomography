@@ -43,14 +43,15 @@ class TomoRunner(Runner):
 
         mask = None
 
-        for X, y, scr in test_data:
+        for X, y, scr, glao_y, _ in test_data:
             X, y = X.numpy(), y.numpy()
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
             for i in range(data.n):
                 logger.debug(f"Calculating tomography ({self.name}) test data, index {i}/{data.n}")
-                target_coeffs, beacon_coeffs, beacons = default_unpack(X, y, i)
+                target_coeffs, beacon_coeffs, beacons = data.unpack(X, y, i)
+                beacon_coeffs = np.array([np.add(beacon_coeffs[n, :], glao_y[i]) for n in range(beacon_coeffs.shape[0])])
 
                 tomo_coeffs = self.tomography.run(beacons, self.target, beacon_coeffs)
                 loss_data.append(
@@ -84,7 +85,7 @@ class OpenLoopRunner(Runner):
 
         mask = None
 
-        for _, y, scr in test_data:
+        for _, y, scr, _, _ in test_data:
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
@@ -117,7 +118,7 @@ class FittingErrorRunner(Runner):
 
         mask = None
 
-        for _, y, scr in test_data:
+        for _, y, scr, _, _ in test_data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -147,15 +148,15 @@ class ModelRunner(Runner):
 
         mask = None
 
-        for X, y, scr in train_data:
+        for X, _, scr, glao_y, delta_y in train_data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
-            X, y = X.to(ml.device), y.to(ml.device)
+            X, delta_y = X.to(ml.device), delta_y.to(ml.device)
 
             pred = self.model(X)
-            loss = self.loss_fn(pred, y)
+            loss = self.loss_fn(pred, delta_y)
 
             loss_data.append(loss.item())
 
@@ -163,10 +164,11 @@ class ModelRunner(Runner):
             self.optimiser.step()
             self.optimiser.zero_grad()
 
+            prediction = pred.to("cpu").detach() + glao_y
 
-            for p0, s0 in zip(pred, scr):
+            for p0, s0 in zip(prediction, scr):
                 s0 = s0.numpy() * mask
-                p0 = p0.to("cpu").detach().numpy()
+                p0 = p0.numpy()
                 recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
                 recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
 
@@ -183,21 +185,23 @@ class ModelRunner(Runner):
         mask = None
 
         with torch.no_grad():
-            for X, y, scr in test_data:
+            for X, y, scr, glao_y, delta_y in test_data:
 
                 if mask is None:
                     mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
-                X, y = X.to(ml.device), y.to(ml.device)
+                X, delta_y = X.to(ml.device), delta_y.to(ml.device)
 
                 pred = self.model(X)
-                loss = self.loss_fn(pred, y).item()
+                loss = self.loss_fn(pred, delta_y).item()
 
                 loss_data.append(loss)
 
-                for p0, s0 in zip(pred, scr):
+                prediction = pred.to("cpu") + glao_y
+
+                for p0, s0 in zip(prediction, scr):
                     s0 = s0.numpy() * mask
-                    p0 = p0.to("cpu").numpy()
+                    p0 = p0.numpy()
                     recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
                     recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
 

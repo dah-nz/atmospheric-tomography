@@ -1,4 +1,4 @@
-from torch import nn, cat
+from torch import nn, cat, sin
 from ml.network import Network
 
 class MLNN_baseline(Network):
@@ -20,6 +20,32 @@ class MLNN_baseline(Network):
     def forward(self, x):
         x = self.flatten(x)
         return self.linear_relu_stack(x)
+    
+class Sine(nn.Module):
+    def __init__(self):
+        super(Sine, self).__init__()
+    def forward(self, x):
+        return sin(x)
+
+class MLNN_sine(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_sine_stack = nn.Sequential(
+            nn.Linear(self.n_coeffs*3*3, 512),
+            Sine(),
+            nn.Dropout(self.do),
+            nn.Linear(512, 2048),
+            Sine(),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 512),
+            Sine(),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_coeffs)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_sine_stack(x)
     
 class CNN2D(Network):
     def __init__(self, cfg):
