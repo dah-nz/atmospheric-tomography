@@ -1,6 +1,24 @@
-from torch import nn, cat, sin
+from torch import nn, cat, sin, sqrt
 from ml.network import Network
-
+    
+class Sine(nn.Module):
+    def __init__(self):
+        super(Sine, self).__init__()
+    def forward(self, x):
+        return sin(x)
+    
+class Snake(nn.Module):
+    def __init__(self):
+        super(Snake, self).__init__()
+    def forward(self, x):
+        return sin(x)**2 + x
+    
+class SquarePlus(nn.Module):
+    def __init__(self):
+        super(SquarePlus, self).__init__()
+    def forward(self, x):
+        return (x + sqrt(x ** 2 + 4)) / 2
+    
 class MLNN_baseline(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -20,12 +38,6 @@ class MLNN_baseline(Network):
     def forward(self, x):
         x = self.flatten(x)
         return self.linear_relu_stack(x)
-    
-class Sine(nn.Module):
-    def __init__(self):
-        super(Sine, self).__init__()
-    def forward(self, x):
-        return sin(x)
 
 class MLNN_sine(Network):
     def __init__(self, cfg):
@@ -47,6 +59,112 @@ class MLNN_sine(Network):
         x = self.flatten(x)
         return self.linear_sine_stack(x)
     
+class MLNN_snake(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_snake_stack = nn.Sequential(
+            nn.Linear(self.n_coeffs*3*3, 512),
+            Snake(),
+            nn.Dropout(self.do),
+            nn.Linear(512, 2048),
+            Snake(),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 512),
+            Snake(),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_coeffs)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_snake_stack(x)
+    
+class MLNN_swish(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_swish_stack = nn.Sequential(
+            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.SiLU(),
+            nn.Dropout(self.do),
+            nn.Linear(512, 2048),
+            nn.SiLU(),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 512),
+            nn.SiLU(),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_coeffs)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_swish_stack(x)
+    
+class MLNN_swish_deep(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_swish_stack = nn.Sequential(
+            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.SiLU(),
+            nn.Dropout(self.do),
+            nn.Linear(512, 2048),
+            nn.SiLU(),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 2048),
+            nn.SiLU(),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 2048),
+            nn.SiLU(),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 512),
+            nn.SiLU(),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_coeffs)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_swish_stack(x)
+    
+class MLNN_GELU(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_swish_stack = nn.Sequential(
+            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.GELU(),
+            nn.Dropout(self.do),
+            nn.Linear(512, 2048),
+            nn.GELU(),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 512),
+            nn.GELU(),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_coeffs)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_swish_stack(x)
+    
+class MLNN_SquarePlus(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_swish_stack = nn.Sequential(
+            nn.Linear(self.n_coeffs*3*3, 512),
+            SquarePlus(),
+            nn.Dropout(self.do),
+            nn.Linear(512, 2048),
+            SquarePlus(),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 512),
+            SquarePlus(),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_coeffs)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_swish_stack(x)
+
 class CNN2D(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -450,3 +568,37 @@ class ParallelCNN(Network):
         x2 = self.horz_stack(x)
         x = cat([x1, x2], 1)
         return self.comb_stack(x)
+    
+
+class CNN2D_sine(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        
+        self.model_stack = nn.Sequential(
+            # 3x3x16 -> 18x5x18
+            nn.Conv2d(3, 18, (3, 3), padding=2, padding_mode="circular", groups=3), 
+            Sine(),
+            nn.Dropout(self.do),
+ 
+            # 18x5x18 -> 54x5x18
+            nn.Conv2d(18, 54, (3, 3), padding=1, padding_mode="circular", groups=3),
+            Sine(),
+            nn.Dropout(self.do),
+
+            # 54x5x18 -> 54x3x16
+            nn.Conv2d(54, 54, (3, 3), padding=0, padding_mode="circular", groups=3),
+            Sine(),
+            nn.Dropout(self.do),
+ 
+            nn.Flatten(),
+ 
+            nn.Linear(3*54*self.n_coeffs, 256),
+            Sine(),
+            nn.Dropout(self.do),
+
+            nn.Linear(256, self.n_coeffs)
+
+        )
+    def forward(self, x):
+        x = x.transpose(2, -1).contiguous()
+        return self.model_stack(x)

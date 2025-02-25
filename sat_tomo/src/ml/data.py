@@ -1,7 +1,7 @@
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
-from tomography import beacon, tomography
+from tomography import beacon, tomography, asterisms
 from basis import zernike
 
 import log
@@ -9,13 +9,20 @@ import log
 logger = log.get_logger(__name__)
 log.setup_logger(logger)
 
+NORMALISE_ANGLES = True
+
 def default_pack(asterism_coeffs, asterism_angles):
     asterism_coeffs = np.expand_dims(asterism_coeffs, axis=-1)
     theta = np.ones_like(asterism_coeffs)
     gamma = np.ones_like(asterism_coeffs)
     for i, b in enumerate(asterism_angles):
-        theta[i, :] = theta[i, :] * b.theta
-        gamma[i, :] = gamma[i, :] * b.gamma
+        if NORMALISE_ANGLES:
+            theta[i, :] = theta[i, :] * b.theta / (np.pi * 2)                   # Normalise to [0, 1]
+            gamma[i, :] = gamma[i, :] * b.gamma / (asterisms.LIMITING_ANGLE)    # Normalise to [0, 1]
+        else:
+            theta[i, :] = theta[i, :] * b.theta
+            gamma[i, :] = gamma[i, :] * b.gamma
+
     
     data = np.append(asterism_coeffs, theta, axis=2)
     data = np.append(data, gamma, axis=2)
@@ -28,7 +35,10 @@ def default_unpack(X, y, i):
     gamma = np.array([data[0, 0, 2], data[1, 0, 2], data[2, 0, 2]])
 
     beacon_coeffs = data[:, :, 0]
-    beacons = [beacon.Beacon(t, g, arcseconds=False) for t, g in zip(theta, gamma)]
+    if NORMALISE_ANGLES:
+        beacons = [beacon.Beacon(t * np.pi * 2, g * asterisms.LIMITING_ANGLE, arcseconds=False) for t, g in zip(theta, gamma)]
+    else:
+        beacons = [beacon.Beacon(t, g, arcseconds=False) for t, g in zip(theta, gamma)]
     return target_coeffs, beacon_coeffs, beacons
 
 class TomographyData(Dataset):

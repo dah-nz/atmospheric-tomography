@@ -96,10 +96,11 @@ def run(cfg):
             
             if 'variable' in cfg.asterism_types:
                 log.info(f"Running variable asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
-                variable_asterisms = asterisms.generate_variable_asterisms(cfg.training_size + cfg.testing_size, cfg.magnitude)
+                training_asterisms = asterisms.generate_variable_asterisms(cfg.training_size, cfg.magnitude, zero_rate=1e-3, fixed_rate=1e-3)
+                testing_asterisms = asterisms.generate_variable_asterisms(cfg.testing_size, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0)
                 data = run_epoch(variable_trainer,
                                  cfg.training_size, 
-                                 variable_asterisms, 
+                                 training_asterisms, 
                                  atmosphere_train, 
                                  cfg.basis)
 
@@ -109,7 +110,7 @@ def run(cfg):
 
                 data = run_epoch(variable_trainer, 
                                  cfg.testing_size,
-                                 variable_asterisms,
+                                 testing_asterisms,
                                  atmosphere_test,
                                  cfg.basis,
                                  train=False)
@@ -122,7 +123,7 @@ def run(cfg):
                     variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/{cfg.start_time}")
                     variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/current")
 
-                save_asterism_data["variable"] += (epoch, variable_asterisms)
+                save_asterism_data["variable"] += (epoch, training_asterisms + testing_asterisms)
 
     # Save final model
     fixed_trainer.save_models(suffix="fixed", dir=f"{directory}/{cfg.start_time}")
