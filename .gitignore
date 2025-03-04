@@ -54,3 +54,4 @@ packages/
 *.dat
 *.pgf
 **/old/*
+*.old
