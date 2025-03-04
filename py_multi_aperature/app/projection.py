@@ -1,5 +1,5 @@
 import numpy as np
-from scipy import rand
+# from scipy import rand
 from zernike import zerni
 from util import circle, pol2cart
 import util
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     from phase_screen import createFromModes
 
     size = 256
-    nModes = 50
+    nModes = 16
     np.random.seed(3)
     test_modes = [list(m * np.exp(-(i+1)/nModes) for i, m in enumerate(np.random.rand(nModes) - 0.5))]
     scale = 0.54

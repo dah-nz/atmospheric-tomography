@@ -71,6 +71,7 @@ def cart2imagespace(image_dim, d, location):
     center = image_dim / 2
     x = center + ( location[0] * image_dim / d)# - 0.5
     y = center + (-location[1] * image_dim / d)# - 0.5
+    # print(x, y)
     return (int(x), int(y))
 
 def rmse(expected, actual):

@@ -2,10 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-from . import GeoWFS
-from .parameters import *
-from .fresnel_propagation import fresnel_propagation
-from .phase_screen import phase_screen
+import GeoWFS
+from parameters import *
+from fresnel_propagation import fresnel_propagation
+from phase_screen import phase_screen
 
 
 if __name__ == "__main__":

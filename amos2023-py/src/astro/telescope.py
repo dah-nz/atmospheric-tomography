@@ -29,6 +29,7 @@ class Telescope():
         self.D = diameter # (m)
         self.f_number = f_number # f/N
         self.f = self.f_number * self.D # focal length(m)
+        self._raw_location = location
         self.location = Location(lat=location[0], lon=location[1], height=location[2])
 
     def set_target(self, target, time):
@@ -45,6 +46,7 @@ class Telescope():
 
     def target_altaz(self):
         return self.target.altaz_from(self.location, self.time)
+
 
 if __name__ == "__main__":
     from satellite import Satellite

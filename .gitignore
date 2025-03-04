@@ -55,3 +55,12 @@ packages/
 *.pgf
 **/old/*
 *.old
+asterisms_*.txt
+*.vscode
+*.pickle
+*.updated
+de421.bsp
+gp.php
+*.torch
+*.mat
+*.out

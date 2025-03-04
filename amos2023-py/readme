@@ -39,3 +39,4 @@ Target locations are static with on-axis compared to off-axis in X, Y, 45deg and
 Dynamic simulations will be used where the target locations and phase screen are moved independently, to simulate a spatio-temporally variant atmoshper and satellite position
 Dynamic movements will simulate different angular velocities of the satellite across some chord of the telescope aperture projection. This may or may not pass through the optical axis.
 Phase screens will move in some direction, and at some wind speed. Each layer will have different wind directions and speeds.
+

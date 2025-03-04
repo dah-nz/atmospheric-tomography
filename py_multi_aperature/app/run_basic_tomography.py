@@ -39,26 +39,28 @@ def main():
 
             t = []
             t.append(time.perf_counter())
-            # t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
-            # t.append(time.perf_counter())
+            t_nowfs = tomo_projection_nowfs.projection_nowfs(sim)
+            t.append(time.perf_counter())
             # t_wfs = tomo_projection.projection(sim)
             # t.append(time.perf_counter())
             # t_noisy_wfs = tomo_projection.projection(sim, total_photons=1e6)
             # t.append(time.perf_counter())
             # t_covar = tomo_covariance.covariance(sim)
             # t.append(time.perf_counter())
-            t_noisy_covar = tomo_covariance.covariance(sim, total_photons=1e6)
-            t.append(time.perf_counter())
+            # t_noisy_covar = tomo_covariance.covariance(sim, total_photons=1e6)
+            # t.append(time.perf_counter())
 
-            print(t_noisy_covar)
+            print(t_nowfs)
 
-            # nowfs_results.append((modes, gs, (t_nowfs, util.rmse(np.sum(modes, 0), [0.0] + list(t_nowfs)), t[1] - t[0])))
+            nowfs_results.append((modes, gs, (t_nowfs, util.rmse(np.sum(modes, 0), [0.0] + list(t_nowfs)), t[1] - t[0])))
             # wfs_results.append((modes, gs, (t_wfs, util.rmse(np.sum(modes, 0), [0.0] + list(t_wfs)), t[1] - t[0])))
             # noisy_wfs_results.append((modes, gs, (t_noisy_wfs, util.rmse(np.sum(modes, 0), [0.0] + list(t_noisy_wfs)), t[1] - t[0])))
             # covar_results.append((modes, gs, (t_covar, util.rmse(np.sum(modes, 0), [0.0] + list(np.sum(np.reshape(t_covar, (2, -1)), 0))), t[1] - t[0])))
-            noisy_covar_results.append((modes, gs, (t_noisy_covar, util.rmse(np.sum(modes, 0), [0.0] + list(np.sum(np.reshape(t_noisy_covar, (2, -1)), 0))), t[1] - t[0])))
+            # noisy_covar_results.append((modes, gs, (t_noisy_covar, util.rmse(np.sum(modes, 0), [0.0] + list(np.sum(np.reshape(t_noisy_covar, (2, -1)), 0))), t[1] - t[0])))
 
     import pickle
+
+    print(nowfs_results)
 
     # with open("1basic_nowfs.data", 'wb') as f:
     #     pickle.dump(nowfs_results, f)
@@ -68,8 +70,8 @@ def main():
     #     pickle.dump(noisy_wfs_results, f)
     # with open("1covar.data", 'wb') as f:
     #     pickle.dump(covar_results, f)
-    with open("1noisy_covar.data", 'wb') as f:
-        pickle.dump(noisy_covar_results, f)
+    # with open("1noisy_covar.data", 'wb') as f:
+    #     pickle.dump(noisy_covar_results, f)
 
 if __name__ == "__main__":
     main()

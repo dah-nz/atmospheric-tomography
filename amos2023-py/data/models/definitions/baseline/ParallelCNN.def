@@ -2,41 +2,41 @@ class ParallelCNN(Network):
     def __init__(self, settings):
         super().__init__(settings)
         self.vert_stack = nn.Sequential(
-            # 3x3x16 -> 36x5x16
+            # 3x3x32 -> 12x5x32
             nn.Conv2d(3, 36, (3, 1), padding=(2, 0), padding_mode="zeros", groups=3), 
             nn.GELU(),
             nn.Dropout(self.do),
  
-            # 36x5x16 -> 36x7x16
-            nn.Conv2d(36, 36, (3, 1), padding=(2, 0), padding_mode="zeros", groups=3),
+            # 12x5x32 -> 12x7x32
+            nn.Conv2d(36, 24, (3, 1), padding=(2, 0), padding_mode="zeros", groups=2),
             nn.GELU(),
             nn.Dropout(self.do),
 
-            # 36x7x16 -> 36x7x16
-            nn.Conv2d(36, 36, (3, 1), padding=(2, 0), padding_mode="zeros", groups=3),
+            # 12x7x32 -> 12x9x32
+            nn.Conv2d(24, 12, (3, 1), padding=(2, 0), padding_mode="zeros", groups=1),
             nn.GELU(),
             nn.Dropout(self.do),
  
             nn.Flatten(),
  
-            nn.Linear(5184, 1024),
+            nn.Linear(1728, 1024),
             nn.GELU(),
             nn.Dropout(self.do)
         )
 
         self.horz_stack = nn.Sequential(
-            # 3x3x16 -> 36x3x18
-            nn.Conv2d(3, 36, (1, self.n_coeffs), padding=(0, self.n_coeffs//2+1), padding_mode="zeros", groups=3), 
+            # 3x3x32 -> 12x3x34
+            nn.Conv2d(3, 12, (1, self.n_coeffs), padding=(0, self.n_coeffs//2+1), padding_mode="zeros", groups=3), 
             nn.GELU(),
             nn.Dropout(self.do),
  
-            # 36x3x18 -> 36x3x18
-            nn.Conv2d(36, 36, (1, self.n_coeffs), padding=(0, self.n_coeffs//2+1), padding_mode="zeros", groups=3),
+            # 12x3x34 -> 12x3x36
+            nn.Conv2d(12, 24, (1, self.n_coeffs), padding=(0, self.n_coeffs//2+1), padding_mode="zeros", groups=2),
             nn.GELU(),
             nn.Dropout(self.do),
 
-            # 36x3x18 -> 36x3x18
-            nn.Conv2d(36, 36, (1, self.n_coeffs), padding=(0, self.n_coeffs//2+1), padding_mode="zeros", groups=3),
+            # 12x3x36 -> 12x3x38
+            nn.Conv2d(24, 36, (1, self.n_coeffs), padding=(0, self.n_coeffs//2+1), padding_mode="zeros", groups=1),
             nn.GELU(),
             nn.Dropout(self.do),
  
