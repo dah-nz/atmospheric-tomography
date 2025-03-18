@@ -12,6 +12,8 @@ from tomography import tomography, beacon
 rng_min = 0
 rng_max = (2 ** 31) - 1
 
+_phase_data_cache = None
+
 class PhaseScreenGenerator():
     def __init__(self, size, D, r0, rng=None):
         """
@@ -145,7 +147,7 @@ class PhaseScreenGenerator():
                 else:
                     y0 = 0
                 # sigma.append(util.rmse(screen[x0:x0+size, y0:y0+size], z, mask=mask))
-                sigma.append(np.var(screen[x0:x0+size, y0:y0+size], where=mask))
+                sigma.append(np.var(screen[x0:x0+size, y0:y0+size], where=mask > 0))
 
         return np.mean(sigma)
 
@@ -232,20 +234,16 @@ def generate_phase_screen(n_increases, seed=None):
 
     # Create instance of a random variable, so as to not change global random state
     rng = np.random.default_rng(seed)
-    try:
-        if _phase_data_cache is None:
-            d = os.getcwd()
-            phase_file = os.path.join(d, 'data', 'phase_data.mat')
-            data = sio.loadmat(phase_file)
-            _phase_data_cache = data
-        else:
-            data = _phase_data_cache
-    except UnboundLocalError:
+    global _phase_data_cache
+    
+    if _phase_data_cache is None:
         d = os.getcwd()
         phase_file = os.path.join(d, 'data', 'phase_data.mat')
         data = sio.loadmat(phase_file)
         _phase_data_cache = data
-
+    else:
+        data = _phase_data_cache
+    
     d = np.array(data['d'], dtype=np.float32)
     u = np.array(data['u'], dtype=np.float32)
 

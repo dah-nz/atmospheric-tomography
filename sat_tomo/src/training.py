@@ -5,11 +5,13 @@ import pandas as pd
 from ml import ml, data
 import log as logging
 
-from tomography import asterisms, phase_screen
+from tomography import asterisms, phase_screen, wavefront
 
-def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True):
+import tracemalloc
+
+def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True, wfs=None):
     
-    dt = data.TomographyData(n, asterisms, atmosphere, basis)
+    dt = data.TomographyData(n, asterisms, atmosphere, basis, wfs=wfs)
     if train:
         results = trainer.train(dt)
     else:
@@ -57,6 +59,13 @@ def run(cfg):
 
     save_asterism_data = {"fixed": [], "variable": []}
 
+    if cfg.shwfs:
+        shwfs = wavefront.SHWFS(cfg.diameter, cfg.num_modes)
+    else:
+        shwfs = None
+
+    mask = cfg.basis.get_mask(cfg.aperture_size)
+
     for n_epochs, n_screens in cfg.regime:
         for e in range(n_epochs):
             epoch += 1
@@ -66,12 +75,13 @@ def run(cfg):
 
             if 'fixed' in cfg.asterism_types:
                 log.info(f"Running fixed asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
-                fixed_asterisms = asterisms.generate_fixed_asterisms(cfg.fixed_asterism_angle)
+                fixed_asterisms = asterisms.generate_fixed_asterisms(cfg.fixed_asterism_angle, mask=mask)
                 data = run_epoch(fixed_trainer, 
                                  cfg.training_size, 
                                  fixed_asterisms, 
                                  atmosphere_train, 
-                                 cfg.basis)
+                                 cfg.basis,
+                                 wfs=shwfs)
                 
                 for k, (l, r) in data.items():
                     append_results(results, epoch, "Train", k, n_screens, "Fixed", "Coefficients", l)
@@ -82,7 +92,8 @@ def run(cfg):
                                  fixed_asterisms,
                                  atmosphere_test,
                                  cfg.basis,
-                                 train=False)
+                                 train=False,
+                                 wfs=shwfs)
                 
                 for k, (l, r) in data.items():
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Fixed", "Coefficients", l)
@@ -96,13 +107,14 @@ def run(cfg):
             
             if 'variable' in cfg.asterism_types:
                 log.info(f"Running variable asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
-                training_asterisms = asterisms.generate_variable_asterisms(cfg.training_size, cfg.magnitude, zero_rate=1e-3, fixed_rate=1e-3)
-                testing_asterisms = asterisms.generate_variable_asterisms(cfg.testing_size, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0)
+                training_asterisms = asterisms.generate_variable_asterisms(cfg.training_size, cfg.magnitude, zero_rate=1e-3, fixed_rate=1e-3, mask=mask)
+                testing_asterisms = asterisms.generate_variable_asterisms(cfg.testing_size, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)
                 data = run_epoch(variable_trainer,
                                  cfg.training_size, 
                                  training_asterisms, 
                                  atmosphere_train, 
-                                 cfg.basis)
+                                 cfg.basis,
+                                 wfs=shwfs)
 
                 for k, (l, r) in data.items():
                     append_results(results, epoch, "Train", k, n_screens, "Variable", "Coefficients", l)
@@ -113,7 +125,8 @@ def run(cfg):
                                  testing_asterisms,
                                  atmosphere_test,
                                  cfg.basis,
-                                 train=False)
+                                 train=False,
+                                 wfs=shwfs)
                 
                 for k, (l, r) in data.items():
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Coefficients", l)
@@ -124,6 +137,11 @@ def run(cfg):
                     variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/current")
 
                 save_asterism_data["variable"] += (epoch, training_asterisms + testing_asterisms)
+            
+            snapshot = tracemalloc.take_snapshot()
+            top_stats = snapshot.statistics('lineno')
+
+            log.info(f"tracemalloc: {top_stats[:3]}")
 
     # Save final model
     fixed_trainer.save_models(suffix="fixed", dir=f"{directory}/{cfg.start_time}")

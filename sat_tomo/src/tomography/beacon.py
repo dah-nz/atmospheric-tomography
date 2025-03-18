@@ -165,7 +165,7 @@ class Beacon():
             cutout = cutout - np.average(cutout)
         return cutout
     
-    def cutout_coeffs(self, basis, diameter, layer_altitudes, layer_screens, layer_sizes):
+    def cutout_coeffs(self, basis, diameter, layer_altitudes, layer_screens, layer_sizes, wfs=None, noise=False):
         """
         Calculate coefficients of the total wavefront across a number of layers
 
@@ -182,8 +182,12 @@ class Beacon():
         coeffs:             Basis function coefficients for the total wavefront of each beacon in the asterism
         """
         cutout = self.total_cutout(diameter, layer_altitudes, layer_screens, layer_sizes)
-        out = np.array(basis.decompose(cutout), dtype=np.float32)
-        # out[0] = 0.
+        if wfs is None:
+            out = np.array(basis.decompose(cutout), dtype=np.float32)
+        else:
+            out = np.array(wfs.estimate(cutout, self.magnitude, noise=noise), dtype=np.float32)
+        
+        # print(out.shape)
         return out
     
     def to_vec(self):

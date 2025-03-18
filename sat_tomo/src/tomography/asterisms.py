@@ -10,12 +10,13 @@ log.setup_logger(logger)
 
 ASTERISM_SIZE = 3
 LIMITING_ANGLE = 120
+DEFAULT_M = 8   # default magnitude
 
-def generate_fixed_asterisms(angle):
+def generate_fixed_asterisms(angle, mask=None):
     logger.info(f"Generating fixed asterisms with {ASTERISM_SIZE} stars. Fixed angle of {angle}\"")
-    return [[beacon.Beacon(t, angle) for t in np.linspace(0, 2*np.pi, ASTERISM_SIZE, endpoint=False)]]
+    return [[beacon.Beacon(t, angle, magnitude=8, aperture_mask=mask) for t in np.linspace(0, 2*np.pi, ASTERISM_SIZE, endpoint=False)]]
 
-def generate_variable_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, rng=None, zero_rate=1e-5, fixed_rate=1e-4):
+def generate_variable_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, rng=None, zero_rate=1e-5, fixed_rate=1e-4, mask=None):
     logger.info(f"Generating {n} variable asterisms")
 
     asterism_data = asterisms.load_data(magnitude, n=n, limit=limiting_angle, rng=rng, quick_load=True)
@@ -39,14 +40,15 @@ def generate_variable_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, 
         
         if fixed_rng < fixed_rate:
             fixed_angle = rng.beta(2.0, 10.0) * limiting_angle # Beta distribution with mu = 0.1304, strongly left skewed
-            asterism = [beacon.Beacon(t, fixed_angle) for t in np.linspace(0, 2*np.pi, ASTERISM_SIZE, endpoint=False)]
+            
+            asterism = [beacon.Beacon(t, fixed_angle, DEFAULT_M, aperture_mask=mask) for t in np.linspace(0, 2*np.pi, ASTERISM_SIZE, endpoint=False)]
         else:
             asterism = []
             for (g, t, m), r in zip(stars, zero_rng):
                 if r < zero_rate:
-                    asterism.append(beacon.Beacon(0.0, 0.0, m))
+                    asterism.append(beacon.Beacon(0.0, 0.0, m, aperture_mask=mask))
                 else:
-                    asterism.append(beacon.Beacon(t, g, m))
+                    asterism.append(beacon.Beacon(t, g, m, aperture_mask=mask))
 
         asterism_list.append(asterism)
     

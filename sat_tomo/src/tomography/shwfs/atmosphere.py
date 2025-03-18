@@ -25,7 +25,10 @@ def phase44(num_increases):
 
     # Import Kolmogorov turbulence matrices and vectors.
     #svectors4 = scipy.io.loadmat('../lib/Matrices/svectors4.mat')
-    svectors4 = scipy.io.loadmat('svectors4.mat')
+    try:
+        svectors4 = scipy.io.loadmat('svectors4.mat')
+    except FileNotFoundError:
+        svectors4 = scipy.io.loadmat('./src/tomography/shwfs/svectors4.mat')
     U = np.asmatrix(svectors4['u'])
     D = np.asmatrix(svectors4['d'])
     V = np.asmatrix(svectors4['v'])

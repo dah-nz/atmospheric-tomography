@@ -59,6 +59,7 @@ class Config():
         parser.add_argument('--num_sats', action='store', default=500, help="Number of satellites to calculate asterisms from")
         parser.add_argument('--sat_del_t', action='store', default=30, help="Time delta between satellite location checks (s)")
         parser.add_argument('--asterism_size', action='store', default=3, help="Number of stars in asterisms")
+        parser.add_argument('--shwfs', action='store_true', help="Use Shack-Hartmann WFS for estimating guide-star wavefront modes")
 
         parser.add_argument('--display_asterisms', action='store_true', help="Display data about asterisms")
         parser.add_argument('--display_training', action='store_true', help="Display results of training")
@@ -73,6 +74,12 @@ class Config():
         except argparse.ArgumentTypeError as e:
             print(e)
             quit()
+
+        if type(args.diameter) is str:
+            args.diameter = float(args.diameter)
+
+        if type(args.r0) is str:
+            args.r0 = float(args.r0)
 
         if args.altitudes is None or len(args.altitudes) == 0:
             args.altitudes = [1000, 5000, 10000]

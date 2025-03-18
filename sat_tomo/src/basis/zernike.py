@@ -6,6 +6,8 @@ import scipy.special
 from basis.basis import Basis
 from util import circle
 
+from tomography.shwfs.shackHartmann import generateZernike
+
 class Zernike(Basis):
     """
     Class that interfaces to Zernike polynomials as a set of basis functions
@@ -16,7 +18,6 @@ class Zernike(Basis):
     """
     def __init__(self, max_coeffs):
         super().__init__(max_coeffs, "Zernike", mask=False)
-        self.ms = 0     # mode skip (ignore piston)
 
     @lru_cache(maxsize=64)
     def out(self, size, order):
@@ -31,7 +32,9 @@ class Zernike(Basis):
             polynomial order (note that order 0 is piston (normally the 1st order Zernike))
         """
         # Add one to order as zernike function is 1 indexed
-        return self.__zernike(size, order + 1 + self.ms)
+        if type(size) is not int:
+            size = int(size[0])
+        return generateZernike(size, size, order)
     
     def compose(self, size, coefficients):
         """ Compose a distortion/aberration phase screen from a set of coefficients and basis functions
@@ -55,12 +58,11 @@ class Zernike(Basis):
         except TypeError:
             size = (int(size), int(size))
             phase = np.zeros(size, dtype=np.float64)
-        if self.ms > 0:
-            coeffs = ([0.0] * self.ms) + coefficients
-        else:
-            coeffs = coefficients
+        
+        coeffs = coefficients
+
         for m, c in enumerate(coeffs):
-            phase += np.float64(c * self.out(size, m))
+            phase += np.float64(c * self.out(size, m + 1))
 
         if self.mask:
             phase = phase * circle(size[0])
@@ -68,7 +70,7 @@ class Zernike(Basis):
         return phase
 
     def decompose(self, screen):
-        z = [0] * (self.N + self.ms)
+        z = [0] * (self.N)
 
         if self.mask:
             mask = circle(screen.shape[0])
@@ -76,14 +78,17 @@ class Zernike(Basis):
             mask = np.ones_like(screen)
 
         # Generate basis functions for each mode
-        for n in range(self.N + self.ms):
-            z[n] = mask * np.float64(self.__zernike(screen.shape, n + 1))
+        for n in range(self.N):
+            z[n] = mask * np.float64(self.out(screen.shape, n + 1))
 
         screen = mask * screen
 
         # Do 2D dot product of each basis function mode with the input phase screen
-        dt = [np.sum(screen * z[n], dtype=np.float64)/np.sum(z[n] * z[n]) for n in range(self.N + self.ms)]
-        return dt[self.ms:]
+        dt = [np.sum(screen * z[n], dtype=np.float64)/np.sum(z[n] * z[n]) for n in range(self.N)]
+        return dt
+    
+    def get_mask(self, size):
+        return circle(size)
 
     @lru_cache(maxsize=None)
     def at_point(self, x, y, size, order):
@@ -142,7 +147,7 @@ class Zernike(Basis):
         return zernicoef
 
     def zerni(self, x, y, j):
-        return self.__zerni(x, y, j + self.ms)
+        return self.__zerni(x, y, j)
 
     def __zerni(self, x, y, j):
         Rnm = 0

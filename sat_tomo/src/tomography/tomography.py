@@ -369,7 +369,7 @@ def get_layer_shapes(beacons, altitudes, diameter, aperture_size):
 
     return layer_sizes, layer_pixels
 
-def get_coeffs_for_asterism(asterism, basis, diameter, layer_screens, layer_altitudes, layer_sizes, tip_tilt=False):
+def get_coeffs_for_asterism(asterism, basis, diameter, layer_screens, layer_altitudes, layer_sizes, wfs=None):
     """
     Calculate coefficients for each beacon in an asterism
 
@@ -381,20 +381,16 @@ def get_coeffs_for_asterism(asterism, basis, diameter, layer_screens, layer_alti
     layer_screens:      Phase screens at each layer
     layer_altitudes:    Altitudes of each layer (m)
     layer_sizes:        Size of metapupil at each layer (m)
+    wfs:                Reference to a wfs class that exposes an estimate() method, or None
 
     Return
     ------
     coeffs:             Basis function coefficients for the total wavefront of each beacon in the asterism
     """
     try:
-        coeffs = np.array([b.cutout_coeffs(basis, diameter, layer_altitudes, layer_screens, layer_sizes) for b in asterism])
+        coeffs = np.array([b.cutout_coeffs(basis, diameter, layer_altitudes, layer_screens, layer_sizes, wfs) for b in asterism])
     except AttributeError:
-        coeffs = [np.array([b.cutout_coeffs(basis, diameter, layer_altitudes, layer_screens, layer_sizes) for b in a]) for a in asterism]
-
-    # if tip_tilt:
-    #     tip_tilt = np.sum(coeffs, 0) / np.shape(coeffs)[0]
-    #     coeffs[:, :3] = coeffs[:, :3] * 0
-    #     return tip_tilt[:3], coeffs
+        coeffs = [np.array([b.cutout_coeffs(basis, diameter, layer_altitudes, layer_screens, layer_sizes, wfs) for b in a]) for a in asterism]
 
     return coeffs
 

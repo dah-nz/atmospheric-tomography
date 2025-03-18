@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib as mpl
 import scipy
 
+from tomography.shwfs.shackHartmann import generateZernike
+
 def azimuth2cart(altitude, theta, phi):
     rho = altitude * np.tan(theta)
     return pol2cart(rho, phi)
@@ -52,6 +54,7 @@ def circle(dimension, radius=None, location=(0,0)):
     --------
     mask with given parameters
     """
+    return generateZernike(dimension, dimension, 1)
 
     if radius is None:
         radius = dimension / 2

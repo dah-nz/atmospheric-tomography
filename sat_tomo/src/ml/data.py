@@ -1,7 +1,7 @@
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
-from tomography import beacon, tomography, asterisms
+from tomography import beacon, tomography, asterisms, wavefront
 from basis import zernike
 
 import log
@@ -46,7 +46,7 @@ class TomographyData(Dataset):
     Pytorch dataset wrapper. Stores the phase screen and asterism data for training machine learning models.
 
     """
-    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, limiting_angle=120, rng=None, packing_function=None, unpacking_function=None):
+    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, limiting_angle=120, rng=None, packing_function=None, unpacking_function=None, wfs=None):
         """
         Set up Tomography Dataset
 
@@ -78,7 +78,8 @@ class TomographyData(Dataset):
         else:
             self.basis = basis
 
-        self.target = beacon.Beacon(0, 0)
+        self.target = beacon.Beacon(0, 0, magnitude=14)
+        self.wfs = wfs
 
         if packing_function is None:
             self.pack = default_pack
@@ -109,7 +110,34 @@ class TomographyData(Dataset):
         target_coeffs = self.target.cutout_coeffs(self.basis, self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         target_screen = self.target.total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         
-        asterism_coeffs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters)
+        asterism_coeffs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters, self.wfs)
+        asterism_coeffs_no_wfs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters)
+
+        # import matplotlib.pyplot as plt
+
+        # fig, axs = plt.subplots(3, 4)
+        # cs = ['r', 'g', 'b']
+        # for i in range(3):
+        #     axs[1, 0].plot(asterism_coeffs[i], label=f'WFS {i+1}', color=cs[i], linestyle='dashed')
+        #     axs[1, 0].plot(asterism_coeffs_no_wfs[i], label=f'Dot {i+1}', color=cs[i])
+
+        # axs[0, 0].imshow(target_screen)
+        # axs[0, 1].imshow(asterism[0].total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters))
+        # axs[0, 2].imshow(asterism[1].total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters))
+        # axs[0, 3].imshow(asterism[2].total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters))
+
+        # axs[1, 1].imshow(self.basis.compose(target_screen.shape, asterism_coeffs[0]))
+        # axs[1, 2].imshow(self.basis.compose(target_screen.shape, asterism_coeffs[1]))
+        # axs[1, 3].imshow(self.basis.compose(target_screen.shape, asterism_coeffs[2]))
+
+        # axs[2, 1].imshow(self.basis.compose(target_screen.shape, asterism_coeffs_no_wfs[0]))
+        # axs[2, 2].imshow(self.basis.compose(target_screen.shape, asterism_coeffs_no_wfs[1]))
+        # axs[2, 3].imshow(self.basis.compose(target_screen.shape, asterism_coeffs_no_wfs[2]))
+
+        # plt.legend()
+        # plt.show()
+        # quit()
+
         glao_coeffs = np.sum(asterism_coeffs, 0) / np.shape(asterism_coeffs)[0]
 
         asterism_coeffs = [asterism_coeffs[i, :] - glao_coeffs for i in range(asterism_coeffs.shape[0])]
