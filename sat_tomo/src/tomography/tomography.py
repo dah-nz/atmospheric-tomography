@@ -75,13 +75,16 @@ class Tomography():
 
         if grid_not_pix:
             location = b.position(altitude)
+            # print(theta, gamma, altitude)
+            # print(location)
             location = (location[0] / (layer_size / 2), location[1] / (layer_size / 2))
+            # print(location)
             diameter = self.D / layer_size
-            P = projection.projectionMatrix(location, diameter, self.n_modes, display)
+            P = projection.projectionMatrix(location, diameter, self.n_modes, display, angles=(theta, gamma))
         else:
             def get_single(n, i):
                 A = np.zeros(n)
-                A[i] = 100.0
+                A[i] = 1.0
                 return A
             coeffs = [get_single(self.n_modes, i) for i in range(self.n_modes)]
 
@@ -114,7 +117,7 @@ class Tomography():
         return P
 
 class LeastSquares(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=True, method="Ainv", start_angle=30, end_angle=60, angle_mix="ave", display=False):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=True, method="dotAT", start_angle=30, end_angle=60, angle_mix="ave", display=False):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size)
         """
         proj_grid:
@@ -148,6 +151,8 @@ class LeastSquares(Tomography):
         self.angle_mix   = angle_mix
         self.display     = display
 
+        self.epsilons    = []
+
     def run(self, beacons, target, beacon_coeffs):
         """
         Runs least squares tomography algorithm
@@ -170,13 +175,13 @@ class LeastSquares(Tomography):
         beacon_coeffs = beacon_coeffs.flatten()
         L = np.array(beacon_coeffs)
 
-        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid)
-        T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid)
+        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
+        T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
 
         # fig, axs = plt.subplots(2, 3)
 
-        svd_A = np.linalg.svd(A)
-        svd_T = np.linalg.svd(T)
+        # svd_A = np.linalg.svd(A)
+        # svd_T = np.linalg.svd(T)
 
         # axs[0, 0].set_title("$V_A^T$")
         # axs[0, 0].imshow(svd_A.Vh)
@@ -193,15 +198,17 @@ class LeastSquares(Tomography):
         # axs[1, 2].set_title("$V_T^T V_A - (V_A^T V_T)^T$")
         # axs[1, 2].imshow(np.matmul(svd_T.Vh, svd_A.Vh.T) - np.matmul(svd_A.Vh, svd_T.Vh.T).T)
 
-        self.alignment0 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh.T for cT in svd_T.Vh.T])
-        self.alignment1 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh for cT in svd_T.Vh])
-        self.alignment2 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh for cT in svd_T.Vh.T])
-        self.alignment3 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh.T for cT in svd_T.Vh])
+        # self.alignment0 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh.T for cT in svd_T.Vh.T])
+        # self.alignment1 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh for cT in svd_T.Vh])
+        # self.alignment2 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh for cT in svd_T.Vh.T])
+        # self.alignment3 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh.T for cT in svd_T.Vh])
 
-        if self.method in ["Ainv", "dotAT", "dotAK", "all"]:
+        if self.method in ["Ainv", "dotAT", "dotAK"]:
             A_inv = np.linalg.pinv(A, rcond=self.eps)
-            M0 = np.matmul(T, A_inv)
-            C_A = np.matmul(M0, L)
+            # M0 = np.matmul(T, A_inv)
+            # C_A = np.matmul(M0, L)
+            M0 = np.matmul(A_inv, L)
+            C_A = np.matmul(T, M0)
             if self.method == "Ainv":
                 return C_A
 
@@ -224,18 +231,37 @@ class LeastSquares(Tomography):
                 K[i*N:(i+1)*N, i*N:(i+1)*N] = self.C
             
             epsilon = alpha # 0.0 # 0.001
+            self.epsilons.append(epsilon)
+            
             W = np.matmul(np.matmul(np.linalg.pinv(np.matmul(A.T, A) + epsilon * K, rcond=self.eps), A.T), L)
 
             C_K = np.matmul(T, W)
 
             if self.method == "K":
                 return C_K
+            
+        if self.method == "K2":
+            alphas = np.logspace(-10, 0, 20)
+            clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
+            alpha = clf.alpha_
+        
+            K = np.zeros((T.shape[1], T.shape[1]))
+            N = self.n_modes
 
-        if self.method in ["dotAT", "all"]:
+            for i, _ in enumerate(layers_sizes):
+                K[i*N:(i+1)*N, i*N:(i+1)*N] = self.C
+            
+            epsilon = alpha # 0.001
+            W = np.matmul(np.linalg.pinv(np.matmul(T.T, T) + epsilon * K, rcond=self.eps), T.T)
+            M1 = np.linalg.pinv(np.matmul(A, W), rcond=self.eps)
+
+            C_K = np.matmul(M1, L)
+            return C_K
+
+        if self.method == "dotAT":
             r = util.cos_theta(C_A, C_T)
             C_AT = r * C_A + (1 - r) * C_T
-            if self.method == "dotAT":
-                return C_AT
+            return C_AT
 
         if self.method == "dotAK":
             r = util.cos_theta(C_A, C_K)
@@ -268,7 +294,7 @@ class LeastSquares(Tomography):
             else:
                 r = 1.0 - (angle - self.start_angle) / (self.end_angle - self.start_angle)
 
-            C_ALL = r * C_AT + (1 - r) * C_K
+            C_ALL = r * C_T + (1 - r) * C_K
 
             return C_ALL
         
@@ -290,6 +316,41 @@ class LeastSquares(Tomography):
         return T
     
   
+class AO(Tomography):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256):
+        super().__init__(basis, diameter, n_modes, altitudes, aperture_size)
+
+    def run(self, beacons, target, beacon_coeffs):
+        """
+        Runs adaptive optics, where the target coefficients are set to one of the beacon coefficients
+        This is assumed to be the closest of the beacons provided, as this is most likely to be in the isoplanatic patch.
+        
+
+        Parameters
+        ----------
+        beacons:
+            list of AltAz objects that provide positions of beacons
+        target:
+            an object that provides target position
+        beacon_coeffs:
+            list of coefficient arrays for each beacon that are used for calculating the target basis function coefficients
+
+        Returns
+        -------
+        target_coeffs:
+            array of coefficients for target/science object
+        """
+
+        angles = []
+        for b, c in zip(beacons, beacon_coeffs):
+            angles.append((b._gamma_arcsec, c))
+
+        closest = min(angles, key=lambda x: x[0])[1]
+        
+        target_coeffs = closest
+
+        return target_coeffs
+    
 class GLAO(Tomography):
     def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size)

@@ -60,7 +60,7 @@ def run(cfg):
     save_asterism_data = {"fixed": [], "variable": []}
 
     if cfg.shwfs:
-        shwfs = wavefront.SHWFS(cfg.diameter, cfg.num_modes)
+        shwfs = wavefront.SHWFS(cfg.diameter, cfg.num_modes, noise=cfg.noise)
     else:
         shwfs = None
 

@@ -21,7 +21,7 @@ del_rad = 1
 @lru_cache(maxsize=256)
 def getGrid(N):
     # rng = np.random.default_rng()
-    radius = [((n+1)/N)**0.3 for n in range(N)]
+    radius = [((n+1)/N)**0.35 for n in range(N)]
     theta = [np.pi*np.pi*N*r for r in radius]
     # radius = rng.uniform(0.0, 1.0, N)
     # radius = [r**0.3 for r in radius]
@@ -31,7 +31,7 @@ def getGrid(N):
 
 # Translate points on a grid
 def translateGrid(grid, shift):
-    return [(x + shift[0], y - shift[1]) for x, y in grid]
+    return [(x + shift[0], y + shift[1]) for x, y in grid]
 
 # Scale points on a grid
 def scaleGrid(grid, scale):
@@ -43,7 +43,7 @@ def scaleGrid(grid, scale):
 #               diameter     - relative diameter of circular portion (1 = same size as metapupil)
 #               nModes       - number of Zernike modes
 @lru_cache(maxsize=256)
-def projectionMatrix(location, diameter, nModes, display=False):
+def projectionMatrix(location, diameter, nModes, display=False, angles=None):
     # try:
     #     global _cache_PROJ_MATRICES
     #     return _cache_PROJ_MATRICES[(location, diameter, nModes)]
@@ -65,7 +65,10 @@ def projectionMatrix(location, diameter, nModes, display=False):
         axs[0, 1].axis('equal')
         X = [x for x,_ in unitGrid]
         Y = [y for _,y in unitGrid]
-        axs[0, 1].scatter(X, Y, c='k', label=f"meta: p = ({location[0]:.3f}, {location[1]:.3f})")
+        if angles is not None:
+            axs[0, 1].scatter(X, Y, c='k', label=f"meta: p = ({location[0]:.3f}, {location[1]:.3f}), theta:{angles[0]}, gamma:{angles[1]}")
+        else:
+            axs[0, 1].scatter(X, Y, c='k', label=f"meta: p = ({location[0]:.3f}, {location[1]:.3f})")
         plotcirc(axs[0, 1], (0, 0), 1, "k:")
         # plt.plot([0, 1], [location[0], location[0]], "k:")
         # plt.plot([location[1], location[1]], [0, 1], "k:")

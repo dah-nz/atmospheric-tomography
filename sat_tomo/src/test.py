@@ -2,6 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import util
 
+from tomography import test_tomography
+test_tomography.run_tests()
+quit()
+
 sz = 100
 rd = 1
 
@@ -10,6 +14,7 @@ rng = np.random.default_rng()
 from basis import zernike
 from tomography.shwfs.shackHartmann import generateZernike
 from tomography.shwfs.atmosphere import generatePhaseScreen
+
 
 modes = [1, 2, 3, 4, 5]
 
