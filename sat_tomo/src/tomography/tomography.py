@@ -221,6 +221,7 @@ class LeastSquares(Tomography):
         
         if self.method in ["K", "dotAK", "dotTK", "all"]:
             alphas = np.logspace(-10, 0, 20)
+            alphas = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
             clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
             alpha = clf.alpha_
         

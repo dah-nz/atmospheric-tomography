@@ -6,7 +6,7 @@ import seaborn as sns
 from functools import lru_cache
 
 from tomography import tomography as tomo
-from tomography import beacon, phase_screen, projection
+from tomography import beacon, phase_screen, projection, wavefront
 from basis import zernike
 
 import util
@@ -72,18 +72,20 @@ def test_leastsquares():
     rng = np.random.default_rng()
 
     alts = [1000, 5000, 10000] #[1000, 5000, 10000]
-    r0_total = 0.11
+    r0_total = 0.07
 
-    D = 0.61
+    D = 1.8
     N = 21
-    N_TESTS = 16
+    N_TESTS = 128
     N_GS = 3
 
     ap = 100
-    angles = np.geomspace(1, 121, 15) - 1
+    angles = np.geomspace(1, 121, 31) - 1
     # angles = [30]
     # angles = [5, 15, 30, 45, 60]
     nagle = 30 # asterism angle
+
+    wfs = wavefront.SHWFS(D, N, noise=False)
 
     bss = zernike.Zernike(N)
     data = {
@@ -115,13 +117,13 @@ def test_leastsquares():
         # "LSQ [f(A,T)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAT", proj_grid=False),
         # "LSQ [f(A,K)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAK", proj_grid=True),
         # "LSQ [f(A,K)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAK", proj_grid=False),
-        "LSQ [f(T,K)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=True),
+        # "LSQ [f(T,K)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=True),
         "LSQ [f(T,K)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=False),
         # "LSQ [all, mean]":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="ave"),
         # "LSQ [all, max]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="max"),
         # "LSQ [all, min]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="min"),
         # "LSQ [all, median]": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="med"),
-        "LSQ [all, mean] Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=5, end_angle=10, angle_mix="ave"),
+        "LSQ [all, mean] Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="ave"),
         # "LSQ [all, max] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=30, end_angle=45, angle_mix="max"),
         # "LSQ [all, min] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=30, end_angle=45, angle_mix="min"),
         # "LSQ [all, median] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=30, end_angle=45, angle_mix="med"),
@@ -133,7 +135,7 @@ def test_leastsquares():
     tgt_ao = "Target : Adaptive Optics"
     tgt_ = "Target : "
 
-    test0 = "LSQ [TA⁺]"
+    # test0 = "LSQ [TA⁺]"
 
     errors = {}
     for nagle in angles:
@@ -162,7 +164,7 @@ def test_leastsquares():
                 update_outputs = j % 100 == 0
 
 
-            target = beacon.Beacon(0, 0, aperture_mask=mask)
+            target = beacon.Beacon(0, 0, magnitude=6, aperture_mask=mask)
 
             # theta_o = rng.uniform(0, 2*np.pi / 3)
             theta_o = 1
@@ -172,12 +174,12 @@ def test_leastsquares():
             gamma = [nagle] * N_GS
             # gamma = rng.uniform(1, nagle, size=N_GS)
 
-            beacons = [beacon.Beacon(t, g, aperture_mask=mask) for t, g in zip(theta, gamma)]
+            beacons = [beacon.Beacon(t, g, magnitude=6, aperture_mask=mask) for t, g in zip(theta, gamma)]
 
             actual_coeffs = target.cutout_coeffs(bss, D, alts, atm, atms.metapupil_diameters)
             target_screen = target.total_cutout(D, alts, atm, atms.metapupil_diameters)
             variance['target'].append(np.var(target_screen))
-            asterism_coeffs = tomo.get_coeffs_for_asterism(beacons, bss, D, atm, alts, atms.metapupil_diameters)
+            asterism_coeffs = tomo.get_coeffs_for_asterism(beacons, bss, D, atm, alts, atms.metapupil_diameters, wfs=wfs)
 
             vars = tomo.get_layer_variance_for_asterism(beacons, D, alts, atm, atms.metapupil_diameters)
             for i in range(len(alts)):
