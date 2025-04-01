@@ -149,6 +149,30 @@ def run(cfg):
     variable_trainer.save_models(suffix="variable", dir=f"{directory}/{cfg.start_time}")
     variable_trainer.save_models(suffix="variable", dir=f"{directory}/current")
 
+    # Run verification test
+    log.info(f"Running final verification test")
+
+    verification_atmospheres = phase_screen.Atmosphere(cfg.testing_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+    verification_asterisms = asterisms.generate_variable_asterisms(cfg.testing_size, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)
+
+    for runner in variable_trainer.runners:
+        try:
+            runner.fixed_only = False
+        except AttributeError:
+            pass
+
+    data = run_epoch(variable_trainer, 
+                    cfg.testing_size,
+                    verification_asterisms,
+                    verification_atmospheres,
+                    cfg.basis,
+                    train=False,
+                    wfs=shwfs)
+    
+    for k, (l, r) in data.items():
+        append_results(results, epoch, "Verification", k, cfg.testing_size, "Variable", "Coefficients", l)
+        append_results(results, epoch, "Verification", k, cfg.testing_size, "Variable", "Reconstruction", r)
+
     df = pd.DataFrame.from_dict(results, orient="columns")
 
     for dir in [f"{directory}/current", f"{directory}/{cfg.start_time}"]:
@@ -158,6 +182,10 @@ def run(cfg):
 
         with open(f"{dir}/asterisms_fixed.txt", "w") as f:
             for l in save_asterism_data["fixed"]:
+                f.write(f"{l}\n")
+
+        with open(f"{dir}/asterisms_verification.txt", "w") as f:
+            for l in verification_asterisms:
                 f.write(f"{l}\n")
 
         with open(f"{dir}/results.csv", "w") as f:

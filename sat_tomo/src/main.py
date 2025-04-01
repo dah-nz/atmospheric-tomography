@@ -69,11 +69,17 @@ if __name__ == "__main__":
         with open(f"{cfg.directory}/current/results.csv", "r") as f:
             df = pd.read_csv(f)
 
+        df_verification = df.drop(df[df.Stage != "Verification"].index)
+        df = df.drop(df[df.Stage == "Verification"].index)
+
         df = df.sort_values(by="Stage")
 
         sns.relplot(data=df, kind='line', 
                     x='Epoch', y='Loss', row="Type",
                     col="Asterism", style="Stage", hue="Model",
+                    facet_kws={'sharey': "row", 'sharex': True})
+        
+        sns.boxplot(data=df_verification, x='Model', y='Loss', row="Type",
                     facet_kws={'sharey': "row", 'sharex': True})
         
     snapshot = tracemalloc.take_snapshot()

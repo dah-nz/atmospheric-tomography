@@ -346,9 +346,9 @@ class vonKarmen():
 
         init precomputes meshgrids and other values that are constant between different generations
         """
-    def __init__(self, N, D, r0, L0=np.Infinity, l0=0):
+    def __init__(self, N, D, r0, L0=np.inf, l0=0):
         self.update(N, D, r0, L0, l0)
-    def update(self, N, D, r0, L0=np.Infinity, l0=0):
+    def update(self, N, D, r0, L0=np.inf, l0=0):
         self.D = D
         self.N = N
         self.r0 = r0
@@ -377,7 +377,7 @@ class vonKarmen():
         #precompute inner and outer scale frequencies
         fm = 5.92 / l0 / (2 * np.pi) if l0 != 0 else 0
         fm_term = np.exp(-1*((f / fm) ** 2)) if l0 != 0 else 1.
-        f0 = 1. / L0 if L0 != np.Infinity else 0
+        f0 = 1. / L0 if L0 != np.inf else 0
         with warnings.catch_warnings():
             warnings.simplefilter("ignore") # Aware of divide by zero here - the next line addresses it
             psd_phi = (0.023 * r0 ** (-5./3.) * fm_term) / (((f ** 2) + (f0 ** 2)) ** (11./6.))

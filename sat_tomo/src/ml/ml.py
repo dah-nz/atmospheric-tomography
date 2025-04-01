@@ -54,7 +54,10 @@ class Trainer():
 
         if len(cfg.tomo_methods) > 0:
             # Set up different tomography methods
-            self.tomo = {t: (eval(f"tomography.{t}(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size)"), s) for t, s in cfg.tomo_methods.items()}
+            self.tomo = {}
+            for t, opts in cfg.tomo_methods.items():
+                if opts['run']:
+                    self.tomo[t] = (eval(f"tomography.{t}(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size)"), opts['fixed'])
             for k, (algo, fixed_asterisms_only) in self.tomo.items():
                 self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, fixed_asterisms_only))
 

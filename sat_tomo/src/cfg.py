@@ -68,8 +68,9 @@ class Config():
 
         parser.add_argument('--fixed_off', action='store_true', help='Turn off fixed asterism training')
         parser.add_argument('--variable_off', action='store_true', help='Turn off variable asterism training')
-        parser.add_argument('--lsq_off', action='store_true', help='Turn off Least Squares tomography')
-        parser.add_argument('--glao_off', action='store_true', help='Turn off GLAO tomography')
+        parser.add_argument('--lsq_off', action='store_true', help='Turn off Least Squares tomography comparison')
+        parser.add_argument('--glao_off', action='store_true', help='Turn off GLAO tomography comparison')
+        parser.add_argument('--ao_off', action='store_true', help="Turn off adaptive optics comparison")
 
         try:
             args = parser.parse_args()
@@ -92,16 +93,22 @@ class Config():
         for k, v in vars(args).items():
             if not k.startswith("__"):
                 setattr(self, k, v)
-        #   Name                Fixed asterisms only
+
+
+        #   Name                Run in parallel? , Fixed asterisms only?
         self.tomo_methods = {
-            "LeastSquares":     True,
-            "GLAO":             False
+            "LeastSquares":     {'run': True, 'fixed': True},
+            "GLAO":             {'run': True, 'fixed': False},
+            "AO":               {'run': True, 'fixed': False},
             }
 
         if self.lsq_off:
-            self.tomo_methods.pop('LeastSquares')
+            self.tomo_methods['LeastSquares']['run'] = False
         if self.glao_off:
-            self.tomo_methods.pop("GLAO")
+            self.tomo_methods["GLAO"]['run'] = False
+        if self.ao_off:
+            self.tomo_methods["AO"]['run'] = False
+
         
         self.basis = basis.select(self.basis_function, self.num_modes)
 
