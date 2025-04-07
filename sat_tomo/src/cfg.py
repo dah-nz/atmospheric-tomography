@@ -97,7 +97,7 @@ class Config():
 
         #   Name                Run in parallel? , Fixed asterisms only?
         self.tomo_methods = {
-            "LeastSquares":     {'run': True, 'fixed': True},
+            "LeastSquares":     {'run': True, 'fixed': False},
             "GLAO":             {'run': True, 'fixed': False},
             "AO":               {'run': True, 'fixed': False},
             }

@@ -172,7 +172,9 @@ def run(cfg):
 
     verification_asterisms = []
 
-    for _ in range(cfg.testing_size):
+    for i in range(cfg.testing_size):
+
+        log.info(f"Running verification test screen {i+1}/{cfg.testing_size}")
 
         verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
         verification_asterism = asterisms.generate_variable_asterisms(1, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)

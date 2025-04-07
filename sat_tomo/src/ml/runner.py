@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 logger = log.get_logger(__name__)
 log.setup_logger(logger, to_console=True)
 
+MAX_LSQ = 8
+
 class Runner(object):
     def __init__(self, name, loss_fn, basis) -> None:
         self.name = name
@@ -37,9 +39,12 @@ class TomoRunner(Runner):
         loss_bias = []
         recon_bias = []
 
-        # Ignore situations when doing tomo for variable asterisms would take too long
-        if self.fixed_only and len(data.asterisms) != 1:
-            return (None, None, None, None)
+        # Limit situations when doing tomo for an entire epoch of least squares would take too long
+        if type(self.tomography).__name__ == "LeastSquares" and data.n > MAX_LSQ:
+            N = MAX_LSQ
+        else:
+            N = data.n
+
         
         test_data = data.get_dataloader()
 
@@ -50,7 +55,7 @@ class TomoRunner(Runner):
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
-            for i in range(data.n):
+            for i in range(N):
                 logger.debug(f"Calculating tomography ({self.name}) test data, index {i}/{data.n}")
                 target_coeffs, beacon_coeffs, beacons = data.unpack(X, y, i)
 
@@ -210,7 +215,10 @@ class ModelRunner(Runner):
                 X, delta_y = X.to(ml.device), delta_y.to(ml.device)
 
                 pred = self.model(X)
-                loss = self.loss_fn(pred, delta_y).item()
+                pred_tot = pred + glao_y.to(ml.device)
+                tot = glao_y.to(ml.device) + delta_y
+                # loss = self.loss_fn(pred, delta_y).item()
+                loss = self.loss_fn(pred_tot, tot).item()
 
                 loss_data.append(loss)
 

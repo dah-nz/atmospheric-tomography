@@ -41,8 +41,9 @@ def generate_variable_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, 
         
         if fixed_rng < fixed_rate:
             fixed_angle = rng.beta(2.0, 10.0) * limiting_angle # Beta distribution with mu = 0.1304, strongly left skewed
+            t0 = rng.uniform(0, 2*np.pi)
             
-            asterism = [beacon.Beacon(t, fixed_angle, DEFAULT_M, aperture_mask=mask) for t in np.linspace(0, 2*np.pi, ASTERISM_SIZE, endpoint=False)]
+            asterism = [beacon.Beacon(t, fixed_angle, DEFAULT_M, aperture_mask=mask) for t in np.linspace(t0, t0+2*np.pi, ASTERISM_SIZE, endpoint=False)]
         else:
             asterism = []
             for (g, t, m), r in zip(stars, zero_rng):

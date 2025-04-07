@@ -128,6 +128,7 @@ class TomographyData(Dataset):
             asterism_coeffs = [asterism_coeffs[i, :] - glao_coeffs for i in range(asterism_coeffs.shape[0])]
             X = self.pack(asterism_coeffs, asterism)
             extra = target_coeffs - glao_coeffs # delta
+            target_coeffs = glao_coeffs
         elif self.option == "shwfs_spots":
             sh_spots = tomography.get_wfs_screen_for_asterism(asterism, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmoshpere.metapupil_diameters, self.wfs)
             X = -1
