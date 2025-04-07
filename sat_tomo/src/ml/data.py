@@ -9,36 +9,44 @@ import log
 logger = log.get_logger(__name__)
 log.setup_logger(logger)
 
-NORMALISE_ANGLES = True
+NORMALISE_ANGLES = False
+LIMITING_MAGNITUDE = 14
 
-def default_pack(asterism_coeffs, asterism_angles):
+def default_pack(asterism_coeffs, asterism_angles, normalise=NORMALISE_ANGLES):
     asterism_coeffs = np.expand_dims(asterism_coeffs, axis=-1)
     theta = np.ones_like(asterism_coeffs)
     gamma = np.ones_like(asterism_coeffs)
+    magnitude = np.ones_like(asterism_coeffs)
+
     for i, b in enumerate(asterism_angles):
-        if NORMALISE_ANGLES:
-            theta[i, :] = theta[i, :] * b.theta / (np.pi * 2)                   # Normalise to [0, 1]
-            gamma[i, :] = gamma[i, :] * b.gamma / (asterisms.LIMITING_ANGLE)    # Normalise to [0, 1]
+        if normalise:
+            theta[i, :] = theta[i, :] * b.theta / (np.pi * 2)                           # Normalise to [0, 1]
+            gamma[i, :] = gamma[i, :] * b._gamma_arcsec / (asterisms.LIMITING_ANGLE)    # Normalise to [0, 1]
+            magnitude[i, :] = magnitude[i, :] * b.magnitude / LIMITING_MAGNITUDE
         else:
             theta[i, :] = theta[i, :] * b.theta
             gamma[i, :] = gamma[i, :] * b.gamma
+            magnitude[i, :] = magnitude[i, :] * b.magnitude
 
     
     data = np.append(asterism_coeffs, theta, axis=2)
     data = np.append(data, gamma, axis=2)
+    data = np.append(data, magnitude, axis=2)
     return data
 
-def default_unpack(X, y, i):
+def default_unpack(X, y, i, normalise=NORMALISE_ANGLES):
     data = X[i]
     target_coeffs = y[i]
-    theta = np.array([data[0, 0, 1], data[1, 0, 1], data[2, 0, 1]])
-    gamma = np.array([data[0, 0, 2], data[1, 0, 2], data[2, 0, 2]])
+    theta =     np.array([data[0, 0, 1], data[1, 0, 1], data[2, 0, 1]])
+    gamma =     np.array([data[0, 0, 2], data[1, 0, 2], data[2, 0, 2]])
+    magnitude = np.array([data[0, 0, 3], data[1, 0, 3], data[2, 0, 3]])
 
     beacon_coeffs = data[:, :, 0]
-    if NORMALISE_ANGLES:
-        beacons = [beacon.Beacon(t * np.pi * 2, g * asterisms.LIMITING_ANGLE, arcseconds=False) for t, g in zip(theta, gamma)]
+    if normalise:
+        beacons = [beacon.Beacon(t * np.pi * 2, g * asterisms.LIMITING_ANGLE, magnitude=m * LIMITING_MAGNITUDE) for t, g, m in zip(theta, gamma, magnitude)]
     else:
-        beacons = [beacon.Beacon(t, g, arcseconds=False) for t, g in zip(theta, gamma)]
+        beacons = [beacon.Beacon(t, g, magnitude=m, arcseconds=False) for t, g, m in zip(theta, gamma, magnitude)]
+
     return target_coeffs, beacon_coeffs, beacons
 
 class TomographyData(Dataset):
@@ -90,6 +98,8 @@ class TomographyData(Dataset):
             self.unpack = default_unpack
         else:
             self.unpack = packing_function
+
+        self.option = ""
         
     def __len__(self):
         return self.n
@@ -111,47 +121,28 @@ class TomographyData(Dataset):
         target_screen = self.target.total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         
         asterism_coeffs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters, self.wfs)
-        asterism_coeffs_no_wfs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters)
 
-        # import matplotlib.pyplot as plt
 
-        # fig, axs = plt.subplots(3, 4)
-        # cs = ['r', 'g', 'b']
-        # for i in range(3):
-        #     axs[1, 0].plot(asterism_coeffs[i], label=f'WFS {i+1}', color=cs[i], linestyle='dashed')
-        #     axs[1, 0].plot(asterism_coeffs_no_wfs[i], label=f'Dot {i+1}', color=cs[i])
-
-        # axs[0, 0].imshow(target_screen)
-        # axs[0, 1].imshow(asterism[0].total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters))
-        # axs[0, 2].imshow(asterism[1].total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters))
-        # axs[0, 3].imshow(asterism[2].total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters))
-
-        # axs[1, 1].imshow(self.basis.compose(target_screen.shape, asterism_coeffs[0]))
-        # axs[1, 2].imshow(self.basis.compose(target_screen.shape, asterism_coeffs[1]))
-        # axs[1, 3].imshow(self.basis.compose(target_screen.shape, asterism_coeffs[2]))
-
-        # axs[2, 1].imshow(self.basis.compose(target_screen.shape, asterism_coeffs_no_wfs[0]))
-        # axs[2, 2].imshow(self.basis.compose(target_screen.shape, asterism_coeffs_no_wfs[1]))
-        # axs[2, 3].imshow(self.basis.compose(target_screen.shape, asterism_coeffs_no_wfs[2]))
-
-        # plt.legend()
-        # plt.show()
-        # quit()
-
-        glao_coeffs = np.sum(asterism_coeffs, 0) / np.shape(asterism_coeffs)[0]
-
-        asterism_coeffs = [asterism_coeffs[i, :] - glao_coeffs for i in range(asterism_coeffs.shape[0])]
-
-        X = self.pack(asterism_coeffs, asterism)
+        if self.option == "glao_offset":
+            glao_coeffs = np.sum(asterism_coeffs, 0) / np.shape(asterism_coeffs)[0]
+            asterism_coeffs = [asterism_coeffs[i, :] - glao_coeffs for i in range(asterism_coeffs.shape[0])]
+            X = self.pack(asterism_coeffs, asterism)
+            extra = target_coeffs - glao_coeffs # delta
+        elif self.option == "shwfs_spots":
+            sh_spots = tomography.get_wfs_screen_for_asterism(asterism, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmoshpere.metapupil_diameters, self.wfs)
+            X = -1
+        else:
+            X = self.pack(asterism_coeffs, asterism)
+            extra = -1
         
-        logger.debug(f"X: {X.shape}, target: {target_coeffs.shape}")
+        logger.debug(f"X: {X.shape}, target: {target_coeffs.shape}, option: {self.option}")
 
-        diff = target_coeffs - glao_coeffs
-
-        return X, target_coeffs, target_screen, glao_coeffs, diff
+        return X, target_coeffs, target_screen, extra
     
-    def get_dataloader(self, shuffle=False):
+    def get_dataloader(self, option="", shuffle=False):
+        self.option=option
         logger.debug(f"Loading dataloader, batch_size={self.n}")
+
         return DataLoader(self, batch_size=self.n, shuffle=shuffle)
 
 

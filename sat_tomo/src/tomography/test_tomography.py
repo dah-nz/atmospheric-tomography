@@ -6,7 +6,7 @@ import seaborn as sns
 from functools import lru_cache
 
 from tomography import tomography as tomo
-from tomography import beacon, phase_screen, projection, wavefront
+from tomography import beacon, phase_screen, projection, wavefront, asterisms
 from basis import zernike
 
 import util
@@ -17,6 +17,7 @@ def run_tests():
     # test_beacons()
     # test_atmospheres()
     test_leastsquares()
+    # test_asterisms()
     # projection.test_projection()
 
     # C = zernike.covar(21)
@@ -27,6 +28,16 @@ def run_tests():
     # plt.imshow(C)
 
     plt.show()
+
+def test_asterisms():
+    from astronomy.asterisms import load_data
+
+    angles = np.geomspace(1, 121, 31) - 1
+    N_TESTS = 64
+
+    for angle in angles:
+        asterisms = load_data(14, limit=angle, quick_load=True, use_cache=False)
+        print(f"Angle: {angle}; N: {len(asterisms)}")
 
 def test_atmospheres():
     rng = np.random.default_rng()
@@ -76,8 +87,10 @@ def test_leastsquares():
 
     D = 1.8
     N = 21
-    N_TESTS = 128
+    N_TESTS = 64
     N_GS = 3
+
+    test_variable = False # Test variable or fixed asterisms
 
     ap = 100
     angles = np.geomspace(1, 121, 31) - 1
@@ -118,15 +131,15 @@ def test_leastsquares():
         # "LSQ [f(A,K)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAK", proj_grid=True),
         # "LSQ [f(A,K)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAK", proj_grid=False),
         # "LSQ [f(T,K)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=True),
-        "LSQ [f(T,K)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=False),
+        # "LSQ [f(T,K)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=False),
         # "LSQ [all, mean]":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="ave"),
         # "LSQ [all, max]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="max"),
         # "LSQ [all, min]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="min"),
         # "LSQ [all, median]": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="med"),
         "LSQ [all, mean] Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="ave"),
-        # "LSQ [all, max] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=30, end_angle=45, angle_mix="max"),
-        # "LSQ [all, min] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=30, end_angle=45, angle_mix="min"),
-        # "LSQ [all, median] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=30, end_angle=45, angle_mix="med"),
+        # "LSQ [all, max] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="max"),
+        # "LSQ [all, min] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="min"),
+        # "LSQ [all, median] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="med"),
     }
 
     tgt_fit = "Target : Fitting"
@@ -156,25 +169,40 @@ def test_leastsquares():
 
     mask = util.circle(ap)
 
+    from astronomy.asterisms import load_data, sample
+
     for nagle in angles:
-        for j, atm in enumerate(atms):
+        
+        if not test_variable:
+            asts = asterisms.generate_fixed_asterisms(N_TESTS, nagle, mask=mask)
+        else:
+            data = load_data(14, limit=nagle, quick_load=True, use_cache=False)
+            asts = [[beacon.Beacon(t, g, magnitude=m, aperture_mask=mask) for g, t, m in a] for a in data]
+            # asts = asterisms.generate_variable_asterisms(N_TESTS, limiting_angle=nagle, zero_rate=0.0, fixed_rate=0.0, mask=mask)
+            if len(asts) < N_TESTS:
+                for n in range(N_TESTS - len(asts)):
+                    theta = rng.uniform(0, np.pi * 2, size=N_GS) # 
+                    gamma = rng.uniform(0.3*nagle, nagle, size=N_GS)
+                    beacons = [beacon.Beacon(t, g, magnitude=6, aperture_mask=mask) for t, g in zip(theta, gamma)]
+                    asts.append(beacons)
+            else:
+                asts = sample(np.array(asts), N_TESTS)
+
+        for j, (atm, beacons) in enumerate(zip(atms, asts)):
             if N_TESTS > 100:
                 update_outputs = (j + 1) % 100 == 0
             else:
                 update_outputs = j % 100 == 0
 
-
             target = beacon.Beacon(0, 0, magnitude=6, aperture_mask=mask)
 
+            # beacons = asts[0]
             # theta_o = rng.uniform(0, 2*np.pi / 3)
-            theta_o = 1
-            theta = np.linspace(theta_o, theta_o + 2*np.pi, N_GS, endpoint=False)
-            # theta = rng.uniform(0, np.pi * 2, size=N_GS) # 
+            # theta_o = 1
+            # theta = np.linspace(theta_o, theta_o + 2*np.pi, N_GS, endpoint=False)
 
-            gamma = [nagle] * N_GS
-            # gamma = rng.uniform(1, nagle, size=N_GS)
+            # gamma = [nagle] * N_GS
 
-            beacons = [beacon.Beacon(t, g, magnitude=6, aperture_mask=mask) for t, g in zip(theta, gamma)]
 
             actual_coeffs = target.cutout_coeffs(bss, D, alts, atm, atms.metapupil_diameters)
             target_screen = target.total_cutout(D, alts, atm, atms.metapupil_diameters)
@@ -210,10 +238,18 @@ def test_leastsquares():
             errors[nagle][tgt_ol].append(mse_ol)
             errors[nagle][tgt_ao].append(mse_ao)
 
+            # print(beacons)
+            # print(actual_coeffs)
+            # print(asterism_coeffs)
+
             for test, lsq in tests.items():
                 # print(f"{test}: {tests[test]}")
                 coeffs = lsq.run(beacons, target, asterism_coeffs)
+
+                # print(coeffs)
+
                 coeffs[:3] = actual_coeffs[:3]
+                # coeffs[0] = actual_coeffs[0]
                 recon = bss.compose(ap, coeffs)
                 mse =  util.mse(target_screen, recon)
                 # mse = np.var(target_screen - recon)

@@ -22,6 +22,7 @@ class SHWFS():
         self.grid_size = self.num_pix*self.num_lenslets
         self.piston = shackHartmann.generateZernike(self.grid_size, self.grid_size, 1)
         self.noise = noise
+        self.sh_image = None
 
     def estimate(self, screen, magnitude):
 
@@ -37,7 +38,7 @@ class SHWFS():
         else:
             shwfs_func = shackHartmann.ShackHartmann
 
-        zernis = shwfs_func(H=            self.H,
+        zernis, _ = shwfs_func(H=            self.H,
                             compamp=      complex_amplitude,
                             numPix=       self.num_pix,
                             numLen=       self.num_lenslets,
@@ -47,3 +48,29 @@ class SHWFS():
                             photons=      photons)
         
         return zernis
+    
+    def spots(self, screen, magnitude):
+
+        V_wavelength = 0.550e-6
+        V_zeropoint = 3.31e12
+        total_photons = V_zeropoint * 10**(-0.4*magnitude)
+
+        photons = total_photons / (self.num_lenslets**2) # Number of photons per lenslet
+
+        complex_amplitude = self.piston * np.exp(complex(0, 1) * screen)
+        if self.noise:
+            shwfs_func = shackHartmann.ShackHartmannNoise
+        else:
+            shwfs_func = shackHartmann.ShackHartmann
+
+        _, spots = shwfs_func(H=            self.H,
+                            compamp=      complex_amplitude,
+                            numPix=       self.num_pix,
+                            numLen=       self.num_lenslets,
+                            numPixSub=    self.subimage_pixels,
+                            over=         self.over,
+                            D=            self.D,
+                            photons=      photons)
+        
+        return spots
+    

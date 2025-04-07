@@ -24,7 +24,7 @@ class MLNN_baseline(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.Linear(self.n_coeffs*3*4, 512),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -597,6 +597,30 @@ class CNN2D_sine(Network):
             nn.Dropout(self.do),
 
             nn.Linear(256, self.n_coeffs)
+
+        )
+    def forward(self, x):
+        x = x.transpose(2, -1).contiguous()
+        return self.model_stack(x)
+    
+class CNN_WFS(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.type="wfs_image"
+        self.model_stack = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=(3, 3), padding=1),    # 3x3x16 -> 16x3x16
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Flatten(),
+ 
+            nn.Linear(3*16*self.n_coeffs, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+
+            nn.Linear(256, 64),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(64, self.n_coeffs)
 
         )
     def forward(self, x):

@@ -14,7 +14,7 @@ log.setup_logger(logger)
 
 cache = {}
 
-def load_data(mag, n=None, limit=0, rng=None, quick_load=False):
+def load_data(mag, n=None, limit=-1, rng=None, quick_load=False, use_cache=True):
     """
     Load asterism data from file or generate from TLEs and starmaps
 
@@ -47,11 +47,14 @@ def load_data(mag, n=None, limit=0, rng=None, quick_load=False):
 
     data = []
     try:
-        data = cache[mag]
-        logger.debug(f'Loading satellite data from cache for magnitude = {mag}')
+        if use_cache:
+            data = cache[mag]
+            logger.debug(f'Loading satellite-star angle data from cache for magnitude = {mag}')
+        else:
+            raise KeyError
     except KeyError:
         filename = f'data/satellites/angle_data_mag{mag}.pak'
-        logger.debug(f'Loading satellite data from from file \"{filename}\" for magnitude = {mag}')
+        logger.debug(f'Loading satellite-star angle data from from file \"{filename}\" for magnitude = {mag}')
     
         with open(filename, 'rb') as f:
             logger.info(f'Opening file "{filename}"')
@@ -64,10 +67,11 @@ def load_data(mag, n=None, limit=0, rng=None, quick_load=False):
             print(data[-5:])
             quit()
 
-        if limit > 0:
+        if limit >= 0:
             data = data[data[:, 2, 0] <= limit, :]
 
-        cache[mag] = data
+        if use_cache:
+            cache[mag] = data
 
     if n is not None:
         data = sample(data, n, rng)

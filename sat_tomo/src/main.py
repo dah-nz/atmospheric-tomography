@@ -69,7 +69,7 @@ if __name__ == "__main__":
         with open(f"{cfg.directory}/current/results.csv", "r") as f:
             df = pd.read_csv(f)
 
-        df_verification = df.drop(df[df.Stage != "Verification"].index)
+        df_v = df.drop(df[df.Stage != "Verification"].index)
         df = df.drop(df[df.Stage == "Verification"].index)
 
         df = df.sort_values(by="Stage")
@@ -79,8 +79,13 @@ if __name__ == "__main__":
                     col="Asterism", style="Stage", hue="Model",
                     facet_kws={'sharey': "row", 'sharex': True})
         
-        sns.boxplot(data=df_verification, x='Model', y='Loss', row="Type",
-                    facet_kws={'sharey': "row", 'sharex': True})
+        plt.figure()
+        df_v_recon = df_v.drop(df_v[df_v.Type != "Reconstruction"].index)
+        sns.boxplot(data=df_v_recon, x='Model', y='Loss')
+        
+        plt.figure()
+        df_v_coeff = df_v.drop(df_v[df_v.Type != "Coefficients"].index)
+        sns.boxplot(data=df_v_coeff, x='Model', y='Loss')
         
     snapshot = tracemalloc.take_snapshot()
     top_stats = snapshot.statistics('lineno')

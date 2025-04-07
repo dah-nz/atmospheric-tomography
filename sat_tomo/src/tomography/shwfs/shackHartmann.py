@@ -383,8 +383,8 @@ def ShackHartmann(H, compamp, numPix, numLen, numPixSub, over, D, photons):
 		for j in range(0, numLen):
 			pixelIntensity[i*fftTotalPix:(i+1)*fftTotalPix,j*fftTotalPix:(j+1)*fftTotalPix] = speckle(compamp[i*numPix:(i+1)*numPix,j*numPix:(j+1)*numPix], over)
 
-	import matplotlib.pyplot as plt
-	plt.figure(100), plt.imshow(pixelIntensity), plt.title('Shack-Hartmann spots')
+	# import matplotlib.pyplot as plt
+	# plt.figure(100), plt.imshow(pixelIntensity), plt.title('Shack-Hartmann spots')
 
 	# Truncate the intensity to eliminate extra pixels.
 	xstart = int((fftTotalPix-numPixSub)/2) 
@@ -417,7 +417,7 @@ def ShackHartmann(H, compamp, numPix, numLen, numPixSub, over, D, photons):
 
 	#print(centroid)
 
-	return reconstruction
+	return reconstruction, intensity
 
 def ShackHartmannNoise(H, compamp, numPix, numLen, numPixSub, over, D, photons):
 	'''
@@ -460,8 +460,8 @@ def ShackHartmannNoise(H, compamp, numPix, numLen, numPixSub, over, D, photons):
 			currentSection = pixelIntensity[i*fftTotalPix:(i+1)*fftTotalPix,j*fftTotalPix:(j+1)*fftTotalPix]
 			intensity[i*numPixSub:(i+1)*numPixSub,j*numPixSub:(j+1)*numPixSub] = currentSection[xstart:xend,xstart:xend]
 
-	import matplotlib.pyplot as plt
-	plt.figure(100), plt.imshow(intensity), plt.title('Shack-Hartmann spots')
+	# import matplotlib.pyplot as plt
+	# plt.figure(100), plt.imshow(intensity), plt.title('Shack-Hartmann spots')
 
 	# Normalise the intensity.
 	intensity = intensity/np.sum(np.sum(intensity))
@@ -492,7 +492,7 @@ def ShackHartmannNoise(H, compamp, numPix, numLen, numPixSub, over, D, photons):
 	reconstruction = -2.0*np.pi*numLen/(over*D) * reconstruction #* (((numLen*1.)-1)/(numLen*1.)) #Python 2
 	reconstruction = np.insert(reconstruction, 0, 0)
 
-	return reconstruction
+	return reconstruction, intensity
 
 def spotArray(compamp, numPix, numLen, numPixSub, over, photons, photonNoise, detectorReadNoise, wfs_sigma):
 	'''

@@ -1,6 +1,7 @@
 import os, inspect, shutil
 
 import pandas as pd
+import numpy as np
 
 from ml import ml, data
 import log as logging
@@ -66,6 +67,12 @@ def run(cfg):
 
     mask = cfg.basis.get_mask(cfg.aperture_size)
 
+    fixed_bias_c = []
+    fixed_bias_r = []
+
+    var_bias_c = []
+    var_bias_r = []
+
     for n_epochs, n_screens in cfg.regime:
         for e in range(n_epochs):
             epoch += 1
@@ -75,31 +82,35 @@ def run(cfg):
 
             if 'fixed' in cfg.asterism_types:
                 log.info(f"Running fixed asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
-                fixed_asterisms = asterisms.generate_fixed_asterisms(cfg.fixed_asterism_angle, mask=mask)
+                fixed_asterisms_train = asterisms.generate_fixed_asterisms(cfg.training_size, cfg.fixed_asterism_angle, mask=mask)
                 data = run_epoch(fixed_trainer, 
                                  cfg.training_size, 
-                                 fixed_asterisms, 
+                                 fixed_asterisms_train, 
                                  atmosphere_train, 
                                  cfg.basis,
                                  wfs=shwfs)
                 
-                for k, (l, r) in data.items():
+                for k, (l, r, bc, br) in data.items():
                     append_results(results, epoch, "Train", k, n_screens, "Fixed", "Coefficients", l)
                     append_results(results, epoch, "Train", k, n_screens, "Fixed", "Reconstruction", r)
+                    fixed_bias_c.append(bc)
+                    fixed_bias_r.append(br)
 
+
+                fixed_asterisms_test = asterisms.generate_fixed_asterisms(cfg.testing_size, cfg.fixed_asterism_angle, mask=mask)
                 data = run_epoch(fixed_trainer, 
                                  cfg.testing_size,
-                                 fixed_asterisms,
+                                 fixed_asterisms_test,
                                  atmosphere_test,
                                  cfg.basis,
                                  train=False,
                                  wfs=shwfs)
-                
-                for k, (l, r) in data.items():
+
+                for k, (l, r, _, _) in data.items():
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Fixed", "Coefficients", l)
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Fixed", "Reconstruction", r)
                 
-                save_asterism_data["fixed"] += (epoch, fixed_asterisms)
+                save_asterism_data["fixed"] += (epoch, fixed_asterisms_train + fixed_asterisms_test)
 
                 if (epoch - 1) % cfg.save_frequency == 0:
                     fixed_trainer.save_models(epoch, suffix="fixed", dir=f"{directory}/{cfg.start_time}")
@@ -116,9 +127,11 @@ def run(cfg):
                                  cfg.basis,
                                  wfs=shwfs)
 
-                for k, (l, r) in data.items():
+                for k, (l, r, bc, br) in data.items():
                     append_results(results, epoch, "Train", k, n_screens, "Variable", "Coefficients", l)
                     append_results(results, epoch, "Train", k, n_screens, "Variable", "Reconstruction", r)
+                    var_bias_c.append(bc)
+                    var_bias_r.append(br)
 
                 data = run_epoch(variable_trainer, 
                                  cfg.testing_size,
@@ -128,7 +141,7 @@ def run(cfg):
                                  train=False,
                                  wfs=shwfs)
                 
-                for k, (l, r) in data.items():
+                for k, (l, r, _, _) in data.items():
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Coefficients", l)
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Reconstruction", r)
 
@@ -151,31 +164,39 @@ def run(cfg):
 
     # Run verification test
     log.info(f"Running final verification test")
-
-    verification_atmospheres = phase_screen.Atmosphere(cfg.testing_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
-    verification_asterisms = asterisms.generate_variable_asterisms(cfg.testing_size, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)
-
     for runner in variable_trainer.runners:
         try:
             runner.fixed_only = False
         except AttributeError:
             pass
 
-    data = run_epoch(variable_trainer, 
-                    cfg.testing_size,
-                    verification_asterisms,
-                    verification_atmospheres,
-                    cfg.basis,
-                    train=False,
-                    wfs=shwfs)
-    
-    for k, (l, r) in data.items():
-        append_results(results, epoch, "Verification", k, cfg.testing_size, "Variable", "Coefficients", l)
-        append_results(results, epoch, "Verification", k, cfg.testing_size, "Variable", "Reconstruction", r)
+    verification_asterisms = []
+
+    for _ in range(cfg.testing_size):
+
+        verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+        verification_asterism = asterisms.generate_variable_asterisms(1, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)
+
+        data = run_epoch(variable_trainer, 
+                        1,
+                        verification_asterism,
+                        verification_atmosphere,
+                        cfg.basis,
+                        train=False,
+                        wfs=shwfs)
+        
+        for k, (l, r, _, _) in data.items():
+            append_results(results, epoch, "Verification", k, cfg.testing_size, "Variable", "Coefficients", l)
+            append_results(results, epoch, "Verification", k, cfg.testing_size, "Variable", "Reconstruction", r)
+        
+        verification_asterisms.append(verification_asterism[0])
 
     df = pd.DataFrame.from_dict(results, orient="columns")
 
     for dir in [f"{directory}/current", f"{directory}/{cfg.start_time}"]:
+        with open(f"{dir}/results.csv", "w") as f:
+            df.to_csv(f, sep=",")
+
         with open(f"{dir}/asterisms_variable.txt", "w") as f:
             for l in save_asterism_data["variable"]:
                 f.write(f"{l}\n")
@@ -188,9 +209,6 @@ def run(cfg):
             for l in verification_asterisms:
                 f.write(f"{l}\n")
 
-        with open(f"{dir}/results.csv", "w") as f:
-            df.to_csv(f, sep=",")
-
         for k, m in fixed_trainer.models.items():
             name = m.__class__.__name__
             source = inspect.getsource(m.__class__)
@@ -199,5 +217,10 @@ def run(cfg):
 
     shutil.make_archive(f'{directory}/{cfg.start_time}', 'zip', f'{directory}/{cfg.start_time}')
     shutil.rmtree(f'{directory}/{cfg.start_time}')
+
+    print(f"Bias (Fixed, Coefficient) = {np.mean(fixed_bias_c)}")
+    print(f"Bias (Fixed, Reconstruction) = {np.mean(fixed_bias_r)}")
+    print(f"Bias (Variable, Coefficient) = {np.mean(var_bias_c)}")
+    print(f"Bias (Variable, Reconstruction) = {np.mean(var_bias_r)}")
 
     return df

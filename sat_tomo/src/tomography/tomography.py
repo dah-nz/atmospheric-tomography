@@ -105,6 +105,7 @@ class Tomography():
 
             if display:
                 fig, axs = plt.subplots(1, 4)
+                fig.suptitle(f"Proj submatrices. theta:{theta}, gamma:{gamma}, alt:{altitude}m, size:{layer_size}m, px:{layer_pixels}")
                 axs[0].set_title("Metapupil")
                 axs[0].imshow(coeffs)
                 axs[1].set_title("Subpupil")
@@ -117,7 +118,7 @@ class Tomography():
         return P
 
 class LeastSquares(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=True, method="dotAT", start_angle=30, end_angle=60, angle_mix="ave", display=False):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=False, method="all", start_angle=18, end_angle=22, angle_mix="ave", display=False):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size)
         """
         proj_grid:
@@ -171,9 +172,10 @@ class LeastSquares(Tomography):
         target_coeffs:
             array of coefficients for target/science object
         """
+
         layers_sizes, layer_pixels = self.get_layer_shapes(beacons)
-        beacon_coeffs = beacon_coeffs.flatten()
-        L = np.array(beacon_coeffs)
+
+        L = np.array(beacon_coeffs.flatten())
 
         A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
         T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
@@ -220,8 +222,8 @@ class LeastSquares(Tomography):
                 return C_T
         
         if self.method in ["K", "dotAK", "dotTK", "all"]:
-            alphas = np.logspace(-10, 0, 20)
-            alphas = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
+            alphas = np.logspace(-20, 0, 50)
+            # alphas = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
             clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
             alpha = clf.alpha_
         
@@ -242,9 +244,10 @@ class LeastSquares(Tomography):
                 return C_K
             
         if self.method == "K2":
-            alphas = np.logspace(-10, 0, 20)
-            clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
-            alpha = clf.alpha_
+            # alphas = np.logspace(-10, 0, 20)
+            # clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
+            # alpha = clf.alpha_
+            alpha = 0.23
         
             K = np.zeros((T.shape[1], T.shape[1]))
             N = self.n_modes
@@ -453,6 +456,31 @@ def get_coeffs_for_asterism(asterism, basis, diameter, layer_screens, layer_alti
         coeffs = np.array([b.cutout_coeffs(basis, diameter, layer_altitudes, layer_screens, layer_sizes, wfs) for b in asterism])
     except AttributeError:
         coeffs = [np.array([b.cutout_coeffs(basis, diameter, layer_altitudes, layer_screens, layer_sizes, wfs) for b in a]) for a in asterism]
+
+    return coeffs
+
+def get_wfs_screen_for_asterism(asterism, diameter, layer_screens, layer_altitudes, layer_sizes, wfs):
+    """
+    Calculate coefficients for each beacon in an asterism
+
+    Parameters
+    ----------
+    asterism:           Layer altitudes (m)
+    basis:              Set of basis functions for decomposition
+    diameter:           Telescope diameter (m)
+    layer_screens:      Phase screens at each layer
+    layer_altitudes:    Altitudes of each layer (m)
+    layer_sizes:        Size of metapupil at each layer (m)
+    wfs:                Reference to a wfs class that exposes an estimate() method, or None
+
+    Return
+    ------
+    coeffs:             Basis function coefficients for the total wavefront of each beacon in the asterism
+    """
+    try:
+        coeffs = np.array([b.cutout_wfs_image(diameter, layer_altitudes, layer_screens, layer_sizes, wfs) for b in asterism])
+    except AttributeError:
+        coeffs = [np.array([b.cutout_wfs_image(diameter, layer_altitudes, layer_screens, layer_sizes, wfs) for b in a]) for a in asterism]
 
     return coeffs
 

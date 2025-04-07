@@ -34,16 +34,18 @@ class TomoRunner(Runner):
     def _run(self, data):
         loss_data = []
         recon_data = []
+        loss_bias = []
+        recon_bias = []
 
         # Ignore situations when doing tomo for variable asterisms would take too long
         if self.fixed_only and len(data.asterisms) != 1:
-            return (None, None)
+            return (None, None, None, None)
         
         test_data = data.get_dataloader()
 
         mask = None
 
-        for X, y, scr, glao_y, _ in test_data:
+        for X, y, scr, _ in test_data:
             X, y = X.numpy(), y.numpy()
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -51,25 +53,25 @@ class TomoRunner(Runner):
             for i in range(data.n):
                 logger.debug(f"Calculating tomography ({self.name}) test data, index {i}/{data.n}")
                 target_coeffs, beacon_coeffs, beacons = data.unpack(X, y, i)
-                beacon_coeffs = np.array([np.add(beacon_coeffs[n, :], glao_y[i]) for n in range(beacon_coeffs.shape[0])])
 
                 tomo_coeffs = self.tomography.run(beacons, self.target, beacon_coeffs)
+                if type(self.tomography).__name__ == "LeastSquares":
+                    tomo_coeffs[:3] = target_coeffs[:3]         # Assume pistion, tip and tilt are known a priori (a la Ragazzoni)
+
                 loss_data.append(
                     self.loss_fn(torch.from_numpy(tomo_coeffs), torch.from_numpy(target_coeffs)).item()
                 )
 
                 t0 = torch.from_numpy(self.basis.compose(scr[i].shape, tomo_coeffs))
                 s0 = torch.from_numpy(scr[i].numpy() * mask)
-                # fig, axs = plt.subplots(1,3)
-                # axs[0].imshow(t0.numpy())
-                # axs[1].imshow(s0.numpy())
-                # axs[2].imshow((t0 - s0).numpy())
-                # plt.show()
+
                 recon_data.append(self.loss_fn(s0, t0).item())
+                loss_bias.append(np.mean(target_coeffs-tomo_coeffs))
+                recon_bias.append(np.mean(s0.numpy()-t0.numpy()))
     
         logger.info(f" -> {self.name} loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data))
+        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
     
 class OpenLoopRunner(Runner):
     def __init__(self, loss_fn, basis) -> None:
@@ -81,11 +83,13 @@ class OpenLoopRunner(Runner):
     def _run(self, data):
         loss_data = []
         recon_data = []
+        loss_bias = []
+        recon_bias = []
         test_data = data.get_dataloader()
 
         mask = None
 
-        for _, y, scr, _, _ in test_data:
+        for _, y, scr, _ in test_data:
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
@@ -94,16 +98,20 @@ class OpenLoopRunner(Runner):
 
             loss = self.loss_fn(p, y).item()
             loss_data.append(loss)
+            y0 = y.to("cpu").detach().numpy()
+            p0 = p.to("cpu").detach().numpy()
+            loss_bias.append(np.mean(y0-p0))
 
             y0 = p.to("cpu").detach().numpy()
             recon = torch.from_numpy(self.basis.compose(scr[0].shape, y0[0]))
             for s in scr:
                 s0 = torch.from_numpy(s.numpy() * mask)
                 recon_data.append(self.loss_fn(s0, recon).item())
+                recon_bias.append(np.mean(s0.numpy()-recon.numpy()))
 
         logger.info(f" -> {self.name} loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data))
+        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
 
 class FittingErrorRunner(Runner):
     def __init__(self, loss_fn, basis) -> None:
@@ -114,11 +122,12 @@ class FittingErrorRunner(Runner):
         return self._run(data)
     def _run(self, data):
         recon_data = []
+        recon_bias = []
         test_data = data.get_dataloader()
 
         mask = None
 
-        for _, y, scr, _, _ in test_data:
+        for _, y, scr, _ in test_data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -128,10 +137,11 @@ class FittingErrorRunner(Runner):
                 y0 = y0.to("cpu").numpy()
                 recon = torch.from_numpy(self.basis.compose(s0.shape, y0))
                 recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
+                recon_bias.append(s0-recon.numpy())
 
         logger.info(f" -> {self.name} recon loss: {np.mean(recon_data):>7f}")
 
-        return (None, np.sqrt(np.mean(recon_data)))
+        return None, np.sqrt(np.mean(recon_data)), None, np.mean(recon_bias)
 
 class ModelRunner(Runner):
     def __init__(self, model, loss_fn, optimiser, basis):
@@ -143,12 +153,14 @@ class ModelRunner(Runner):
         self.model.train()
         loss_data = []
         recon_data = []
+        loss_bias = []
+        recon_bias = []
 
-        train_data = data.get_dataloader()
+        train_data = data.get_dataloader(option="glao_offset")
 
         mask = None
 
-        for X, _, scr, glao_y, delta_y in train_data:
+        for X, glao_y, scr, delta_y in train_data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -165,27 +177,32 @@ class ModelRunner(Runner):
             self.optimiser.zero_grad()
 
             prediction = pred.to("cpu").detach() + glao_y
+            del_y = delta_y.to("cpu").detach()
+            loss_bias.append(glao_y+del_y-prediction)
 
             for p0, s0 in zip(prediction, scr):
                 s0 = s0.numpy() * mask
                 p0 = p0.numpy()
                 recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
                 recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
+                recon_bias.append(s0-recon.numpy())
 
         logger.info(f" -> {self.name} training loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data))
+        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
 
     def test(self, data):
         self.model.eval()
         loss_data = []
         recon_data = []
+        loss_bias = []
+        recon_bias = []
 
-        test_data = data.get_dataloader()
+        test_data = data.get_dataloader(option="glao_offset")
         mask = None
 
         with torch.no_grad():
-            for X, y, scr, glao_y, delta_y in test_data:
+            for X, glao_y, scr, delta_y in test_data:
 
                 if mask is None:
                     mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -198,13 +215,16 @@ class ModelRunner(Runner):
                 loss_data.append(loss)
 
                 prediction = pred.to("cpu") + glao_y
+                del_y = delta_y.to("cpu").detach()
+                loss_bias.append(glao_y+del_y-prediction)
 
                 for p0, s0 in zip(prediction, scr):
                     s0 = s0.numpy() * mask
                     p0 = p0.numpy()
                     recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
                     recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
+                    recon_bias.append(s0-recon.numpy())
 
         logger.info(f" -> {self.name} testing loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data))
+        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)

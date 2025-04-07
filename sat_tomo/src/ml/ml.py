@@ -50,7 +50,14 @@ class Trainer():
         for k in self.models.keys():
             model = self.models[k]
             opti = self.optimisers[k]
-            self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis))
+            try:
+                if model.type == "wfs_image":
+                    self.trainers.append(runner.ImageModelRunner(model, self.loss_fn, opti, cfg.basis))
+                else:
+                    self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis))
+            except AttributeError:
+                self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis))
+            
 
         if len(cfg.tomo_methods) > 0:
             # Set up different tomography methods

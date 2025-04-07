@@ -35,7 +35,10 @@ class Beacon():
         self.magnitude = magnitude
 
     def __repr__(self):
-        return f"<Beacon(t: {self.theta}, g: {self._gamma_arcsec}\" ({self.gamma} rads))>"
+        try:
+            return f"<Beacon(t: {float(self.theta):.4}, g: {float(self._gamma_arcsec):.4}\" ({float(self.gamma):.4} rads), m: {float(self.magnitude):.4})>"
+        except TypeError:
+            return f"<Beacon(t: {float(self.theta):.4}, g: {float(self._gamma_arcsec):.4}\" ({float(self.gamma):.4} rads), m: Not Defined)>"
     
     def position(self, altitude):
         """
@@ -96,8 +99,8 @@ class Beacon():
                 y1 = y0 + self.aperture_mask.shape[0]
 
             if y0 < 0 or x0 < 0 or x1 > screen_dim or y1 > screen_dim:
-                print(pos, pix_x, pix_y, r, cut_out_dim, screen_dim, phase_screen_size, x0, x1, y0, y1)
-                quit()
+                print(layer_altitude, pos, pix_x, pix_y, r, cut_out_dim, screen_dim, phase_screen_size, x0, x1, y0, y1)
+                raise ValueError("Requested location of cut out is outside bounds of given phase screen")
 
             phase = phase_screen[y0:y1, x0:x1]
         else: # interp
@@ -152,11 +155,13 @@ class Beacon():
         total wavefront phase screen, summed across all altitudes, with any resultant offset (piston mode) removed.
             
         """
-        # try:
-        cutouts = np.array([self.cutout(diameter, a, l, d, interp=False) for a, l, d in zip(layer_altitudes, layer_screens, layer_sizes)])
-        # except ValueError as err:
-        #     print(diameter, layer_altitudes, layer_screens.shape, layer_sizes)
-        #     raise err
+        try:
+            cutouts = np.array([self.cutout(diameter, a, l, d, interp=False) for a, l, d in zip(layer_altitudes, layer_screens, layer_sizes)])
+        except ValueError as err:
+            for a, l, s in zip(layer_altitudes, layer_screens, layer_sizes):
+                co = self.cutout(diameter, a, l, s, interp=False)
+                print(a, l.shape, s, diameter, co.shape)
+            raise err
 
         cutout = np.sum(cutouts, 0)
         if self.aperture_mask is not None:
@@ -190,6 +195,28 @@ class Beacon():
         # print(out.shape)
         return out
     
+    def cutout_wfs_image(self, diameter, layer_altitudes, layer_screens, layer_sizes, wfs):
+        """
+        Generate wfs spot image for the total wavefront across a number of layers
+
+        Parameters
+        ----------
+        basis:              Set of basis functions for decomposition
+        diameter:           Telescope diameter (m)
+        layer_altitudes:    Altitudes of each layer (m)
+        layer_screens:      Phase screens at each layer
+        layer_sizes:        Size of metapupil at each layer (m)
+        wfs:                Instance of wavefront sensor
+
+        Return
+        ------
+        coeffs:             Basis function coefficients for the total wavefront of each beacon in the asterism
+        """
+        cutout = self.total_cutout(diameter, layer_altitudes, layer_screens, layer_sizes)
+        out = np.array(wfs.spots(cutout, self.magnitude), dtype=np.float32)
+        
+        return out
+
     def to_vec(self):
         """
             Returns a unit vector giving the direction of the beacon from the aperture
