@@ -173,6 +173,11 @@ class ModelRunner(Runner):
             X, delta_y = X.to(ml.device), delta_y.to(ml.device)
 
             pred = self.model(X)
+
+            # prediction = pred + glao_y.to(ml.device)
+            # actual = delta_y + glao_y.to(ml.device)
+            # loss = self.loss_fn(prediction, actual)
+            
             loss = self.loss_fn(pred, delta_y)
 
             loss_data.append(loss.item())

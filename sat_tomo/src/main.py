@@ -79,13 +79,20 @@ if __name__ == "__main__":
                     col="Asterism", style="Stage", hue="Model",
                     facet_kws={'sharey': "row", 'sharex': True})
         
-        plt.figure()
+        fig, axs = plt.subplots(1, 2)
         df_v_recon = df_v.drop(df_v[df_v.Type != "Reconstruction"].index)
-        sns.boxplot(data=df_v_recon, x='Model', y='Loss')
+        sns.boxplot(data=df_v_recon, x='Model', y='Loss', ax=axs[0])
+        axs[0].set_title("Reconstruction")
         
-        plt.figure()
         df_v_coeff = df_v.drop(df_v[df_v.Type != "Coefficients"].index)
-        sns.boxplot(data=df_v_coeff, x='Model', y='Loss')
+        sns.boxplot(data=df_v_coeff, x='Model', y='Loss', ax=axs[1])
+        axs[1].set_title("Coefficients")
+
+        print("*** Reconstruction Statistics ***")
+        print(df_v_recon[["Model", "Loss"]].groupby("Model").describe())
+
+        print("*** Coefficient Statistics ***")
+        print(df_v_coeff[["Model", "Loss"]].groupby("Model").describe())
         
     snapshot = tracemalloc.take_snapshot()
     top_stats = snapshot.statistics('lineno')

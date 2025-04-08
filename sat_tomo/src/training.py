@@ -61,8 +61,10 @@ def run(cfg):
     save_asterism_data = {"fixed": [], "variable": []}
 
     if cfg.shwfs:
+        log.info(f"Using SHWFS for coefficient estimation")
         shwfs = wavefront.SHWFS(cfg.diameter, cfg.num_modes, noise=cfg.noise)
     else:
+        log.info(f"Using dot product (ideal WFS) for coefficient estimation")
         shwfs = None
 
     mask = cfg.basis.get_mask(cfg.aperture_size)
