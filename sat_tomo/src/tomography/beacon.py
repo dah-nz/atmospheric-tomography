@@ -52,6 +52,30 @@ class Beacon():
         # print(pos, altitude, self.gamma, self.theta)
         return pos 
     
+    def position_gaussian(self, base_screen, limiting_angle=120):
+
+        x, y = self.position(1)
+        max_pos, _ = util.azimuth2cart(1, util.arcsec2rad(limiting_angle), 0)
+        x0, y0 = x/max_pos, y/max_pos         # Position ratio between 0 and the limiting angle
+
+        xi = np.linspace(-1.2, 1.2, num=base_screen.shape[0])
+        yi = np.linspace(-1.2, 1.2, num=base_screen.shape[1])
+
+        X, Y = np.meshgrid(xi, yi)
+
+        # change size and magnitude based on beacon stellar magnitude
+        # if self.magnitude is None:
+        #     m = 10
+        # else:
+        #     m = 20-self.magnitude
+
+        # g = m * np.exp(-4*np.log(2) * ((X-x0)**2 + (Y+y0)**2) / (m/30)**2)
+
+        # simple
+        g = np.exp(-4*np.log(2) * ((X-x0)**2 + (Y+y0)**2) / (0.2)**2)
+
+        return g
+    
     def cutout(self, diameter, layer_altitude, phase_screen, phase_screen_size, remove_piston=False, full_phase=False, interp=False):
         """
         Get the beacon wavefront projection on a layer at an altitude for optical simulation

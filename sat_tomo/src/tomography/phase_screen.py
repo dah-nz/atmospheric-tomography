@@ -152,7 +152,7 @@ class PhaseScreenGenerator():
         return np.mean(sigma)
 
 class Atmosphere():
-    def __init__(self, n, layer_altitudes, r0, D, aperture_size, limiting_angle=120, rng=None):
+    def __init__(self, n, layer_altitudes, r0, D, aperture_size, limiting_angle=120, rng=None, per_layer_r0=False):
         self.limit_star = [beacon.Beacon(0, limiting_angle+1, arcseconds=True)]            # add one to limiting angle to add a little leeway for numerical differences pushing bounds slightly over the edges
         m, l = tomography.get_layer_shapes(self.limit_star, layer_altitudes, D, aperture_size)
         self.metapupil_diameters = m
@@ -161,9 +161,10 @@ class Atmosphere():
         self.cut_out = (aperture_size, aperture_size)
         self.altitudes = layer_altitudes
         self.r0 = r0
-        self.layer_r0 = [r0 * (len(layer_altitudes) ** (1/2)) for _ in layer_altitudes]
-        # self.layer_r0 = [(r0 * (a/np.median(layer_altitudes))) ** (2/3) for a in layer_altitudes]
-        # self.layer_r0 = [r0 for _ in layer_altitudes]
+        if per_layer_r0:
+            self.layer_r0 = [r0 for _ in layer_altitudes]
+        else:
+            self.layer_r0 = [r0 * (len(layer_altitudes) ** (1/2)) for _ in layer_altitudes]
         self.D = D
         self.rng = rng
         self.generators = [PhaseScreenGenerator(s, self.D, r0, self.rng) for s, r0 in zip(self.layer_shapes, self.layer_r0)]

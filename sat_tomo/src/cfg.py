@@ -39,7 +39,7 @@ class Config():
         parser.add_argument('-e', '--epochs', action='store', default=64, type=int, help="Number of training epochs")
         parser.add_argument('-D', '--diameter', action='store', default=1.8, help="Set telescope diameter (m)")
         parser.add_argument('--directory', action='store', default='C:/Code/PhD/Data', help="Directory to save data to")
-        parser.add_argument('--aperture_size', action='store', default=64, type=int, help="Set aperture size (pixels)")
+        parser.add_argument('--aperture_size', action='store', default=100, type=int, help="Set aperture size (pixels)")
         parser.add_argument('--r0', action='store', default=0.07, help="Set total Fried parameter across all layers (m)")
         parser.add_argument('--layers', action='store', default=3, type=int, help="Number of layers")
         parser.add_argument('--altitudes', action=AltitudeExtendAction, nargs="*", help="Layer altitudes")
@@ -54,7 +54,7 @@ class Config():
         parser.add_argument('--loss_function', action='store', default='mse_loss', help="ML training loss function")
         parser.add_argument('--learning_rate', action='store', default=1e-3, help="ML training AdamW learning rate")
         parser.add_argument('--weight_decay', action='store', default=1e-5, help="ML training AdamW weight decay")
-        parser.add_argument('--save_frequency', action='store', default=4, type=int, help='Frequency to save intermediary model parameters')
+        parser.add_argument('--save_frequency', action='store', default=16, type=int, help='Frequency to save intermediary model parameters')
 
         parser.add_argument('--num_sats', action='store', default=500, help="Number of satellites to calculate asterisms from")
         parser.add_argument('--sat_del_t', action='store', default=30, help="Time delta between satellite location checks (s)")
@@ -71,6 +71,8 @@ class Config():
         parser.add_argument('--lsq_off', action='store_true', help='Turn off Least Squares tomography comparison')
         parser.add_argument('--glao_off', action='store_true', help='Turn off GLAO tomography comparison')
         parser.add_argument('--ao_off', action='store_true', help="Turn off adaptive optics comparison")
+        parser.add_argument('--per_layer_r0', action='store_true', help="Set r0 value as each layer, rather than total across layers.")
+        parser.add_argument('--fixed_theta_0_randomised', action="store_true", help="Randomise the starting angle for fixed asterisms (rotating the equally spaced guide-stars about the centre)")
 
         try:
             args = parser.parse_args()
@@ -83,6 +85,9 @@ class Config():
 
         if type(args.r0) is str:
             args.r0 = float(args.r0)
+
+        if type(args.fixed_asterism_angle) is str:
+            args.fixed_asterism_angle = float(args.fixed_asterism_angle)
 
         if args.altitudes is None or len(args.altitudes) == 0:
             args.altitudes = [1000, 5000, 10000]

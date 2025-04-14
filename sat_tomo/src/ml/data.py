@@ -54,7 +54,7 @@ class TomographyData(Dataset):
     Pytorch dataset wrapper. Stores the phase screen and asterism data for training machine learning models.
 
     """
-    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, limiting_angle=120, rng=None, packing_function=None, unpacking_function=None, wfs=None):
+    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, rng=None, packing_function=None, unpacking_function=None, wfs=None):
         """
         Set up Tomography Dataset
 
@@ -130,8 +130,26 @@ class TomographyData(Dataset):
             extra = target_coeffs - glao_coeffs # delta
             target_coeffs = glao_coeffs
         elif self.option == "shwfs_spots":
-            sh_spots = tomography.get_wfs_screen_for_asterism(asterism, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmoshpere.metapupil_diameters, self.wfs)
-            X = -1
+            sh_spots = tomography.get_wfs_screen_for_asterism(asterism, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters, self.wfs)
+            locations = [star.position_gaussian(sh_spots[0], limiting_angle=asterisms.LIMITING_ANGLE) for star in asterism]
+
+            # print(asterism)
+
+            # import matplotlib.pyplot as plt
+            # fig, axs = plt.subplots(2, 3)
+            # for i in range(len(asterism)):
+            #     spots = sh_spots[i]
+            #     loc = locations[i]
+            #     axs[0, i].imshow(spots)
+            #     axs[1, i].imshow(loc)
+            # plt.show()
+            # quit()
+
+            X = np.stack(sh_spots, axis=0)
+            X2 = np.stack(locations, axis=0)
+            X = np.concatenate([X, X2], axis=0, dtype=np.float32)
+
+            extra = -1
         else:
             X = self.pack(asterism_coeffs, asterism)
             extra = -1

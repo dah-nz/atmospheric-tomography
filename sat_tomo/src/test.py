@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import util
 
-from tomography import test_tomography
-test_tomography.run_tests()
-quit()
+# from tomography import test_tomography
+# test_tomography.run_tests()
+# quit()
 
 sz = 100
 rd = 1
@@ -33,7 +33,7 @@ for n, mode in enumerate(modes):
     axs[n, 1].imshow(my_z)
     axs[n, 2].imshow(byron_z - my_z)
 
-from tomography import phase_screen
+from tomography import phase_screen, beacon
 
 D = 1.8
 r0 = 0.07
@@ -66,8 +66,8 @@ plt.colorbar(a1, ax=axs[1])
 print(f"  Mine: peak: {np.mean(ave_ptp_mine)}, std: {np.mean(sigma_m)}")
 print(f"Byrons: peak: {np.mean(ave_ptp_byron)}, std: {np.mean(sigma_b)}")
 
-plt.show()
-quit()
+# plt.show()
+# quit()
 # base = np.zeros((sz+2*rd, sz+2*rd))
 # circle1 = base + util.circle(sz+2*rd, rd, tuple(rng.integers(-sz//2,sz//2,2)))
 # circle2 = base + util.circle(sz+2*rd, rd, tuple(rng.integers(-sz//2,sz//2,2)))
@@ -75,7 +75,7 @@ quit()
 
 circles = []
 
-def makeGaussian(size, fwhm = 3, center=None):
+def makeGaussianStar(size, magnitude = 3, center=None):
     """ Make a square gaussian kernel.
 
     size is the length of a side of the square
@@ -92,15 +92,17 @@ def makeGaussian(size, fwhm = 3, center=None):
         x0 = center[0]
         y0 = center[1]
 
-    return np.exp(-4*np.log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2)
+    fwhm = 1/400 * (39 * magnitude ** 2 - 1092 * magnitude + 8044)
+
+    return fwhm * np.exp(-4*np.log(2) * ((x-x0)**2 + (y-y0)**2) / (fwhm)**2)
 
 
 for n in range(3):
-    gamma = rng.uniform(0, 1) * (sz / 2)
+    gamma = (1 - rng.uniform(0, 1) ** 2) * 120
     theta = rng.uniform(0, 2 * np.pi)
-    x, y = util.pol2cart(gamma, theta)
-    bd = 4
-    circles.append(makeGaussian(sz+bd, fwhm=2, center=(x+(sz+bd)/2, y+(sz+bd)/2)))
+    b = beacon.Beacon(theta, gamma, magnitude=rng.uniform(-6, 14), arcseconds=True)
+    print(b)
+    circles.append(b.position_gaussian(my_atmo, limiting_angle=120))
 
 circles.append(np.sum(np.array(circles), 0))
 

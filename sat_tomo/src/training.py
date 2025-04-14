@@ -79,12 +79,12 @@ def run(cfg):
         for e in range(n_epochs):
             epoch += 1
             log.info(f"Running Epoch {epoch}/{total_epochs} (Sub-epoch {e+1}/{n_epochs})")
-            atmosphere_train = phase_screen.Atmosphere(n_screens, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
-            atmosphere_test = phase_screen.Atmosphere(cfg.testing_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+            atmosphere_train = phase_screen.Atmosphere(n_screens, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size, per_layer_r0=cfg.per_layer_r0)
+            atmosphere_test = phase_screen.Atmosphere(cfg.testing_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size, per_layer_r0=cfg.per_layer_r0)
 
             if 'fixed' in cfg.asterism_types:
                 log.info(f"Running fixed asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
-                fixed_asterisms_train = asterisms.generate_fixed_asterisms(cfg.training_size, cfg.fixed_asterism_angle, mask=mask)
+                fixed_asterisms_train = asterisms.generate_fixed_asterisms(cfg.training_size, cfg.fixed_asterism_angle, mask=mask, theta_0_random=cfg.fixed_theta_0_randomised)
                 data = run_epoch(fixed_trainer, 
                                  cfg.training_size, 
                                  fixed_asterisms_train, 
@@ -99,7 +99,7 @@ def run(cfg):
                     fixed_bias_r.append(br)
 
 
-                fixed_asterisms_test = asterisms.generate_fixed_asterisms(cfg.testing_size, cfg.fixed_asterism_angle, mask=mask)
+                fixed_asterisms_test = asterisms.generate_fixed_asterisms(cfg.testing_size, cfg.fixed_asterism_angle, mask=mask, theta_0_random=cfg.fixed_theta_0_randomised)
                 data = run_epoch(fixed_trainer, 
                                  cfg.testing_size,
                                  fixed_asterisms_test,
@@ -179,7 +179,10 @@ def run(cfg):
         log.info(f"Running verification test screen {i+1}/{cfg.testing_size}")
 
         verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
-        verification_asterism = asterisms.generate_variable_asterisms(1, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)
+        if not cfg.variable_off:
+            verification_asterism = asterisms.generate_variable_asterisms(1, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)
+        else:
+            verification_asterism = asterisms.generate_fixed_asterisms(1, cfg.fixed_asterism_angle, mask=mask, theta_0_random=cfg.fixed_theta_0_randomised)
 
         data = run_epoch(variable_trainer, 
                         1,
@@ -222,9 +225,13 @@ def run(cfg):
     shutil.make_archive(f'{directory}/{cfg.start_time}', 'zip', f'{directory}/{cfg.start_time}')
     shutil.rmtree(f'{directory}/{cfg.start_time}')
 
-    print(f"Bias (Fixed, Coefficient) = {np.mean(fixed_bias_c)}")
-    print(f"Bias (Fixed, Reconstruction) = {np.mean(fixed_bias_r)}")
-    print(f"Bias (Variable, Coefficient) = {np.mean(var_bias_c)}")
-    print(f"Bias (Variable, Reconstruction) = {np.mean(var_bias_r)}")
+    if len(fixed_bias_c) > 0:
+        print(f"Bias (Fixed, Coefficient) = {np.mean(fixed_bias_c)}")
+    if len(fixed_bias_r) > 0:
+        print(f"Bias (Fixed, Reconstruction) = {np.mean(fixed_bias_r)}")
+    if len(var_bias_c) > 0:
+        print(f"Bias (Variable, Coefficient) = {np.mean(var_bias_c)}")
+    if len(var_bias_r) > 0:
+        print(f"Bias (Variable, Reconstruction) = {np.mean(var_bias_r)}")
 
     return df

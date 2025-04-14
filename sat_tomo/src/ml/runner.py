@@ -177,7 +177,7 @@ class ModelRunner(Runner):
             # prediction = pred + glao_y.to(ml.device)
             # actual = delta_y + glao_y.to(ml.device)
             # loss = self.loss_fn(prediction, actual)
-            
+
             loss = self.loss_fn(pred, delta_y)
 
             loss_data.append(loss.item())
@@ -230,6 +230,93 @@ class ModelRunner(Runner):
                 prediction = pred.to("cpu") + glao_y
                 del_y = delta_y.to("cpu").detach()
                 loss_bias.append(glao_y+del_y-prediction)
+
+                for p0, s0 in zip(prediction, scr):
+                    s0 = s0.numpy() * mask
+                    p0 = p0.numpy()
+                    recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
+                    recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
+                    recon_bias.append(s0-recon.numpy())
+
+        logger.info(f" -> {self.name} testing loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
+
+        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
+    
+class ImageModelRunner(Runner):
+    def __init__(self, model, loss_fn, optimiser, basis):
+        super().__init__(type(model).__name__, loss_fn, basis)
+        self.model = model
+        self.optimiser = optimiser
+
+    def train(self, data):
+        self.model.train()
+        loss_data = []
+        recon_data = []
+        loss_bias = []
+        recon_bias = []
+
+        train_data = data.get_dataloader(option="shwfs_spots")
+
+        mask = None
+
+        for X, y, scr, _ in train_data:
+
+            if mask is None:
+                mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+
+            X, y = X.to(ml.device), y.to(ml.device)
+
+            pred = self.model(X)
+            
+            loss = self.loss_fn(pred, y)
+
+            loss_data.append(loss.item())
+
+            loss.backward()
+            self.optimiser.step()
+            self.optimiser.zero_grad()
+
+            prediction = pred.to("cpu").detach()
+            y = y.to("cpu").detach()
+            loss_bias.append(y-prediction)
+
+            for p0, s0 in zip(prediction, scr):
+                s0 = s0.numpy() * mask
+                p0 = p0.numpy()
+                recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
+                recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
+                recon_bias.append(s0-recon.numpy())
+
+        logger.info(f" -> {self.name} training loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
+
+        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
+
+    def test(self, data):
+        self.model.eval()
+        loss_data = []
+        recon_data = []
+        loss_bias = []
+        recon_bias = []
+
+        test_data = data.get_dataloader(option="shwfs_spots")
+        mask = None
+
+        with torch.no_grad():
+            for X, y, scr, _ in test_data:
+
+                if mask is None:
+                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+
+                X, y = X.to(ml.device), y.to(ml.device)
+
+                pred = self.model(X)
+                loss = self.loss_fn(pred, y).item()
+
+                loss_data.append(loss)
+
+                prediction = pred.to("cpu").detach()
+                y = y.to("cpu").detach()
+                loss_bias.append(y-prediction)
 
                 for p0, s0 in zip(prediction, scr):
                     s0 = s0.numpy() * mask

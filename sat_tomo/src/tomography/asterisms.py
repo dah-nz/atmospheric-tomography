@@ -12,9 +12,12 @@ ASTERISM_SIZE = 3
 LIMITING_ANGLE = 120
 DEFAULT_M = 8   # default magnitude
 
-def generate_fixed_asterisms(n, angle, mask=None):
+def generate_fixed_asterisms(n, angle, mask=None, theta_0_random=False):
     logger.info(f"Generating fixed asterisms with {ASTERISM_SIZE} stars. Fixed angle of {angle}\"")
-    theta0 = np.random.uniform(0, 2*np.pi, size=n)
+    if theta_0_random:
+        theta0 = np.random.uniform(0, 2*np.pi, size=n)
+    else:
+        theta0 = [0] * n
     return [[beacon.Beacon(t, angle, magnitude=8, aperture_mask=mask) for t in np.linspace(t0, t0+2*np.pi, ASTERISM_SIZE, endpoint=False)] for t0 in theta0]
 
 def generate_variable_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, rng=None, zero_rate=1e-5, fixed_rate=1e-4, mask=None):
