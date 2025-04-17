@@ -1,0 +1,42 @@
+[
+    {
+      "num_modes": 16,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": 0.07,
+      "per_layer_r0": true,
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+
+      "train_models": ["MLNN_baseline", "MLNN_glao_offset"],
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      
+      "epochs": 128,
+      "training_size": 256,
+      "testing_size": 128,
+      "save_frequency": 32,
+      "display_training": true,
+      
+      "shwfs": false,
+      "noise": false,
+      
+      "variable_off": true,
+      "fixed_off": false,
+      "asterism_size": 3,
+      "fixed_asterism_angle": 15,
+      "fixed_theta_0_randomised": false,
+      
+      "build_star_map": false,
+      "satellites": false,
+      "period": 24,
+      
+      "tip_tilt_passthrough": false,
+      "wavefront_tip_tilt_removal": true,
+
+      "load_previous": false,
+      "continue_training": false
+    }
+  ]

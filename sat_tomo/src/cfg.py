@@ -17,7 +17,7 @@ class AltitudeExtendAction(argparse.Action):
         existing_values = getattr(namespace, self.dest, [])
         if existing_values == None:
             existing_values = []
-        existing_values.extend(values)
+        existing_values.extend(map(float, values))
         setattr(namespace, self.dest, existing_values)
 
 class Config():
@@ -71,8 +71,13 @@ class Config():
         parser.add_argument('--lsq_off', action='store_true', help='Turn off Least Squares tomography comparison')
         parser.add_argument('--glao_off', action='store_true', help='Turn off GLAO tomography comparison')
         parser.add_argument('--ao_off', action='store_true', help="Turn off adaptive optics comparison")
+
         parser.add_argument('--per_layer_r0', action='store_true', help="Set r0 value as each layer, rather than total across layers.")
         parser.add_argument('--fixed_theta_0_randomised', action="store_true", help="Randomise the starting angle for fixed asterisms (rotating the equally spaced guide-stars about the centre)")
+        parser.add_argument('-l', '--load_previous', action='store_true', help="Load models from previous training run")
+        parser.add_argument('-c', '--continue_training', action='store_true', help="Save results appended to previous training run")
+        parser.add_argument("--tip_tilt_passthrough", action='store_true', help="Allow tip/tilt to pass through for training (assume first three modes are known and correct)")
+        parser.add_argument("--wavefront_tip_tilt_removal", action='store_true', help="Remove tip/tilt component from wavefronts prior to wavefront sensing, based on target tip/tilt value, approximating a tip/tilt mirror in the optical path")
 
         try:
             args = parser.parse_args()
@@ -104,7 +109,7 @@ class Config():
         self.tomo_methods = {
             "LeastSquares":     {'run': True, 'fixed': False},
             "GLAO":             {'run': True, 'fixed': False},
-            "AO":               {'run': True, 'fixed': False},
+            "AO":               {'run': True, 'fixed': False}
             }
 
         if self.lsq_off:
@@ -113,7 +118,6 @@ class Config():
             self.tomo_methods["GLAO"]['run'] = False
         if self.ao_off:
             self.tomo_methods["AO"]['run'] = False
-
         
         self.basis = basis.select(self.basis_function, self.num_modes)
 

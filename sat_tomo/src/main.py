@@ -66,6 +66,11 @@ if __name__ == "__main__":
         log.info(" > Model training complete <")
 
     if cfg.display_training:
+        # import shutil
+        # shutil.unpack_archive(f"{cfg.directory}/20250409_144309.zip", f"{cfg.directory}/temp", format="zip")
+        # with open(f"{cfg.directory}/temp/results.csv", "r") as f:
+        #     df = pd.read_csv(f)
+
         with open(f"{cfg.directory}/current/results.csv", "r") as f:
             df = pd.read_csv(f)
 
@@ -78,6 +83,14 @@ if __name__ == "__main__":
                     x='Epoch', y='Loss', row="Type",
                     col="Asterism", style="Stage", hue="Model",
                     facet_kws={'sharey': "row", 'sharex': True})
+        
+        # Remove all but last verification results
+        try:
+            max_training_set = df_v["TrainingSet"].max()
+            df_v = df_v.drop(df_v[df_v.TrainingSet != max_training_set].index)
+        except KeyError:
+            pass
+
         
         fig, axs = plt.subplots(1, 2)
         df_v_recon = df_v.drop(df_v[df_v.Type != "Reconstruction"].index)

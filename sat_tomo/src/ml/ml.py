@@ -39,6 +39,7 @@ class Trainer():
         # Set up machine learning models and functions
         self.models = {k: eval(f"models.{k}(cfg).to(self.device)") for k in cfg.train_models}
         self.model_file_names = [cfg.get_file_name(k) for k in cfg.train_models]
+
         self.optimisers = {k: torch.optim.AdamW(m.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay) for k, m in self.models.items()}
         self.loss_fn = cfg.loss_function
 
@@ -51,12 +52,14 @@ class Trainer():
             model = self.models[k]
             opti = self.optimisers[k]
             try:
-                if model.type == "wfs_image":
-                    self.trainers.append(runner.ImageModelRunner(model, self.loss_fn, opti, cfg.basis))
+                if model.model_type == "wfs_image":
+                    self.trainers.append(runner.ImageModelRunner(model, self.loss_fn, opti, cfg.basis, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
+                elif model.model_type == "glao_offset":
+                    self.trainers.append(runner.DeltaModelRunner(model, self.loss_fn, opti, cfg.basis, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
                 else:
-                    self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis))
+                    self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
             except AttributeError:
-                self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis))
+                self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
             
 
         if len(cfg.tomo_methods) > 0:
@@ -66,8 +69,9 @@ class Trainer():
                 if opts['run']:
                     self.tomo[t] = (eval(f"tomography.{t}(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size)"), opts['fixed'])
             for k, (algo, fixed_asterisms_only) in self.tomo.items():
-                self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, fixed_asterisms_only))
+                self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, fixed_asterisms_only)) #, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
 
+        self.runners.append(runner.TipTiltRunner(self.loss_fn, cfg.basis))
         self.runners.append(runner.OpenLoopRunner(self.loss_fn, cfg.basis))
         self.runners.append(runner.FittingErrorRunner(self.loss_fn, cfg.basis))
     
@@ -120,12 +124,15 @@ class Trainer():
         files = self.get_file_names(epoch, prefix, suffix, dir)
 
         for (name, model), ff in zip(self.models.items(), files):
-            logger.info(f"Saving fixed model state dict for model {name} to {ff}")
+            logger.info(f"Saving {suffix} model state dict for model {name} to {ff}")
             torch.save(model.state_dict(), ff)
 
     def load_models(self, epoch=-1, prefix="", suffix="", dir=None):
         files = self.get_file_names(epoch, prefix, suffix, dir)
 
         for (name, model), ff in zip(self.models.items(), files):
-            logger.info(f"Loading fixed model state dict for model {name} from {ff}")
-            model.load_state_dict(torch.load(ff))
+            logger.info(f"Loading {suffix} model state dict for model {name} from {ff}")
+            try:
+                model.load_state_dict(torch.load(ff))
+            except FileNotFoundError:       # If the file isn't found, there's nothing to load, so the model will remain uninitialised
+                pass

@@ -39,6 +39,28 @@ class MLNN_baseline(Network):
         x = self.flatten(x)
         return self.linear_relu_stack(x)
     
+class MLNN_glao_offset(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.model_type="glao_offset"
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.n_coeffs*3*4, 512),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(512, 2048),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 512),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_coeffs)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_relu_stack(x)
+    
+
 class MLNN_deep(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -672,7 +694,7 @@ class CNN_WFS(Network):
 class ResNet_WFS(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
-        self.type="wfs_image"
+        self.model_type="wfs_image"
         
         block = ResidualBlock
         layers = [3, 4, 6, 8, 6, 3]

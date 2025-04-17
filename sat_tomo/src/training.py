@@ -10,9 +10,9 @@ from tomography import asterisms, phase_screen, wavefront
 
 import tracemalloc
 
-def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True, wfs=None):
+def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True, wfs=None, tiptilt_removal=False):
     
-    dt = data.TomographyData(n, asterisms, atmosphere, basis, wfs=wfs)
+    dt = data.TomographyData(n, asterisms, atmosphere, basis, wfs=wfs, tiptilt_removal=tiptilt_removal)
     if train:
         results = trainer.train(dt)
     else:
@@ -35,6 +35,12 @@ def run(cfg):
     
     fixed_trainer = ml.Trainer(cfg)
     variable_trainer = ml.Trainer(cfg)
+    directory = cfg.directory
+
+    if cfg.load_previous or cfg.continue_training:
+        fixed_trainer.load_models(suffix="fixed", dir=f"{directory}/current")
+        variable_trainer.load_models(suffix="variable", dir=f"{directory}/current")
+
     epoch = 0
 
     results = {
@@ -47,7 +53,7 @@ def run(cfg):
         "Loss": [],
     }
 
-    directory = cfg.directory
+
     os.makedirs(f"{directory}/{cfg.start_time}")
     os.makedirs(f"{directory}/{cfg.start_time}/parameters")
     os.makedirs(f"{directory}/{cfg.start_time}/definitions")
@@ -90,7 +96,8 @@ def run(cfg):
                                  fixed_asterisms_train, 
                                  atmosphere_train, 
                                  cfg.basis,
-                                 wfs=shwfs)
+                                 wfs=shwfs,
+                                 tiptilt_removal=cfg.wavefront_tip_tilt_removal)
                 
                 for k, (l, r, bc, br) in data.items():
                     append_results(results, epoch, "Train", k, n_screens, "Fixed", "Coefficients", l)
@@ -106,7 +113,8 @@ def run(cfg):
                                  atmosphere_test,
                                  cfg.basis,
                                  train=False,
-                                 wfs=shwfs)
+                                 wfs=shwfs,
+                                 tiptilt_removal=cfg.wavefront_tip_tilt_removal)
 
                 for k, (l, r, _, _) in data.items():
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Fixed", "Coefficients", l)
@@ -127,7 +135,8 @@ def run(cfg):
                                  training_asterisms, 
                                  atmosphere_train, 
                                  cfg.basis,
-                                 wfs=shwfs)
+                                 wfs=shwfs,
+                                 tiptilt_removal=cfg.wavefront_tip_tilt_removal)
 
                 for k, (l, r, bc, br) in data.items():
                     append_results(results, epoch, "Train", k, n_screens, "Variable", "Coefficients", l)
@@ -141,7 +150,8 @@ def run(cfg):
                                  atmosphere_test,
                                  cfg.basis,
                                  train=False,
-                                 wfs=shwfs)
+                                 wfs=shwfs,
+                                 tiptilt_removal=cfg.wavefront_tip_tilt_removal)
                 
                 for k, (l, r, _, _) in data.items():
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Coefficients", l)
@@ -180,17 +190,20 @@ def run(cfg):
 
         verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
         if not cfg.variable_off:
+            trainer = variable_trainer
             verification_asterism = asterisms.generate_variable_asterisms(1, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)
         else:
+            trainer = fixed_trainer
             verification_asterism = asterisms.generate_fixed_asterisms(1, cfg.fixed_asterism_angle, mask=mask, theta_0_random=cfg.fixed_theta_0_randomised)
 
-        data = run_epoch(variable_trainer, 
+        data = run_epoch(trainer, 
                         1,
                         verification_asterism,
                         verification_atmosphere,
                         cfg.basis,
                         train=False,
-                        wfs=shwfs)
+                        wfs=shwfs,
+                        tiptilt_removal=cfg.wavefront_tip_tilt_removal)
         
         for k, (l, r, _, _) in data.items():
             append_results(results, epoch, "Verification", k, cfg.testing_size, "Variable", "Coefficients", l)
@@ -201,20 +214,33 @@ def run(cfg):
     df = pd.DataFrame.from_dict(results, orient="columns")
 
     for dir in [f"{directory}/current", f"{directory}/{cfg.start_time}"]:
-        with open(f"{dir}/results.csv", "w") as f:
-            df.to_csv(f, sep=",")
 
-        with open(f"{dir}/asterisms_variable.txt", "w") as f:
-            for l in save_asterism_data["variable"]:
-                f.write(f"{l}\n")
+        if cfg.continue_training and "current" in dir:
+            df_existing = pd.read_csv(f"{dir}/results.csv")
+            previous_set = df_existing['TrainingSet'].max()
+            df["TrainingSet"] = previous_set + 1
+            last_epoch = df_existing['Epoch'].max()
+            df["Epoch"] += last_epoch
+            with open(f"{dir}/results.csv", 'w') as f:
+                pd.concat([df_existing, df]).to_csv(f, sep=",")
+            
+        else:
+            df['TrainingSet'] = 0
+            with open(f"{dir}/results.csv", "w") as f:
+                df.to_csv(f, sep=",")
 
-        with open(f"{dir}/asterisms_fixed.txt", "w") as f:
-            for l in save_asterism_data["fixed"]:
-                f.write(f"{l}\n")
+        # 15/04/25 Removing these as I haven't really found any use for keeping them.
+        # with open(f"{dir}/asterisms_variable.txt", "w") as f:
+        #     for l in save_asterism_data["variable"]:
+        #         f.write(f"{l}\n")
 
-        with open(f"{dir}/asterisms_verification.txt", "w") as f:
-            for l in verification_asterisms:
-                f.write(f"{l}\n")
+        # with open(f"{dir}/asterisms_fixed.txt", "w") as f:
+        #     for l in save_asterism_data["fixed"]:
+        #         f.write(f"{l}\n")
+
+        # with open(f"{dir}/asterisms_verification.txt", "w") as f:
+        #     for l in verification_asterisms:
+        #         f.write(f"{l}\n")
 
         for k, m in fixed_trainer.models.items():
             name = m.__class__.__name__
