@@ -33,13 +33,20 @@ def run(cfg):
     log = logging.get_logger(__name__)
     logging.setup_logger(log, to_console=True)
     
-    fixed_trainer = ml.Trainer(cfg)
-    variable_trainer = ml.Trainer(cfg)
+    if cfg.train_combined:
+        trainer = ml.Trainer(cfg)
+    else:
+        fixed_trainer = ml.Trainer(cfg)
+        variable_trainer = ml.Trainer(cfg)
+
     directory = cfg.directory
 
     if cfg.load_previous or cfg.continue_training:
-        fixed_trainer.load_models(suffix="fixed", dir=f"{directory}/current")
-        variable_trainer.load_models(suffix="variable", dir=f"{directory}/current")
+        if cfg.train_combined:
+            trainer.load_models(dir=f"{directory}/current")
+        else:
+            fixed_trainer.load_models(suffix="fixed", dir=f"{directory}/current")
+            variable_trainer.load_models(suffix="variable", dir=f"{directory}/current")
 
     epoch = 0
 
@@ -81,6 +88,8 @@ def run(cfg):
     var_bias_c = []
     var_bias_r = []
 
+    asterisms.LIMITING_ANGLE = cfg.limiting_angle
+
     for n_epochs, n_screens in cfg.regime:
         for e in range(n_epochs):
             epoch += 1
@@ -91,6 +100,8 @@ def run(cfg):
             if 'fixed' in cfg.asterism_types:
                 log.info(f"Running fixed asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
                 fixed_asterisms_train = asterisms.generate_fixed_asterisms(cfg.training_size, cfg.fixed_asterism_angle, mask=mask, theta_0_random=cfg.fixed_theta_0_randomised)
+                if cfg.train_combined:
+                    fixed_trainer = trainer
                 data = run_epoch(fixed_trainer, 
                                  cfg.training_size, 
                                  fixed_asterisms_train, 
@@ -122,7 +133,7 @@ def run(cfg):
                 
                 save_asterism_data["fixed"] += (epoch, fixed_asterisms_train + fixed_asterisms_test)
 
-                if (epoch - 1) % cfg.save_frequency == 0:
+                if (epoch - 1) % cfg.save_frequency == 0 and not cfg.train_combined:
                     fixed_trainer.save_models(epoch, suffix="fixed", dir=f"{directory}/{cfg.start_time}")
                     fixed_trainer.save_models(epoch, suffix="fixed", dir=f"{directory}/current")
             
@@ -130,6 +141,9 @@ def run(cfg):
                 log.info(f"Running variable asterisms [{epoch}/{total_epochs}] ({e+1}/{n_epochs})")
                 training_asterisms = asterisms.generate_variable_asterisms(cfg.training_size, cfg.magnitude, zero_rate=1e-3, fixed_rate=1e-3, mask=mask)
                 testing_asterisms = asterisms.generate_variable_asterisms(cfg.testing_size, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)
+                if cfg.train_combined:
+                    variable_trainer = trainer
+
                 data = run_epoch(variable_trainer,
                                  cfg.training_size, 
                                  training_asterisms, 
@@ -157,11 +171,15 @@ def run(cfg):
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Coefficients", l)
                     append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Reconstruction", r)
 
-                if (epoch - 1) % cfg.save_frequency == 0:
+                if (epoch - 1) % cfg.save_frequency == 0 and not cfg.train_combined:
                     variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/{cfg.start_time}")
                     variable_trainer.save_models(epoch, suffix="variable", dir=f"{directory}/current")
 
                 save_asterism_data["variable"] += (epoch, training_asterisms + testing_asterisms)
+
+            if (epoch - 1) % cfg.save_frequency == 0 and cfg.train_combined:
+                trainer.save_models(epoch, dir=f"{directory}/{cfg.start_time}")
+                trainer.save_models(epoch, dir=f"{directory}/current")
             
             snapshot = tracemalloc.take_snapshot()
             top_stats = snapshot.statistics('lineno')
@@ -169,10 +187,14 @@ def run(cfg):
             log.info(f"tracemalloc: {top_stats[:3]}")
 
     # Save final model
-    fixed_trainer.save_models(suffix="fixed", dir=f"{directory}/{cfg.start_time}")
-    fixed_trainer.save_models(suffix="fixed", dir=f"{directory}/current")
-    variable_trainer.save_models(suffix="variable", dir=f"{directory}/{cfg.start_time}")
-    variable_trainer.save_models(suffix="variable", dir=f"{directory}/current")
+    if cfg.train_combined:
+        trainer.save_models(dir=f"{directory}/{cfg.start_time}")
+        trainer.save_models(dir=f"{directory}/current")
+    else:
+        fixed_trainer.save_models(suffix="fixed", dir=f"{directory}/{cfg.start_time}")
+        fixed_trainer.save_models(suffix="fixed", dir=f"{directory}/current")
+        variable_trainer.save_models(suffix="variable", dir=f"{directory}/{cfg.start_time}")
+        variable_trainer.save_models(suffix="variable", dir=f"{directory}/current")
 
     # Run verification test
     log.info(f"Running final verification test")
@@ -190,10 +212,12 @@ def run(cfg):
 
         verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
         if not cfg.variable_off:
-            trainer = variable_trainer
+            if not cfg.train_combined:
+                trainer = variable_trainer
             verification_asterism = asterisms.generate_variable_asterisms(1, cfg.magnitude, zero_rate=0.0, fixed_rate=0.0, mask=mask)
         else:
-            trainer = fixed_trainer
+            if not cfg.train_combined:
+                trainer = fixed_trainer
             verification_asterism = asterisms.generate_fixed_asterisms(1, cfg.fixed_asterism_angle, mask=mask, theta_0_random=cfg.fixed_theta_0_randomised)
 
         data = run_epoch(trainer, 
@@ -242,7 +266,10 @@ def run(cfg):
         #     for l in verification_asterisms:
         #         f.write(f"{l}\n")
 
-        for k, m in fixed_trainer.models.items():
+        if not cfg.train_combined:
+            trainer = fixed_trainer
+
+        for k, m in trainer.models.items():
             name = m.__class__.__name__
             source = inspect.getsource(m.__class__)
             with open(f"{dir}/definitions/{name}.def", "w") as f:

@@ -6,6 +6,7 @@ import joblib
 from multiprocessing import Pool, Manager, Pipe
 from copy import deepcopy
 import pickle
+import traceback
 
 from astropy.coordinates import TEME, CartesianDifferential, CartesianRepresentation, ITRS, AltAz
 import astropy.units as u
@@ -347,71 +348,76 @@ class SatelliteMap():
     def satellite_worker(self, N, conns, sats, angles, lock, wid):
 
         pid = os.getpid()
-        log.info(f"> > [{pid:5}] PROCESS worker {wid} STARTING")
+        try:
+            log.info(f"> > [{pid:5}] PROCESS worker {wid} STARTING")
 
-        if sats.empty():
-            log.debug(f"> > [{pid:5}](W{wid}) No Satellite events present, ENDING PROCESS")
-            return
-        
-        telescope = self.tele.copy()
-
-        conn_dict = {}
-
-        log.debug(f"> > [{pid:5}](W{wid}) Getting magnitude information")
-
-        for conn in conns:
-            conn.send("M")
-            m = conn.recv()
-            for mag in m:
-                conn_dict[mag] = conn
-
-        log.debug(f"> > [{pid:5}](W{wid}) Magnitude info received")
-
-        count = 0
-
-        lock.acquire()
-        while not sats.empty():
-            i, (tle1, tle2) = sats.get()
-            lock.release()
-            sat = Satellite(tle1, tle2)
-
-            log.info(f"> > [{pid:5}](W{wid}) {(i+1):5}/{N}. Processing satellite: {sat}")
-            events = find_visibility(telescope.location, sat=sat, time=self.time, tdelta=self.time_period)
-            log.info(f"> > [{pid:5}](W{wid}) Found {len(events)} visibility events")
-
-            for vis, (t0, t1) in events:
-
-                log.debug(f"> > [{pid:5}](W{wid}) Processing event for {t0} to {t1}")
-
-                telescope.set_target(vis, t0)
-                times = []
-                t = t0
-                while t1 - t > 0:
-                    times.append(t)
-                    t += self.dt
-
-                frames = len(times)
-                log.debug(f"> > [{pid:5}](W{wid}) {frames} frames to compute")
-                for j, _ in enumerate(times):
-                    if (j + 1) % 256 == 0:
-                        log.info(f"> > [{pid:5}](W{wid}) Frame {j+1}/{frames}")
-                    count += 1
-                    for m in self.star_mags:
-                        conn_dict[m].send((m, telescope.orientation))
-                        m_angle = conn_dict[m].recv()
-                        angles.put(m_angle)
-                        if count % 256 == 0:
-                            log.debug(f"> > [{pid:5}](W{wid}) Angle data {m}:{m_angle}")
-                    if count % 256 == 0:
-                        count = 0
-
-                    telescope.step(self.dt)
+            if sats.empty():
+                log.debug(f"> > [{pid:5}](W{wid}) No Satellite events present, ENDING PROCESS")
+                return
             
+            telescope = self.tele.copy()
+
+            conn_dict = {}
+
+            log.debug(f"> > [{pid:5}](W{wid}) Getting magnitude information")
+
+            for conn in conns:
+                conn.send("M")
+                m = conn.recv()
+                for mag in m:
+                    conn_dict[mag] = conn
+
+            log.debug(f"> > [{pid:5}](W{wid}) Magnitude info received")
+
+            count = 0
+
             lock.acquire()
+            while not sats.empty():
+                i, (tle1, tle2) = sats.get()
+                lock.release()
+                sat = Satellite(tle1, tle2)
 
-        lock.release()
+                log.info(f"> > [{pid:5}](W{wid}) {(i+1):5}/{N}. Processing satellite: {sat}")
+                events = find_visibility(telescope.location, sat=sat, time=self.time, tdelta=self.time_period)
+                log.info(f"> > [{pid:5}](W{wid}) Found {len(events)} visibility events")
 
-        # conn.close()
+                for vis, (t0, t1) in events:
+
+                    log.debug(f"> > [{pid:5}](W{wid}) Processing event for {t0} to {t1}")
+
+                    telescope.set_target(vis, t0)
+                    times = []
+                    t = t0
+                    while t1 - t > 0:
+                        times.append(t)
+                        t += self.dt
+
+                    frames = len(times)
+                    log.debug(f"> > [{pid:5}](W{wid}) {frames} frames to compute")
+                    for j, _ in enumerate(times):
+                        if (j + 1) % 256 == 0:
+                            log.info(f"> > [{pid:5}](W{wid}) Frame {j+1}/{frames}")
+                        count += 1
+                        for m in self.star_mags:
+                            conn_dict[m].send((m, telescope.orientation))
+                            m_angle = conn_dict[m].recv()
+                            angles.put(m_angle)
+                            if count % 256 == 0:
+                                log.debug(f"> > [{pid:5}](W{wid}) Angle data {m}:{m_angle}")
+                        if count % 256 == 0:
+                            count = 0
+
+                        telescope.step(self.dt)
+                
+                lock.acquire()
+
+            lock.release()
+
+            # conn.close()
+        except Exception as a:
+            log.debug(f"> > [{pid:5}] PROCESS worker {wid} <<<<<<<<Exception>>>>>>>> {a}")
+            raise a
+            
         log.debug(f"> > [{pid:5}] PROCESS worker {wid} ENDING")
         
         return # satellite_worker()
@@ -419,64 +425,73 @@ class SatelliteMap():
     def starmap_worker(self, mags, conns, wid):
 
         pid = os.getpid()
-        log.info(f"* * [{pid:5}] PROCESS starmap_worker {wid} STARTING")
+        try:
+            log.info(f"* * [{pid:5}] PROCESS starmap_worker {wid} STARTING")
 
-        log.info(f"* * [{pid:5}](S{wid}) Building starmaps {mags}")
-        star_maps = {}
-        stars = None
-        for m in mags:
-            log.debug(f"* * [{pid:5}](S{wid}) Star map for magnitude {m}")
-            if os.path.exists(f"data/stars/starmap_{m}.pkl"):
-                log.debug(f"* * [{pid:5}](S{wid}) Loading starmap: mag {m}")
-                with open(f"data/stars/starmap_{m}.pkl", 'rb') as f: 
-                    log.debug(f"* * [{pid:5}](S{wid}) Loading starmap from 'data/stars/starmap_{m}.pkl'")
-                    star_maps[m] = joblib.load(f)
-                    log.debug(f"* * [{pid:5}](S{wid}) Loaded starmap from 'data/stars/starmap_{m}.pkl'")
-                log.debug(f"* * [{pid:5}](S{wid}) Loaded starmap: mag {m}")
-            else:
-                log.debug(f"* * [{pid:5}](S{wid}) Building starmap: mag {m}")
-                if stars is None:
-                    log.debug(f"* * [{pid:5}](S{wid}) Loading star data from catalog")
-                    stars = astronomy.StarData()
-                    log.debug(f"* * [{pid:5}](S{wid}) Star data loaded")
-                star_maps[m] = astronomy.build_star_map(stars, mag=m, location=self.tele.location, time=self.time)
-                with open(f'data/stars/starmap_{m}.pkl', 'wb') as f:
-                    log.debug(f"* * [{pid:5}](S{wid}) Saving starmap to 'data/stars/starmap_{m}.pkl'")    
-                    joblib.dump(star_maps[m], f)
-                    log.debug(f"* * [{pid:5}](S{wid}) Saved starmap to 'data/stars/starmap_{m}.pkl'")
-                log.debug(f"* * [{pid:5}](S{wid}) Completed starmap: mag {m}")
-        log.info(f"* * [{pid:5}](S{wid}) Starmaps complete")
-        stars = None # let garbage collection drop star data
+            log.info(f"* * [{pid:5}](S{wid}) Building starmaps {mags}")
+            star_maps = {}
+            stars = None
+            for m in mags:
+                log.debug(f"* * [{pid:5}](S{wid}) Star map for magnitude {m}")
+                if os.path.exists(f"data/stars/starmap_{m}.pkl"):
+                    log.debug(f"* * [{pid:5}](S{wid}) Loading starmap: mag {m}")
+                    with open(f"data/stars/starmap_{m}.pkl", 'rb') as f: 
+                        log.debug(f"* * [{pid:5}](S{wid}) Loading starmap from 'data/stars/starmap_{m}.pkl'")
+                        star_maps[m] = joblib.load(f)
+                        log.debug(f"* * [{pid:5}](S{wid}) Loaded starmap from 'data/stars/starmap_{m}.pkl'")
+                    log.debug(f"* * [{pid:5}](S{wid}) Loaded starmap: mag {m}")
+                else:
+                    log.debug(f"* * [{pid:5}](S{wid}) Building starmap: mag {m}")
+                    if stars is None:
+                        log.debug(f"* * [{pid:5}](S{wid}) Loading star data from catalog")
+                        stars = astronomy.StarData()
+                        log.debug(f"* * [{pid:5}](S{wid}) Star data loaded")
+                    star_maps[m] = astronomy.build_star_map(stars, mag=m, location=self.tele.location, time=self.time)
+                    with open(f'data/stars/starmap_{m}.pkl', 'wb') as f:
+                        log.debug(f"* * [{pid:5}](S{wid}) Saving starmap to 'data/stars/starmap_{m}.pkl'")    
+                        joblib.dump(star_maps[m], f)
+                        log.debug(f"* * [{pid:5}](S{wid}) Saved starmap to 'data/stars/starmap_{m}.pkl'")
+                    log.debug(f"* * [{pid:5}](S{wid}) Completed starmap: mag {m}")
+            log.info(f"* * [{pid:5}](S{wid}) Starmaps complete")
+            stars = None # let garbage collection drop star data
 
-        run = True
-        count = 0
+            run = True
+            count = 0
 
-        while run:
-            for conn in conns:
-                if conn.poll():
-                    msg = conn.recv()
-                    if msg == "DONE":
-                        run = False
-                        break
-                    elif msg == "M":
-                        log.info(f"* * [{pid:5}]({wid}) Magnitude requested - sending {mags}")
-                        conn.send(mags)
-                    else:
-                        count += 1
-                        m, o = msg
-                        try:
-                            if m in mags:
-                                if count % 256 == 0:
-                                    log.info(f"* * [{pid:5}]({wid}) Responding to <{m}>:<{o}>")
-                                angles = star_maps[m].closest(o, self.asterism_size, key=astronomy.get_angles_between)
-                                if count % 256 == 0:
-                                    log.debug(f"* * [{pid:5}]({wid}) <{m}>:<{o}> gives {angles}")
+            while run:
+                for conn in conns:
+                    if conn.poll():
+                        msg = conn.recv()
+                        if msg == "DONE":
+                            run = False
+                            break
+                        elif msg == "M":
+                            log.info(f"* * [{pid:5}]({wid}) Magnitude requested - sending {mags}")
+                            conn.send(mags)
+                        else:
+                            count += 1
+                            m, o = msg
+                            try:
+                                if m in mags:
+                                    if count % 256 == 0:
+                                        log.info(f"* * [{pid:5}]({wid}) Responding to <{m}>:<{o}>")
+                                    angles = star_maps[m].closest(o, self.asterism_size, key=astronomy.get_angles_between)
+                                    if count % 256 == 0:
+                                        log.debug(f"* * [{pid:5}]({wid}) <{m}>:<{o}> gives {angles}")
 
-                                conn.send((m, angles))
-                        except Exception as e:
-                            log.info(f"* * [{pid:5}]({wid}) {e}")
-                            quit()
-        
+                                    conn.send((m, angles))
+                            except Exception as e:
+                                log.debug(f"<<<<<<<<Exception>>>>>>>> * * [{pid:5}]({wid}) {e}")
+                                print(type(e))    # the exception type
+                                print(e.args)     # arguments stored in .args
+                                print(e)
+                                print(traceback.format_exc())
+                                raise e
+            
+        except Exception as a:
+            log.debug(f"> > [{pid:5}] PROCESS starmap_worker {wid} <<<<<<<<Exception>>>>>>>> {a}")
+            raise a
+
         log.info(f"* * [{pid:5}] PROCESS starmap_worker {wid} ENDING")
 
         return # starmap_worker()

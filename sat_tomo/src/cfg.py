@@ -55,6 +55,7 @@ class Config():
         parser.add_argument('--learning_rate', action='store', default=1e-3, help="ML training AdamW learning rate")
         parser.add_argument('--weight_decay', action='store', default=1e-5, help="ML training AdamW weight decay")
         parser.add_argument('--save_frequency', action='store', default=16, type=int, help='Frequency to save intermediary model parameters')
+        parser.add_argument('--limiting_angle', action='store', default=120, type=int, help='Limiting outer angle for variable asterisms')
 
         parser.add_argument('--num_sats', action='store', default=500, help="Number of satellites to calculate asterisms from")
         parser.add_argument('--sat_del_t', action='store', default=30, help="Time delta between satellite location checks (s)")
@@ -78,12 +79,16 @@ class Config():
         parser.add_argument('-c', '--continue_training', action='store_true', help="Save results appended to previous training run")
         parser.add_argument("--tip_tilt_passthrough", action='store_true', help="Allow tip/tilt to pass through for training (assume first three modes are known and correct)")
         parser.add_argument("--wavefront_tip_tilt_removal", action='store_true', help="Remove tip/tilt component from wavefronts prior to wavefront sensing, based on target tip/tilt value, approximating a tip/tilt mirror in the optical path")
+        parser.add_argument("--train_combined", action='store_true', help="Train fixed and variable as a single combined ML model")
 
         try:
             args = parser.parse_args()
         except argparse.ArgumentTypeError as e:
             print(e)
             quit()
+
+        if type(args.period) is str:
+            args.period = float(args.period)
 
         if type(args.diameter) is str:
             args.diameter = float(args.diameter)
@@ -93,6 +98,9 @@ class Config():
 
         if type(args.fixed_asterism_angle) is str:
             args.fixed_asterism_angle = float(args.fixed_asterism_angle)
+
+        if type(args.asterism_size) is str:
+            args.asterism_size = int(args.asterism_size)
 
         if args.altitudes is None or len(args.altitudes) == 0:
             args.altitudes = [1000, 5000, 10000]

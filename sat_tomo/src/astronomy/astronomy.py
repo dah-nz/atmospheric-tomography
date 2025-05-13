@@ -72,7 +72,8 @@ class StarMap():
         """
         
         p_xyz = p.represent_as(UnitSphericalRepresentation).to_cartesian().get_xyz()
-        # print(f"!!!!! {p}: {p_xyz} !!!!!")
+        # print(f"!!!!! {p}: {p_xyz} {n} !!!!!")
+        # print(f"!!!!! {type(p)}: {type(p_xyz)} {type(n)} !!!!!")
         _, indices = self.tree.query(p_xyz, n)
 
         if key is None:

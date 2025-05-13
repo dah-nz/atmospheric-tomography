@@ -87,13 +87,13 @@ def test_leastsquares():
 
     D = 1.8
     N = 21
-    N_TESTS = 64
+    N_TESTS = 256
     N_GS = 3
 
-    test_variable = False # Test variable or fixed asterisms
+    test_variable = True # Test variable or fixed asterisms
 
     ap = 100
-    angles = np.geomspace(1, 121, 31) - 1
+    angles = np.linspace(1, 121, 31) - 1
     # angles = [30]
     # angles = [5, 15, 30, 45, 60]
     nagle = 30 # asterism angle
@@ -120,7 +120,7 @@ def test_leastsquares():
     
     tests = {
         # "LSQ [TA⁺]":         tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Ainv",  proj_grid=True, display=False),
-        # "LSQ [TA⁺] Pix":     tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Ainv",  proj_grid=False, display=False),
+        "LSQ [TA⁺] Pix":     tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Ainv",  proj_grid=False, display=False),
         # "LSQ [(AT⁺)⁺]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=True, display=False),
         "LSQ [(AT⁺)⁺] Pix":  tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=False, display=False),
         # "LSQ [(AᵀA+εK)⁺Aᵀ]": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=True),
@@ -136,7 +136,8 @@ def test_leastsquares():
         # "LSQ [all, max]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="max"),
         # "LSQ [all, min]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="min"),
         # "LSQ [all, median]": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="med"),
-        "LSQ [all, mean] Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="ave"),
+        "LSQ 22\" Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="ave"),
+        "LSQ 45\" Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=45, angle_mix="ave"),
         # "LSQ [all, max] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="max"),
         # "LSQ [all, min] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="min"),
         # "LSQ [all, median] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="med"),
@@ -173,26 +174,28 @@ def test_leastsquares():
 
     for nagle in angles:
         
-        if not test_variable:
-            asts = asterisms.generate_fixed_asterisms(N_TESTS, nagle, mask=mask)
+        fixed_asts = asterisms.generate_fixed_asterisms(N_TESTS, nagle, mask=mask)
+        
+        data = load_data(14, limit=nagle, quick_load=True, use_cache=False)
+        var_asts = [[beacon.Beacon(t, g, magnitude=m, aperture_mask=mask) for g, t, m in a] for a in data]
+        # asts = asterisms.generate_variable_asterisms(N_TESTS, limiting_angle=nagle, zero_rate=0.0, fixed_rate=0.0, mask=mask)
+        if len(var_asts) < N_TESTS:
+            for n in range(N_TESTS - len(var_asts)):
+                theta = rng.uniform(0, np.pi * 2, size=N_GS) # 
+                gamma = rng.uniform(0.3*nagle, nagle, size=N_GS)
+                beacons = [beacon.Beacon(t, g, magnitude=6, aperture_mask=mask) for t, g in zip(theta, gamma)]
+                var_asts.append(beacons)
         else:
-            data = load_data(14, limit=nagle, quick_load=True, use_cache=False)
-            asts = [[beacon.Beacon(t, g, magnitude=m, aperture_mask=mask) for g, t, m in a] for a in data]
-            # asts = asterisms.generate_variable_asterisms(N_TESTS, limiting_angle=nagle, zero_rate=0.0, fixed_rate=0.0, mask=mask)
-            if len(asts) < N_TESTS:
-                for n in range(N_TESTS - len(asts)):
-                    theta = rng.uniform(0, np.pi * 2, size=N_GS) # 
-                    gamma = rng.uniform(0.3*nagle, nagle, size=N_GS)
-                    beacons = [beacon.Beacon(t, g, magnitude=6, aperture_mask=mask) for t, g in zip(theta, gamma)]
-                    asts.append(beacons)
-            else:
-                asts = sample(np.array(asts), N_TESTS)
+            var_asts = sample(np.array(var_asts), N_TESTS)
 
-        for j, (atm, beacons) in enumerate(zip(atms, asts)):
+        for j, atm in enumerate(atms):
             if N_TESTS > 100:
                 update_outputs = (j + 1) % 100 == 0
             else:
                 update_outputs = j % 100 == 0
+
+            beacons = var_asts[j]
+            fixed_beacons = fixed_asts[j]
 
             target = beacon.Beacon(0, 0, magnitude=6, aperture_mask=mask)
 
@@ -268,8 +271,19 @@ def test_leastsquares():
         calculated_r0 = D / ((var / 1.03) ** (3/5))
         print(f"Layer {i} r0: {calculated_r0:.4f}m, intended r0: {atms.layer_r0[i]:.4f}m [var: {var:.4f}]")
 
-    aves = {k: [] for k in errors[angles[0]].keys()}
-    meds = {k: [] for k in errors[angles[0]].keys()}
+    centiles = {
+        "1st": (1, 'dotted'),
+        "10th": (10, 'dashdot'),
+        "25th": (25, 'dashed'),
+        "50th": (50, 'solid'),
+        "75th": (75, 'dashed'),
+        "90th": (90, 'dashdot'),
+        "99th": (99, 'dotted')
+    }
+    data = {}
+    for c, _ in centiles.items():
+        data[c] = {k: [] for k in errors[angles[0]].keys()}
+    # meds = {k: [] for k in errors[angles[0]].keys()}
 
     for angle in angles:
         # plt.figure()
@@ -278,8 +292,11 @@ def test_leastsquares():
         # nbins = 32
 
         for k in errors[angle].keys():
-            aves[k].append(np.mean(errors[angle][k]))
-            meds[k].append(np.median(errors[angle][k]))
+            for c, (i, _) in centiles.items():
+                data[c][k].append(np.percentile(errors[angle][k], i))
+            
+            # aves[k].append(np.mean(errors[angle][k]))
+            # meds[k].append(np.median(errors[angle][k]))
             # plt.hist(errors[angle][k], bins=nbins, density=True, histtype="step", label=k, range=(mn, mx))
 
         # plt.ylabel("Density")
@@ -300,33 +317,42 @@ def test_leastsquares():
             style.append((m, c))
 
     plt.figure()
-    i = 0
+    si = 0 # *s*tyle *i*ndex
 
-    for k in aves.keys():
+    for k in data['1st'].keys():
         if k == tgt_fit:
+            pass
             # plt.plot(angles, aves[k], color="blue", linestyle='dashed', label=f"{k} - Mean")
-            plt.plot(angles, meds[k], color="blue", linestyle='solid', label=f"{k} - Median")    
+            # for c, (i, ls) in centiles.items():
+            plt.plot(angles, data["50th"][k], color="blue", linestyle='solid', label=f"{k} - {c}")    
         elif k == tgt_glao:
+            pass
             # plt.plot(angles, aves[k], color="red", linestyle='dashed', label=f"{k} - Mean")
-            plt.plot(angles, meds[k], color="red", linestyle='solid', label=f"{k} - Median")    
+            # for c, (i, ls) in centiles.items():
+            plt.plot(angles, data["50th"][k], color="red", linestyle='solid', label=f"{k} - {c}")    
         elif k == tgt_ol:
             # plt.plot(angles, aves[k], color="black", linestyle='dashed', label=f"{k} - Mean")
             # plt.plot(angles, meds[k], color="black", linestyle='solid', label=f"{k} - Median")
             pass
         elif k == tgt_ao:
+            pass
             # plt.plot(angles, aves[k], color="black", linestyle='dashed', label=f"{k} - Mean")
-            plt.plot(angles, meds[k], color="green", linestyle='solid', label=f"{k} - Median")
+            # for c, (i, ls) in centiles.items():
+            plt.plot(angles, data["50th"][k], color="green", linestyle='solid', label=f"{k} - {c}")
         else:
-            m, c = style[i]
+            m, cl = style[si]
             # plt.plot(angles, aves[k], color=c, marker=m, linestyle='dashed', alpha=0.6, label=f"{k} - Mean")
-            plt.plot(angles, meds[k], color=c, marker=m, linestyle='solid', alpha=0.6, label=f"{k} - Median")
-            i += 1
+            for c, (i, ls) in centiles.items():
+                plt.plot(angles, data[c][k], color=cl, marker=m, linestyle=ls, alpha=0.6, label=f"{k} - {c}")
+            si += 1
     plt.xlabel("Radius (\")")
     plt.ylabel("MSE (rad²)")
     plt.legend()
 
     for k, v in tests.items():
         print(f"{k} Epsilon: {np.mean(v.epsilons)}")
+
+    plt.show()
 
     
 

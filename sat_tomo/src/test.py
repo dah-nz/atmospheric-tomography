@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import util
 
-# from tomography import test_tomography
-# test_tomography.run_tests()
-# quit()
+from tomography import test_tomography
+test_tomography.run_tests()
+quit()
 
 sz = 100
 rd = 1

@@ -1,0 +1,166 @@
+[
+    {
+      "num_modes": 21,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": 0.07,
+      "per_layer_r0": true,
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+
+      "train_models": ["MLNN_baseline", "MLNN_glao_offset", "ResNet"],
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      
+      "epochs": 128,
+      "training_size": 256,
+      "testing_size": 128,
+      "save_frequency": 32,
+      "display_training": false,
+      
+      "shwfs": true,
+      "noise": false,
+      
+      "variable_off": true,
+      "fixed_off": false,
+      "asterism_size": 3,
+      "fixed_asterism_angle": 15,
+      "fixed_theta_0_randomised": false,
+      "train_combined": true,
+      
+      "build_star_map": false,
+      "satellites": false,
+      "period": 24,
+      
+      "tip_tilt_passthrough": true,
+      "wavefront_tip_tilt_removal": false,
+
+      "load_previous": false,
+      "continue_training": false
+    },
+    {
+      "num_modes": 21,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": 0.07,
+      "per_layer_r0": true,
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+
+      "train_models": ["MLNN_baseline", "MLNN_glao_offset", "ResNet"],
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      
+      "epochs": 128,
+      "training_size": 256,
+      "testing_size": 128,
+      "save_frequency": 32,
+      "display_training": false,
+      
+      "shwfs": true,
+      "noise": false,
+      
+      "variable_off": true,
+      "fixed_off": false,
+      "asterism_size": 3,
+      "fixed_asterism_angle": 15,
+      "fixed_theta_0_randomised": true,
+      "train_combined": true,
+      
+      "build_star_map": false,
+      "satellites": false,
+      "period": 24,
+      
+      "tip_tilt_passthrough": true,
+      "wavefront_tip_tilt_removal": false,
+
+      "load_previous": true,
+      "continue_training": true
+    },
+    {
+      "num_modes": 21,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": 0.07,
+      "per_layer_r0": true,
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+
+      "train_models": ["MLNN_baseline", "MLNN_glao_offset", "ResNet"],
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      
+      "epochs": 128,
+      "training_size": 256,
+      "testing_size": 128,
+      "save_frequency": 32,
+      "display_training": false,
+      
+      "shwfs": true,
+      "noise": false,
+      
+      "variable_off": false,
+      "fixed_off": false,
+      "asterism_size": 3,
+      "fixed_asterism_angle": 15,
+      "fixed_theta_0_randomised": true,
+      "train_combined": true,
+      
+      "build_star_map": false,
+      "satellites": false,
+      "period": 24,
+      
+      "tip_tilt_passthrough": true,
+      "wavefront_tip_tilt_removal": false,
+
+      "load_previous": true,
+      "continue_training": true
+    },
+    {
+      "num_modes": 21,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": 0.07,
+      "per_layer_r0": true,
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+
+      "train_models": ["MLNN_baseline", "MLNN_glao_offset", "ResNet"],
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      
+      "epochs": 512,
+      "training_size": 256,
+      "testing_size": 128,
+      "save_frequency": 32,
+      "display_training": true,
+      
+      "shwfs": true,
+      "noise": false,
+      
+      "variable_off": false,
+      "fixed_off": true,
+      "asterism_size": 3,
+      "fixed_asterism_angle": 15,
+      "fixed_theta_0_randomised": true,
+      "train_combined": true,
+      
+      "build_star_map": false,
+      "satellites": false,
+      "period": 24,
+      
+      "tip_tilt_passthrough": true,
+      "wavefront_tip_tilt_removal": false,
+
+      "load_previous": true,
+      "continue_training": true
+    }
+  ]

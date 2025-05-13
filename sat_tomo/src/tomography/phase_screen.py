@@ -58,11 +58,12 @@ class PhaseScreenGenerator():
             screens = [self._get_raw() for _ in range(n)]
             k = self.find_scaling(cut_out, screens)
             screens = [scr - np.average(scr, weights=self.mask) * self.mask * k for scr in screens]
+            return [np.float32(scr) * k for scr in screens]
         else:
             screens = [self._get_raw() for _ in range(n)]
-            screens = [scr - np.average(scr, weights=self.mask) * self.mask * k for scr in screens]
+            screens = [scr - np.average(scr, weights=self.mask) * self.mask * self.k for scr in screens]
+            return [np.float32(scr) * self.k for scr in screens]
 
-        return [np.float32(scr) * k for scr in screens]
 
 
     def _get_raw(self, seed=None):
