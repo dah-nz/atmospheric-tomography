@@ -19,6 +19,7 @@ class Beacon():
         A mask of the telescope aperture
     
     """
+
     def __init__(self, theta, gamma, magnitude=None, arcseconds=True, aperture_mask=None):
 
         # Gamma needs to be in radians, but is more human readable in arcseconds for this use case
@@ -39,7 +40,14 @@ class Beacon():
             return f"<Beacon(t: {float(self.theta):.4}, g: {float(self._gamma_arcsec):.4}\" ({float(self.gamma):.4} rads), m: {float(self.magnitude):.4})>"
         except TypeError:
             return f"<Beacon(t: {float(self.theta):.4}, g: {float(self._gamma_arcsec):.4}\" ({float(self.gamma):.4} rads), m: Not Defined)>"
+
+    def to_simple_str(self):
+        return f"{float(self.theta)},{float(self._gamma_arcsec)},{float(self.magnitude)}"
     
+    def from_simple_str(string_repr):
+        theta, gamma_a, mag = string_repr.split(',')
+        return Beacon(float(theta), float(gamma_a), float(mag), arcseconds=True)
+
     def position(self, altitude):
         """
         Get the current cartesian position of the beacon on a layer at altitude
