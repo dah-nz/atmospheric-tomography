@@ -2,6 +2,7 @@ import numpy as np
 
 from tomography import beacon
 from astronomy import asterisms
+from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle
 
 import log
 
@@ -101,9 +102,8 @@ def min_angle(asterism):
 
 def centroid(asterism):
     """
-    Return the centroid location of a triangle defined by an asterism of three guide stars
+    Return the centroid location of a triangle
     """
-    from util import cart2pol
 
     x_sum = 0
     y_sum = 0
@@ -119,13 +119,45 @@ def centroid(asterism):
 
 def centroid_distance(asterism):
     """
-    Return the centroid distance of a triangle defined by an asterism of three guide stars from the centre
+    Return the centroid distance of a triangle from the target location
     """
     return centroid(asterism)._gamma_arcsec
 
+def circumcentre(asterism):
+    """
+    Return the centre of the circumcircle of a triangle defined by an asterism of three guide stars
+    """
+    Ax, Ay = asterism[0].position(1)
+    Bx, By = asterism[1].position(1)
+    Cx, Cy = asterism[2].position(1)
+    
+    D = 2*(Ax*(By-Cy) + Bx*(Cy-Ay) + Cx*(Ay-By))
+
+    Ux = (1/D) * ((Ax*Ax+Ay*Ay)*(By-Cy)+(Bx*Bx+By*By)*(Cy-Ay)+(Cx*Cx+Cy*Cy)*(Ay-By))
+    Uy = (1/D) * ((Ax*Ax+Ay*Ay)*(Cx-Bx)+(Bx*Bx+By*By)*(Ax-Cx)+(Cx*Cx+Cy*Cy)*(Bx-Ax))
+
+    r, t = cart2pol(Ux, Uy)
+    
+    return beacon.Beacon(t, r , arcseconds=False)
+
+def circumcircle_radius(asterism):
+    """
+    Return the radius of the asterism circumcircle
+    """
+    xc, yc = circumcentre(asterism).position(1)
+    x0, y0 = asterism[0].position(1)
+
+    return np.sqrt((xc-x0)**2 + (yc-y0)**2)
+
+def circumcentre_distance(asterism):
+    """
+    Return the centre distance of the circumcircle from the target location
+    """
+    return circumcentre(asterism)._gamma_arcsec
+
 def perimeter_area_ratio(asterism):
     """
-    Return the ratio of perimeter to the area of a triangle defined by an asterism of three guide stars
+    Return the ratio of perimeter to the area of a triangle
     """
     a, b, c = lengths(asterism)
     s = (a+b+c)/2
@@ -133,9 +165,20 @@ def perimeter_area_ratio(asterism):
     # print(f"P: {s*2}; A: {A} A/P: {A/(s*2)}[{a}, {b}, {c}]")
     return A / (2 * s)
 
+def perimeter(asterism):
+    return sum(lengths(asterism))
+
+def area(asterism):
+    """
+    Return the area of a triangle
+    """
+    a, b, c = lengths(asterism)
+    s = (a+b+c)/2
+    return np.sqrt(s*(s-a)*(s-b)*(s-c))    
+
 def length_ratio(asterism):
     """
-    Return the ratio of the longest side to the sum of the shorter sides of a triangle defined by an asterism of three guide stars
+    Return the ratio of the longest side to the sum of the shorter sides of a triangle
     """
     a, b, c = lengths(asterism)
     p = a + b + c
@@ -145,19 +188,19 @@ def length_ratio(asterism):
 
 def min_distance(asterism):
     """
-    Return the minimum distance of three guide stars from the target
+    Return the minimum distance of three guide stars from the target location
     """
     return np.amin([a._gamma_arcsec for a in asterism])
 
 def ave_distance(asterism):
     """
-    Return the average distance of three guide stars from the target
+    Return the average distance of three guide stars from the target location
     """
     return np.mean([a._gamma_arcsec for a in asterism])
 
 def overlap(asterism, altitudes, D=1.8):
     """
-    Return the ratio of overlap for an asterism with the target
+    Return the ratio of overlap for the telescope projections of the guidestars with the target projection onto multiple layers
     """
     from  shapely.geometry import Point
     from shapely.ops import unary_union
@@ -186,3 +229,148 @@ def overlap(asterism, altitudes, D=1.8):
         overlaps.append(overlap.area / C4.area)
 
     return np.mean(overlaps)
+
+def closest_furthest_side_length(asterism):
+    """
+    Return the length of the side between the closest star and the furthest star
+    """
+    l12, l13, l23 = lengths(asterism)
+    distances = [a._gamma_arcsec for a in asterism]
+    min_i = np.argmin(distances)
+    max_i = np.argmax(distances)
+
+    if (min_i == 0 and max_i == 1) or (min_i == 1 and max_i == 0):
+        return l12
+    elif (min_i == 1 and max_i == 2) or (min_i == 2 and max_i == 1):
+        return l23
+    elif (min_i == 0 and max_i == 2) or (min_i == 2 and max_i == 0):
+        return l13
+    else:
+        return 0
+
+
+def average_side_length(asterism):
+    """
+    Return the average side length of a triangle
+    """
+    a, b, c = lengths(asterism)
+    return (a+b+c)/3
+
+def minimum_side_length(asterism):
+    """
+    Return the minimum side length of a triangle
+    """
+    return min(lengths(asterism))
+
+def maximum_side_length(asterism):
+    """
+    Return the minimum side length of a triangle
+    """
+    return max(lengths(asterism))
+
+def incentre(asterism):
+    """
+    Return the centre of the incircle (the incircle is a circle inscribed within the triangle)
+    """
+    Ax, Ay = asterism[0].position(1)
+    Bx, By = asterism[1].position(1)
+    Cx, Cy = asterism[2].position(1)
+
+    a, b, c = lengths(asterism)
+
+    X = (a*Ax+b*Bx+c*Cx) / (a+b+c)
+    Y = (a*Ay+b*By+c*Cy) / (a+b+c)
+
+    r, t = cart2pol(X, Y)
+    return beacon.Beacon(t, r , arcseconds=False)
+
+def incentre_distance(asterism):
+    """
+    Return the centre distance of the incircle from the target position (the incircle is a circle inscribed within the triangle)
+    """
+    return incentre(asterism)._gamma_arcsec
+
+def incircle_radius(asterism):
+    """
+    Return the radius of the incircle (the incircle is a circle inscribed within the triangle)
+    """
+    # l12, _, _ = lengths(asterism)
+    x0, y0 = incentre(asterism).position(1)
+    P1 = asterism[0].position(1)
+    P2 = asterism[1].position(1)
+
+    d = distance_of_point_from_line((x0, y0), P1, P2)
+
+    return rad2arcsec(np.arctan(d))
+
+def distance_to_closest_line(asterism):
+    """
+    Return the distance to the closest point on the edges of the triangle
+    """
+    P0 = asterism[0].position(1)
+    P1 = asterism[1].position(1)
+    P2 = asterism[2].position(1)
+
+    d01 = distance_of_point_from_line((0, 0), P0, P1)
+    d12 = distance_of_point_from_line((0, 0), P1, P2)
+    d02 = distance_of_point_from_line((0, 0), P0, P2)
+
+    return rad2arcsec(min(d01, d02, d12))
+
+def is_target_in_triangle(asterism):
+    """
+    Returns True if the target is inside the asterism triangle (including edges)
+    """
+    p1 = asterism[0].position(1)
+    p2 = asterism[1].position(1)
+    p3 = asterism[2].position(1)
+
+    return point_in_triangle(p1, p2, p3, (0, 0))
+
+    # # det1R = x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1)
+    # # target location
+    # x = 0
+    # y = 0
+
+    # a = ((y2 - y3)*(x - x3) + (x3 - x2)*(y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    # b = ((y3 - y1)*(x - x3) + (x1 - x3)*(y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    # c = 1 - a - b
+
+    # # b = np.array([1, x, y]).T
+    # # A = np.array([[x1*y2-x2*y1, y1-y2, x2-x1],
+    # #               [x2*y0-x0*y2, y2-y0, x0-x2],
+    # #               [x0*y1-x1*y0, y0-y1, x1-x0]])
+    
+    # # l = (1/det1R) * np.matmul(A, b)
+
+    # return a >= 0 and b >= 0 and c >= 0 and a <= 1 and b <= 1 and c <= 1 #np.all(l >= 0).astype(int)
+
+def gaussian_area_within_triangle(asterism):
+    import matplotlib.pyplot as plt
+    from util import azimuth2cart, arcsec2rad, circle
+
+    x, y = (0, 0) #asterism[0].position(1)
+
+    p1 = asterism[0].position(1)
+    p2 = asterism[1].position(1)
+    p3 = asterism[2].position(1)
+
+    granularity=64
+
+    in_tri = lambda x, y: point_in_triangle(p1, p2, p3, (x, y))
+
+    max_pos, _ = azimuth2cart(1, arcsec2rad(120), 0)
+    x0, y0 = x/max_pos, y/max_pos         # Position ratio between 0 and the limiting angle
+
+    xi = np.linspace(-max_pos, max_pos, num=granularity, endpoint=True)
+    yi = np.linspace(-max_pos, max_pos, num=granularity, endpoint=True)
+
+    X, Y = np.meshgrid(xi, yi)
+
+    g = np.exp(-4*np.log(2) * ((X-x0)**2 + (Y+y0)**2) / (max_pos)**2)
+    g = g * in_tri(X, Y).astype(int)
+
+    # plt.imshow(g)
+    # plt.show()
+
+    return np.sum(g)

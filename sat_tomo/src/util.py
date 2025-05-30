@@ -167,3 +167,40 @@ def cos_theta(v1, v2):
     v1_u = unit_vector(v1)
     v2_u = unit_vector(v2)
     return np.dot(v1_u, v2_u)
+
+def distance_of_point_from_line(P0, P1, P2):
+    """
+    Return the distance of a line through P1 and P2 from P0
+    """
+    x0, y0 = P0
+    x1, y1 = P1
+    x2, y2 = P2
+
+    A = abs(((y2 - y1) * x0) - ((x2 - x1) * y0) + (x2 * y1) - (y2 * x1))
+    B = np.sqrt((y2 - y1)**2 + (x2 - x1)**2)
+
+    return A/B
+
+def point_in_triangle(p1, p2, p3, p):
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+    x, y = p
+
+    a = ((y2 - y3)*(x - x3) + (x3 - x2)*(y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    b = ((y3 - y1)*(x - x3) + (x1 - x3)*(y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+    c = 1 - a - b
+
+    # print(p1, p2, p3, p, a, b, c)
+
+    # det1R = x1*(y2-y3)+x2*(y3-y1)+x3*(y1-y2)
+
+    # b = np.array([1, x, y]).T
+    # A = np.array([[x2*y3-x3*y2, y2-y3, x3-x2],
+    #               [x3*y1-x1*y3, y3-y1, x1-x3],
+    #               [x1*y2-x2*y1, y1-y2, x2-x1]])
+    
+    # l = (1/det1R) * np.matmul(A, b)
+
+    # return np.all(l >= 0).astype(int) 
+    return (a >= 0) & (b >= 0) & (c >= 0)

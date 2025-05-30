@@ -21,7 +21,7 @@ def run_tests():
     # f.run_asterism_comparison()
     f.filter_asterisms()
 
-    load_angle_data_test()
+    # load_angle_data_test()
     
     plt.show()
 
@@ -44,7 +44,7 @@ class Filter():
         self.r0 = 0.07
         self.ap_pix = 100
         self.alts = [1000, 5000, 10000]
-        self.n_asterisms = 1000
+        self.n_asterisms = None
         self.glao = GLAO(self.Z, self.D, self.N, self.alts, self.ap_pix)
         self.ao = AO(self.Z, self.D, self.N, self.alts, self.ap_pix)
         self.lsq = LeastSquares(self.Z, self.D, self.N, self.alts, self.ap_pix, r0=self.r0)
@@ -133,18 +133,6 @@ class Filter():
             res = [p.get() for p in workers]
 
         print("Multi-processing completed")
-        # good_asterisms = []
-        # ok_asterisms = []
-        # bad_asterisms = []
-
-        # x_good = []
-        # y_good = []
-
-        # x_ok = []
-        # y_ok = []
-
-        # x_bad = []
-        # y_bad = []
 
         results = []
 
@@ -154,17 +142,6 @@ class Filter():
             if j % 100 == 0:
                 print(f"Loading results for asterism {j+1}/{self.total}")
             asterism = all_asterisms[j]
-
-            # i = np.argmin([x.gamma for x in asterism])
-            # offset = asterism[i].theta
-            # ys = []
-            # xs = []
-            # for b in asterism:
-            #     b1 = beacon.Beacon(b.theta, b.gamma, b.magnitude, arcseconds=False)
-            #     b1.theta = b1.theta - offset
-            #     x, y = util.rad2arcsec(b1.position(1))
-            #     xs.append(x)
-            #     ys.append(y)
 
             results.append({
                 'asterism_id':  j,
@@ -178,224 +155,307 @@ class Filter():
                 'tiptilt_mse':  tiptilt_mse,
             })
 
-            # if lsq_mse < glao_mse:
-            # # if lsq_mse < tiptilt_mse:
-            #     good_asterisms.append(asterism)
-            # elif lsq_mse < ol_mse:
-            #     ok_asterisms.append(asterism)
-            # else:
-            #     bad_asterisms.append(asterism)
-        
-
-            # xs.append(xs[0])
-            # ys.append(ys[0])
-
-            # if lsq_mse < glao_mse:
-            # # if lsq_mse < tiptilt_mse:
-            #     x_good.append(xs)
-            #     y_good.append(ys)
-            # elif lsq_mse < ol_mse:
-            #     x_ok.append(xs)
-            #     y_ok.append(ys)
-            # else:
-            #     x_bad.append(xs)
-            #     y_bad.append(ys)
-
         df = pd.DataFrame(results)
         df.to_csv('data/satellites/asterism_quality_data.csv')
 
     def filter_asterisms(self):
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import mean_squared_error, r2_score
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix, f1_score
+        
+        from sklearn.cross_decomposition import PLSRegression
+        from sklearn.decomposition import PCA
+        from sklearn.linear_model import LinearRegression, Ridge, Lasso
+        from sklearn.pipeline import make_pipeline
+        from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+        from sklearn.svm import SVC, SVR
+        from sklearn.manifold import TSNE
+        import umap
+
+        import torch
+        import torch.nn as nn
+        import torch.optim as optim
+        from torch.utils.data import TensorDataset, DataLoader
+
         df = pd.read_csv('data/satellites/asterism_quality_data.csv', index_col="asterism_id")
 
         asterism_list = [[beacon.Beacon.from_simple_str(df.loc[idx, f'gs_{i+1}']) for i in range(3)] for idx in range(df.shape[0])]
-        min_distance = [asterisms.min_distance(a) for a in asterism_list]
-        ave_distance = [asterisms.ave_distance(a) for a in asterism_list]
-        centroid_distance = [asterisms.centroid_distance(a) for a in asterism_list]
-        length_ratio = [asterisms.length_ratio(a) for a in asterism_list]
-        overlap_full = [asterisms.overlap(a, [1000, 5000, 10000]) for a in asterism_list]
-        # overlap_1st = [asterisms.overlap(a, [1000]) for a in asterism_list]
-        # overlap_2nd = [asterisms.overlap(a, [5000]) for a in asterism_list]
-        # overlap_3rd = [asterisms.overlap(a, [10000]) for a in asterism_list]
+        distance_0 = [a[0]._gamma_arcsec for a in asterism_list]
+        distance_1 = [a[1]._gamma_arcsec for a in asterism_list]
+        distance_2 = [a[2]._gamma_arcsec for a in asterism_list]
+        angle_01 = [a[1].theta - a[0].theta for a in asterism_list]
+        angle_12 = [a[2].theta - a[1].theta for a in asterism_list]
+        
+        def norm(a):
+            # ZScore normalisation
+            a = np.array(a)
+            return (a - a.mean()) / a.std()
+        
+        performance = df['glao_mse']
 
-        # Use Z-score normalization on difference of lsq rmse to open loop rmse. Larger values here imply better performance
-        performance = df['ol_mse'] - df['lsq_mse']
-        performance = (performance - performance.mean()) / performance.std()
+        # performance = (0.8 * df['ol_mse']) - df['lsq_mse']
+        # performance = (performance - performance.mean()) / performance.std()
 
         df0 = pd.DataFrame()
 
         df0['performance'] = performance
-        df0['min_distance'] = min_distance
-        df0['average_distance'] = ave_distance
-        df0['centroid_distance'] = centroid_distance
-        df0['length_ratio'] = length_ratio
-        df0['overlap_full'] = overlap_full
-        # df0['overlap_1st'] = overlap_1st
-        # df0['overlap_2nd'] = overlap_2nd
-        # df0['overlap_3rd'] = overlap_3rd
 
-        # df1 = pd.DataFrame()
-        # df1['LSQ MSE'] = performance
-        # for lbl in ['min_distance', 'average_distance', 'centroid_distance']:
-        #     df1[lbl] = 1 - (df0[lbl] - df0[lbl].min()) / (df0[lbl].max() - df0[lbl].min())
-            # df1[lbl] = (df0[lbl] - df0[lbl].mean()) / (df0[lbl].std())
-        # for lbl in ['length_ratio', 'overlap_full']:
-        #     df1[lbl] = (df0[lbl] - df0[lbl].min()) / (df0[lbl].max() - df0[lbl].min())
-            # df1[lbl] = (df0[lbl].mean() - df0[lbl]) / (df0[lbl].std())
+        df0['distance_0'] = norm(distance_0)
+        df0['distance_1'] = norm(distance_1)
+        df0['distance_2'] = norm(distance_2)
+        df0['angle_01'] =   norm(angle_01)
+        df0['angle_12'] =   norm(angle_12)
+
+        df0['ave_distance'] =          norm([asterisms.ave_distance(a) for a in asterism_list])
+        df0['centroid_distance'] =     norm([asterisms.centroid_distance(a) for a in asterism_list])
+        df0['circumcentre_distance'] = norm([asterisms.circumcentre_distance(a) for a in asterism_list])
+        df0['circumcircle_radius'] =   norm([asterisms.circumcircle_radius(a) for a in asterism_list])
+        df0['length_ratio'] =          norm([asterisms.length_ratio(a) for a in asterism_list])
+
+        df0['overlap'] =                      norm([asterisms.overlap(a, [1000, 5000, 10000]) for a in asterism_list])
+        df0['closest_furthest_side_length'] = norm([asterisms.closest_furthest_side_length(a) for a in asterism_list])
+        df0['ave_side_length'] =              norm([asterisms.average_side_length(a) for a in asterism_list])
+        df0['min_side_length'] =              norm([asterisms.minimum_side_length(a) for a in asterism_list])
+        df0['max_side_length'] =              norm([asterisms.maximum_side_length(a) for a in asterism_list])
+
+        df0['distance_to_closest_line'] = norm([asterisms.distance_to_closest_line(a) for a in asterism_list])
+        df0['incentre_distance'] =        norm([asterisms.incentre_distance(a) for a in asterism_list])
+        df0['incircle_radius'] =          norm([asterisms.incircle_radius(a) for a in asterism_list])
+        df0['perimeter_area_ratio'] =     norm([asterisms.perimeter_area_ratio(a) for a in asterism_list])
+        df0['area'] =                     norm([asterisms.area(a) for a in asterism_list])
+
+        df0['perimeter'] =     norm([asterisms.perimeter(a) for a in asterism_list])
+        df0['in_triangle'] =   norm([asterisms.is_target_in_triangle(a) for a in asterism_list])
+        df0['min_angle'] =     norm([asterisms.min_angle(a) for a in asterism_list])
+        df0['max_angle'] =     norm([asterisms.max_angle(a) for a in asterism_list])
+        df0['gaussian_area'] = norm([asterisms.gaussian_area_within_triangle(a) for a in asterism_list])
+
+        named_columns = [col for col in df0.columns if not col.startswith("Unnamed")]
+        num_named_columns = len(named_columns)
+        print(f"Number of named columns: {num_named_columns}")
+        n_features = num_named_columns - 1
+
+        df0 = df0.sample(frac=0.2)
+
+        # X = df0.drop(columns='performance')
+        # y = df0['performance']
+
+        X = df0.drop(columns='performance')
+        y = df0['performance']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+        X_c = df0.drop(columns='performance')
+        y_c = (df0['performance'] < 0.5 * (df['ol_mse'].mean())).astype(int)
+        # y_c = (df0['performance'] > 0.0).astype(int)
+        X_c_train, X_c_test, y_c_train, y_c_test = train_test_split(X_c, y_c, test_size=0.2)
+
         
-        # df1['md*ad'] = df1['min_distance']      * df1['average_distance']
-        # df1['md*cd'] = df1['min_distance']      * df1['centroid_distance']
-        # df1['md*lr'] = df1['min_distance']      * df1['length_ratio']
-        # df1['md*of'] = df1['min_distance']      * df1['overlap_full']
-        # df1['ad*cd'] = df1['average_distance']  * df1['centroid_distance']
-        # df1['ad*lr'] = df1['average_distance']  * df1['length_ratio']
-        # df1['ad*of'] = df1['average_distance']  * df1['overlap_full']
-        # df1['cd*lr'] = df1['centroid_distance'] * df1['length_ratio']
-        # df1['cd*of'] = df1['centroid_distance'] * df1['overlap_full']
-        # df1['lr*of'] = df1['length_ratio']      * df1['overlap_full']
+        print("Calculating 2D UMAP")
+        plt.figure()
+        umap_reducer = umap.UMAP(n_components=2)
+        X_umap = umap_reducer.fit_transform(X_c)
+        plt.scatter(X_umap[:, 0], X_umap[:, 1], c=y_c, cmap='viridis')
+        plt.title("UMAP 2D")
 
-        # df1['md*ad*cd'] = df1['min_distance']       * df1['average_distance']   * df1['centroid_distance']
-        # df1['md*ad*lr'] = df1['min_distance']       * df1['average_distance']   * df1['length_ratio']
-        # df1['md*ad*of'] = df1['min_distance']       * df1['average_distance']   * df1['overlap_full']
-        # df1['md*cd*lr'] = df1['min_distance']       * df1['centroid_distance']  * df1['length_ratio']
-        # df1['md*cd*of'] = df1['min_distance']       * df1['centroid_distance']  * df1['overlap_full']
-        # df1['md*lr*of'] = df1['min_distance']       * df1['length_ratio']       * df1['overlap_full']
-        # df1['ad*cd*lr'] = df1['average_distance']   * df1['centroid_distance']  * df1['length_ratio']
-        # df1['ad*cd*of'] = df1['average_distance']   * df1['centroid_distance']  * df1['overlap_full']
-        # df1['ad*lr*of'] = df1['average_distance']   * df1['length_ratio']       * df1['overlap_full']
-        # df1['cd*lr*of'] = df1['centroid_distance']  * df1['length_ratio']       * df1['overlap_full']
+        print("Calculating 3D UMAP")
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        umap_reducer = umap.UMAP(n_components=3)
+        X_umap = umap_reducer.fit_transform(X)
+        ax.scatter(X_umap[:, 0], X_umap[:, 1], X_umap[:, 2], c=y, cmap='viridis')
+        fig.suptitle("UMAP 3D")
 
-        # df1['md*ad*cd*lr'] = df1['min_distance']        * df1['average_distance']   * df1['centroid_distance']  * df1['length_ratio']
-        # df1['md*ad*cd*of'] = df1['min_distance']        * df1['average_distance']   * df1['centroid_distance']  * df1['overlap_full']
-        # df1['md*ad*lr*of'] = df1['min_distance']        * df1['average_distance']   * df1['length_ratio']       * df1['overlap_full']
-        # df1['md*cd*lr*of'] = df1['min_distance']        * df1['centroid_distance']  * df1['length_ratio']       * df1['overlap_full']
-        # df1['ad*cd*lr*of'] = df1['average_distance']    * df1['centroid_distance']  * df1['length_ratio']       * df1['overlap_full']
 
-        # df1['md*ad*cd*lr*of'] = df1['min_distance'] * df1['average_distance'] * df1['centroid_distance'] * df1['length_ratio'] * df1['overlap_full']
 
-        # print(df.columns)
-        # df0 = df.drop(['gs_1', 'gs_2', 'gs_3', 'ol_mse', 'glao_mse', 'ao_mse', 'tiptilt_mse', 'Unnamed: 0'], axis=1)
-
-        sns.lmplot(data=df0, y='LSQ MSE', x='min_distance')
-        sns.lmplot(data=df0, y='LSQ MSE', x='average_distance')
-        sns.lmplot(data=df0, y='LSQ MSE', x='centroid_distance')
-        sns.lmplot(data=df0, y='LSQ MSE', x='length_ratio')
-        sns.lmplot(data=df0, y='LSQ MSE', x='overlap_full')
-
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*ad')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*cd')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*lr')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='ad*cd')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='ad*lr')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='ad*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='cd*lr')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='cd*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='lr*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*ad*cd')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*ad*lr')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*ad*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*cd*lr')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*cd*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*lr*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='ad*cd*lr')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='ad*cd*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='ad*lr*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='cd*lr*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*ad*cd*lr')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*ad*cd*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*ad*lr*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*cd*lr*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='ad*cd*lr*of')
-        # sns.lmplot(data=df1, y='LSQ MSE', x ='md*ad*cd*lr*of')
-
-        # sns.pairplot(df0, hue="LSQ MSE", palette="hot_r")
-
-        return
+        print("Calculating 2D t-SNE")
+        tsne = TSNE(n_components=2)
+        X_tsne = tsne.fit_transform(X_c)
 
         plt.figure()
+        plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y_c, cmap='viridis')
+        plt.title("t-SNE 2D")
 
-        plt.xlabel("Arcseconds")
-        plt.ylabel("Arcseconds")
-        axis = plt.gca()
-        axis.set_aspect('equal')
-        for x, y in zip(x_bad, y_bad):
-            plt.plot(x, y, 'rs--', alpha=0.02)
-        for x, y in zip(x_ok, y_ok):
-            plt.plot(x, y, 'bo--', alpha=0.04)
-        for x, y in zip(x_good, y_good):
-            plt.plot(x, y, 'g+-', alpha=0.3)
+        print("Calculating 3D t-SNE")
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        tsne2 = TSNE(n_components=3)
+        X_tsne2 = tsne2.fit_transform(X)
+        ax.scatter(X_tsne2[:, 0], X_tsne2[:, 1], X_tsne2[:, 2], c=y, cmap='viridis')
+        fig.suptitle("t-SNE 3D")
 
-        plt.plot([0, 0], [-120, 120], 'k:', alpha=0.3)
-        plt.plot([-120, 120], [0, 0], 'k:', alpha=0.3)
-        n_points = 100
-        for angle in [15, 30, 45, 60, 75, 90, 105, 120]:
-            g = [util.pol2cart(120,t/n_points*(2*np.pi)) for t in range(n_points + 1)]
-            alpha = 0.3 if angle %30 == 0 else 0.2
-            plt.plot([x for x,_ in g], [y for _,y in g], 'k:', alpha=alpha)
+        # Display higher dimensional data as 2D using Principal Component Analysis
+        print("Calculating 2D PCA")
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X_c)
 
-        fig, axs = plt.subplots(1, 7)
+        plt.figure()
+        plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_c, cmap='viridis')
+        plt.title("PCA 2D")
 
-        good_angle = [asterisms.max_angle(a) for a in good_asterisms]
-        ok_angle = [asterisms.max_angle(a) for a in ok_asterisms]
-        bad_angle = [asterisms.max_angle(a) for a in bad_asterisms]
+        print("Calculating 3D PCA")
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        PCA_model = PCA(n_components=3).fit(X)
+        X_reduced = PCA_model.transform(X)
+        ax.scatter(X_reduced[:, 0], X_reduced[:, 1], X_reduced[:, 2], c=y, cmap='viridis')
+        fig.suptitle("PCA 3D")
 
-        good_min_angle = [asterisms.min_angle(a) for a in good_asterisms]
-        ok_min_angle = [asterisms.min_angle(a) for a in ok_asterisms]
-        bad_min_angle = [asterisms.min_angle(a) for a in bad_asterisms]
+        # Show correlations between variables
+        plt.figure()
+        correlations = df0.corr()
+        sns.heatmap(correlations, annot=True)
 
-        good_centroid = [asterisms.centroid_distance(a) for a in good_asterisms]
-        ok_centroid = [asterisms.centroid_distance(a) for a in ok_asterisms]
-        bad_centroid = [asterisms.centroid_distance(a) for a in bad_asterisms]
+        def regression(X_train, X_test, y_train, y_test, model, name):
+            model.fit(X_train, y_train)
 
-        good_perim = [asterisms.perimeter_area_ratio(a) for a in good_asterisms]
-        ok_perim = [asterisms.perimeter_area_ratio(a) for a in ok_asterisms]
-        bad_perim = [asterisms.perimeter_area_ratio(a) for a in bad_asterisms]
-
-        good_length = [asterisms.length_ratio(a) for a in good_asterisms]
-        ok_length = [asterisms.length_ratio(a) for a in ok_asterisms]
-        bad_length = [asterisms.length_ratio(a) for a in bad_asterisms]
-
-        good_asterisms = [[(b._gamma_arcsec, b.theta, b.magnitude) for b in a] for a in good_asterisms]
-        bad_asterisms = [[(b._gamma_arcsec, b.theta, b.magnitude) for b in a] for a in bad_asterisms]
-        ok_asterisms = [[(b._gamma_arcsec, b.theta, b.magnitude) for b in a] for a in ok_asterisms]
-
-        good_min = [np.min([b[0] for b in a]) for a in good_asterisms]
-        ok_min = [np.min([b[0] for b in a]) for a in ok_asterisms]
-        bad_min = [np.min([b[0] for b in a]) for a in bad_asterisms]
-
-        good_mean = [np.mean([b[0] for b in a]) for a in good_asterisms]
-        ok_mean = [np.mean([b[0] for b in a]) for a in ok_asterisms]
-        bad_mean = [np.mean([b[0] for b in a]) for a in bad_asterisms]
-
-        fns = [('Minimum angle', good_min, ok_min, bad_min), 
-               ('Average angle', good_mean, ok_mean, bad_mean),
-               ('Centroid Distance', good_centroid, ok_centroid, bad_centroid),
-               ('Perimeter Area Ratio', good_perim, ok_perim, bad_perim),
-               ('Length Ratio', good_length, ok_length, bad_length),
-               ('Minimum Triangle Angle', good_min_angle, ok_min_angle, bad_min_angle),
-               ('Maximum Triangle Angle', good_angle, ok_angle, bad_angle)]
-        for ax, (t, g, o, b) in zip(axs, fns):
-            ax.set_title(t)
-            ax.set_ylabel("Density")
-
-            ax.hist(g, 20, density=True, histtype='step', color='g', alpha=0.5, label="Good")
-            ax.hist(o, 20, density=True, histtype='step', color='b', alpha=0.5, label="OK")
-            ax.hist(b, 20, density=True, histtype='step', color='r', alpha=0.5, label="Bad")
-
-            if t == 'Maximum Triangle Angle':
-                ax.set_xlabel("Radians")
-                ax.legend()
-            elif t == 'Minimum Triangle Angle':
-                ax.set_xlabel("Radians")
-            elif t == 'Length Ratio' or t == 'Perimeter Area Ratio':
-                ax.set_xlabel("Ratio")
-            else:
-                ax.set_xlabel("Arcseconds")
+            y_pred = model.predict(X_test).flatten()
         
-        with open(f'data/satellites/angle_data_filtered_good.pak', 'wb') as f:
-            joblib.dump(good_asterisms, f)
+            df = pd.DataFrame()
+            df['prediction'] = y_pred
+            df['test'] = y_test.to_numpy()
 
-        with open(f'data/satellites/angle_data_filtered_ok.pak', 'wb') as f:
-            joblib.dump(ok_asterisms, f)
+            print(name)
+            print("R² score:", r2_score(y_test, y_pred))
+            print("MSE:", mean_squared_error(y_test, y_pred))
+            print("\n")
 
-        print(f"Good: {len(good_asterisms)}; OK: {len(ok_asterisms)}; Bad: {len(bad_asterisms)}")
+            sns.lmplot(data=df, x='test', y='prediction')
+            plt.plot([df['test'].min(), df['test'].max()], [df['test'].min(), df['test'].max()], 'r:')
+            plt.title(name)
+
+        def classification(X_c_train, X_c_test, y_c_train, y_c_test, model, name):
+            model.fit(X_c_train, y_c_train)
+
+            y_pred = model.predict(X_c_test)
+            
+            df = pd.DataFrame()
+            df['prediction'] = y_pred
+            df['test'] = y_c_test.to_numpy()
+
+            sns.lmplot(data=df, x='test', y='prediction')
+            plt.plot([df['test'].min(), df['test'].max()], [df['test'].min(), df['test'].max()], 'r:')
+            plt.title(name)
+
+            accuracy = accuracy_score(df['test'], df['prediction'])
+            precision = precision_score(df['test'], df['prediction'])
+            recall = recall_score(df['test'], df['prediction'])
+
+            print(name)
+            print(f"Accuracy:  {accuracy:.2f}      Proportion of correct predictions (both positives and negatives.)")
+            print(f"Precision: {precision:.2f}      TP / (TP + FP) — How many predicted positives are truly positive?")
+            print(f"Recall:    {recall:.2f}      TP / (TP + FN) — How many actual positives were correctly predicted?")
+
+            cm = confusion_matrix(df['test'], df['prediction'])
+            print("Confusion Matrix:\n", cm)
+
+            # F1 Score
+            f1 = f1_score(df['test'], df['prediction'])
+            print(f"F1 Score: {f1:.2f}\n\n")
+
+        # Partial Least Squares Regression (PLS)
+        model = PLSRegression(n_components=2)
+        regression(X_train, X_test, y_train, y_test, model, "Partial Least Squares Regression")
+
+        # Principal Component Regression (PCR)
+        pcr = make_pipeline(PCA(n_components=2), LinearRegression())
+        regression(X_train, X_test, y_train, y_test, pcr, "Principal Component Regression")
+
+        # Ridge Regression
+        rdg = Ridge(alpha=0.1)
+        regression(X_train, X_test, y_train, y_test, rdg, "Ridge Regression")
+        
+        # Lasso Regression
+        lso = Lasso(alpha=0.1)
+        regression(X_train, X_test, y_train, y_test, lso, "Lasso Regression")
+
+        # Linear Discriminant Analysis
+        lda = LinearDiscriminantAnalysis()
+        classification(X_c_train, X_c_test, y_c_train, y_c_test, lda, "Linear Discriminant Analysis")
+
+        # Support Vector Machine
+        # for kernel in ['linear', 'poly', 'rbf', 'sigmoid']:
+        for kernel in ['linear', 'rbf']:
+            clf = SVC(kernel=kernel)
+            classification(X_c_train, X_c_test, y_c_train, y_c_test, clf, f"Support Vector Classifier [{kernel}]")
+
+            svr = SVR(kernel=kernel, C=1.0, epsilon=0.1)
+            regression(X_train, X_test, y_train, y_test, svr, f"Support Vector Regression [{kernel}]")
+        
+        # Machine Learning Regression
+        class ML_Model():
+            def __init__(self, nn_model, loss, cls=False):
+                self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                self.criterion = loss()
+                self.model = nn_model()
+                self.optimizer = optim.AdamW(self.model.parameters(), lr=0.01, weight_decay=1e-4)
+                self.classifier = cls
+            def fit(self, X, y):
+                X_nn = torch.tensor(X.to_numpy(), dtype=torch.float32)
+                y_nn = torch.tensor(y.to_numpy(), dtype=torch.float32)
+
+                if self.classifier:
+                    self.unique_vals, indices = y_nn.unique(sorted=True, return_inverse=True)
+                    y_nn = nn.functional.one_hot(indices, num_classes=len(self.unique_vals)).float()
+
+                dataset = TensorDataset(X_nn, y_nn)
+                batch_size = 100
+                loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+                self.model.to(self.device)
+
+                epochs = 16
+                self.model.train()
+                for epoch in range(epochs):
+                    for batch_X, batch_y in loader:
+                        outputs = self.model(batch_X.to(self.device))
+                        loss = self.criterion(outputs, batch_y.to(self.device))
+                        self.optimizer.zero_grad()
+                        loss.backward()
+                        self.optimizer.step()
+                    if epoch == 0 or (epoch % 10 == 9):
+                        print(f"Epoch {epoch+1}/{epochs} complete")
+            def predict(self, X_test):
+                self.model.eval()
+                with torch.no_grad():
+                    X_nn = torch.tensor(X_test.to_numpy(), dtype=torch.float32)
+                    y_pred = self.model(X_nn.to(self.device)).detach()
+                if self.classifier:
+                    y_pred = self.unique_vals[torch.argmax(y_pred.to('cpu'), dim=1)]
+                return y_pred.squeeze().to('cpu').numpy()
+
+        class RegressionModel(nn.Module):
+            def __init__(self):
+                super(RegressionModel, self).__init__()
+                self.network = nn.Sequential(
+                    nn.Linear(n_features, 128),
+                    nn.ReLU(),
+                    nn.Linear(128, 64),
+                    nn.ReLU(),
+                    nn.Linear(64, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, 1)
+                )
+            def forward(self, x):
+                return self.network(x)
+            
+        reg_model = ML_Model(RegressionModel, nn.MSELoss)
+        regression(X_train, X_test, y_train, y_test, reg_model, "ML Regression")
+            
+        class ClassificationModel(nn.Module):
+            def __init__(self):
+                super(ClassificationModel, self).__init__()
+                self.network = nn.Sequential(
+                    nn.Linear(n_features, 128),
+                    nn.ReLU(),
+                    nn.Linear(128, 64),
+                    nn.ReLU(),
+                    nn.Linear(64, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, 2)
+                )
+            def forward(self, x):
+                return self.network(x)
+
+        cls_model = ML_Model(ClassificationModel, nn.CrossEntropyLoss, cls=True)
+        classification(X_c_train, X_c_test, y_c_train, y_c_test, cls_model, "ML Classification")
+        
+        return
