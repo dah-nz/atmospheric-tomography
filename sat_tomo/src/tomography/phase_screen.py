@@ -177,7 +177,7 @@ class Atmosphere():
     def __getitem__(self, idx):
         return [scr[idx] for scr in self.screens]
 
-def kolmogorov(size, D, r0, seed):
+def kolmogorov(size, D, r0, seed=None):
     """
     Simulation of a phase screen with Kolmogorov Statistics.
     Starts from an exact 15 x 15 phase screen.
@@ -445,3 +445,14 @@ class vonKarmen():
         phs = phs_hi + phs_lo[:self.N, :self.N]
 
         return phs
+    
+def calculate_r0(screen, D):
+        """
+        Calculates the r0 of a phase screen
+
+        Output
+        ----------
+            sigma (rads)
+        """
+        # return np.sqrt(1.0299*(self.D/self.r0)**(5/3))
+        return D * (1.0299/np.var(screen))**(3/5)

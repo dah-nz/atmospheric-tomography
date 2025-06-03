@@ -16,14 +16,17 @@ import util
 import joblib
 
 def run_tests():
-    f = Filter()
 
-    # f.run_asterism_comparison()
-    f.filter_asterisms()
-
-    # load_angle_data_test()
+    # test_asterism_generation()
+    # test_phase_variance()
     
+    f = Filter()
+    f.run_asterism_comparison()
+    f.filter_asterisms()
+    # load_angle_data_test()
+
     plt.show()
+
 
 def load_angle_data_test():
     with open(f'data/satellites/angle_data_mag6.pak', 'rb') as f:
@@ -38,19 +41,25 @@ def load_angle_data_test():
 
 class Filter():
     def __init__(self):
+        self.n_asterisms = 400
+        self.n_atm = 10
+
         self.N = 21
         self.Z = zernike.Zernike(self.N)
         self.D = 1.8
-        self.r0 = 0.07
+        self.r0 = 0.25
         self.ap_pix = 100
         self.alts = [1000, 5000, 10000]
-        self.n_asterisms = None
         self.glao = GLAO(self.Z, self.D, self.N, self.alts, self.ap_pix)
         self.ao = AO(self.Z, self.D, self.N, self.alts, self.ap_pix)
         self.lsq = LeastSquares(self.Z, self.D, self.N, self.alts, self.ap_pix, r0=self.r0)
-        self.target = beacon.Beacon(0, 0, 10)
+        self.mask = util.circle(self.ap_pix)
+        self.target = beacon.Beacon(0, 0, 10, aperture_mask=self.mask)
         self.total = -1
-        self.n_atm = 512
+
+        self.tomo_methods = ['glao', 'tiptilt', 'ao', 'lsq', 'ol', 'ideal']
+        self.metrics = ['coeff_rmse', 'recon_rmse', 'strehl']
+        self.statistics = ['mean', 'std', 'min', 'lq', 'med', 'uq', 'max']
 
     def worker(self, atm, aq, rq, l):
         try:
@@ -61,33 +70,84 @@ class Filter():
                 i, asterism = aq.get()
                 l.release()
                 t0 = time.time()
+
+                results = {
+                    t: {m: [] for m in self.metrics} for t in self.tomo_methods
+                }
+
+                stats = {
+                    t: {m: {} for m in self.metrics} for t in self.tomo_methods
+                }
                 
-                glao_mse = []
-                tiptilt_mse = []
-                lsq_mse = []
-                ol_mse = []
-                ao_mse = []
                 for screens in atm:
                     target_coeffs = self.target.cutout_coeffs(self.Z, self.D, self.alts, screens, atm.metapupil_diameters)
+                    target_screen = self.target.total_cutout(self.D, self.alts, screens, atm.metapupil_diameters)
                     ast_coeffs = get_coeffs_for_asterism(asterism, self.Z, self.D, screens, self.alts, atm.metapupil_diameters)
-                    tiptilt_coeffs = np.zeros_like(target_coeffs)
-                    tiptilt_coeffs[:3] = target_coeffs[:3]
-                    glao_coeffs = self.glao.run(asterism, self.target, ast_coeffs)
-                    lsq_coeffs = self.lsq.run(asterism, self.target, ast_coeffs)
-                    ao_coeffs = self.ao.run(asterism, self.target, ast_coeffs)
-                    ol_coeffs = np.zeros_like(lsq_coeffs)
-                    glao_mse.append(util.rmse(target_coeffs, glao_coeffs))
-                    tiptilt_mse.append(util.rmse(target_coeffs, tiptilt_coeffs))
-                    ao_mse.append(util.rmse(target_coeffs, ao_coeffs))
-                    lsq_mse.append(util.rmse(target_coeffs, lsq_coeffs))
-                    ol_mse.append(util.rmse(target_coeffs, ol_coeffs))
+
+                    for tomo in self.tomo_methods:
+                        match tomo:
+                            case 'glao':
+                                coeffs = self.glao.run(asterism, self.target, ast_coeffs)
+                            case 'tiptilt':
+                                coeffs = np.zeros_like(target_coeffs)
+                                coeffs[:3] = target_coeffs[:3]
+                            case 'ao':
+                                coeffs = self.ao.run(asterism, self.target, ast_coeffs)
+                            case 'lsq':
+                                coeffs = self.lsq.run(asterism, self.target, ast_coeffs)
+                            case 'ideal':
+                                coeffs = target_coeffs
+                            case _:
+                                coeffs = np.zeros_like(target_coeffs)
+
+                        for metric in self.metrics:
+                            match metric:
+                                case 'recon_rmse':
+                                    recon = self.Z.compose(target_screen.shape, coeffs)
+                                    result = util.rmse(recon, target_screen, mask=self.mask)
+                                case 'coeff_rmse':
+                                    result = util.rmse(coeffs, target_coeffs)
+                                case 'strehl':
+                                    recon = self.Z.compose(target_screen.shape, coeffs)
+                                    # fig, axs = plt.subplots(1, 3)
+                                    # fig.suptitle(tomo)
+                                    r = recon - target_screen
+                                    # axs[0].imshow(recon)
+                                    # axs[1].imshow(target_screen)
+                                    # axs[2].imshow(r)
+                                    var = np.var(r, where=self.mask > 0)
+                                    print(f"{tomo}\n\
+                                          {target_coeffs}\n{coeffs}\n\
+                                          target r0: {phase_screen.calculate_r0(target_screen, self.D)}, recon r0: {phase_screen.calculate_r0(recon, self.D)}, diff r0: {phase_screen.calculate_r0(r, self.D)}\n\
+                                          Variance: {var}, Strehl: {np.exp(-var)}")
+                                    result = np.exp(-var)
+                                    # plt.show()
+                                case _:
+                                    result = np.nan
+                            results[tomo][metric].append(result)
+
+                for tomo in self.tomo_methods:
+                    for metric in self.metrics:
+                        for statistic in self.statistics:
+                            match statistic:
+                                case 'std':
+                                    r = np.std(results[tomo][metric])
+                                case 'mean':
+                                    r = np.mean(results[tomo][metric])
+                                case 'min':
+                                    r = np.amin(results[tomo][metric])
+                                case 'lq':
+                                    r = np.percentile(results[tomo][metric], 25)
+                                case 'med':
+                                    r = np.median(results[tomo][metric])
+                                case 'uq':
+                                    r = np.percentile(results[tomo][metric], 75)
+                                case 'max':
+                                    r = np.amax(results[tomo][metric])
+
+                            stats[tomo][metric][statistic] = r
                 
-                glao_mse = np.mean(glao_mse)
-                tiptilt_mse = np.mean(tiptilt_mse)
-                lsq_mse = np.mean(lsq_mse)
-                ol_mse = np.mean(ol_mse)
-                ao_mse = np.mean(ao_mse)
-                rq.put((i, ol_mse, glao_mse, lsq_mse, tiptilt_mse, ao_mse))
+                rq.put((i, stats))
 
                 t1 = time.time()
                 dt = t1 - t0
@@ -104,11 +164,12 @@ class Filter():
 
     def run_asterism_comparison(self):
 
-        all_asterisms = asterisms.generate_variable_asterisms(n=self.n_asterisms, zero_rate=0.0, fixed_rate=0.0)
-        # fixed_asterisms = asterisms.generate_fixed_asterisms(10, 5, theta_0_random=True)
-        # for angle in range(10, 120, 5):
-        #     fixed_asterisms += asterisms.generate_fixed_asterisms(10, angle, theta_0_random=True)
+        # all_asterisms = asterisms.generate_variable_asterisms(n=self.n_asterisms, zero_rate=0.0, fixed_rate=0.0)
+        # fixed_asterisms = asterisms.generate_fixed_asterisms(self.n_asterisms, 5, theta_0_random=True)
+        # # for angle in range(10, 120, 5):
+        # #     fixed_asterisms += asterisms.generate_fixed_asterisms(10, angle, theta_0_random=True)
         # all_asterisms += fixed_asterisms
+        all_asterisms = asterisms.get_test_asterisms(self.n_asterisms, fixed_rate=0.1, uniform_rate=0.2, offset_rate=0.5)
         self.total = len(all_asterisms)
 
 
@@ -137,23 +198,25 @@ class Filter():
         results = []
 
         while not result_queue.empty():
-            j, ol_mse, glao_mse, lsq_mse, tiptilt_mse, ao_mse = result_queue.get()
+            j, stats = result_queue.get()
 
             if j % 100 == 0:
                 print(f"Loading results for asterism {j+1}/{self.total}")
             asterism = all_asterisms[j]
 
-            results.append({
+            r_dict = {
                 'asterism_id':  j,
                 'gs_1':         asterism[0].to_simple_str(),
                 'gs_2':         asterism[1].to_simple_str(),
-                'gs_3':         asterism[2].to_simple_str(),
-                'ol_mse':       ol_mse,
-                'lsq_mse':      lsq_mse,
-                'glao_mse':     glao_mse,
-                'ao_mse':       ao_mse,
-                'tiptilt_mse':  tiptilt_mse,
-            })
+                'gs_3':         asterism[2].to_simple_str()
+            }
+            for t in self.tomo_methods:
+                for m in self.metrics:
+                    for s in self.statistics:
+                        r_dict[f'{t}_{m}_{s}'] = stats[t][m][s]
+                    r_dict[f'{t}_{m}_iqr'] = stats[t][m]['uq'] - stats[t][m]['lq']
+
+            results.append(r_dict)
 
         df = pd.DataFrame(results)
         df.to_csv('data/satellites/asterism_quality_data.csv')
@@ -186,12 +249,17 @@ class Filter():
         angle_01 = [a[1].theta - a[0].theta for a in asterism_list]
         angle_12 = [a[2].theta - a[1].theta for a in asterism_list]
         
+        tomo_method = 'lsq'
+        metric = 'recon_rmse'
+        statistic = 'mean'
+
+
         def norm(a):
             # ZScore normalisation
             a = np.array(a)
             return (a - a.mean()) / a.std()
         
-        performance = df['glao_mse']
+        performance = df[f'{tomo_method}_{metric}_{statistic}']
 
         # performance = (0.8 * df['ol_mse']) - df['lsq_mse']
         # performance = (performance - performance.mean()) / performance.std()
@@ -245,7 +313,7 @@ class Filter():
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
         X_c = df0.drop(columns='performance')
-        y_c = (df0['performance'] < 0.5 * (df['ol_mse'].mean())).astype(int)
+        y_c = (df0['performance'] < 0.5 * (df[f'ol_{metric}_{statistic}'].mean())).astype(int)
         # y_c = (df0['performance'] > 0.0).astype(int)
         X_c_train, X_c_test, y_c_train, y_c_test = train_test_split(X_c, y_c, test_size=0.2)
 
@@ -459,3 +527,130 @@ class Filter():
         classification(X_c_train, X_c_test, y_c_train, y_c_test, cls_model, "ML Classification")
         
         return
+
+
+def test_asterism_generation():
+
+    fixed_asts =    asterisms.get_test_asterisms(100, fixed_rate=1.0, uniform_rate=0.0, offset_rate=0.0)
+    uniform_asts =  asterisms.get_test_asterisms(100, fixed_rate=0.0, uniform_rate=1.0, offset_rate=0.0)
+    offset_asts =   asterisms.get_test_asterisms(100, fixed_rate=0.0, uniform_rate=0.0, offset_rate=1.0)
+    real_asts =     asterisms.get_test_asterisms(100, fixed_rate=0.0, uniform_rate=0.0, offset_rate=0.0)
+
+    mixed_asts =     asterisms.get_test_asterisms(100, fixed_rate=0.1, uniform_rate=0.2, offset_rate=0.5)
+    mix_2_asts =     asterisms.get_test_asterisms(100, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.4)
+    
+
+    def getCircle(radius, n_points, centre=(0,0), angle=2*np.pi):
+        circle = [util.pol2cart(radius, t/n_points*angle) for t in range(n_points + 1)]
+        X = [x+centre[0] for x, _ in circle]
+        Y = [y+centre[1] for _, y in circle]
+        return X, Y
+    
+    xcirc, ycirc = getCircle(120, 64)
+    
+    fig, axs = plt.subplots(2, 3)
+    fig.suptitle("Asterism Distribution")
+
+    def plot_asterisms(ax, title, asts):
+        ax.set_title(title)
+        ax.set_aspect('equal')
+        ax.set_xlabel('Arcseconds')
+        ax.set_ylabel('Arcseconds')
+        for ast in asts:
+            x, y = asterisms.get_asterism_coords(ast, theta_offset=True)
+            ax.scatter(x, y, c='r', alpha=0.2)
+        for ast in asts:
+            x, y = asterisms.get_asterism_coords(ast)
+            x = np.append(x, x[0])
+            y = np.append(y, y[0])
+            ax.plot(x, y, 'b', alpha=0.1)
+        ax.plot(xcirc, ycirc, 'k:', alpha=0.2)
+
+    plot_asterisms(axs[0, 0], "Fixed Asterisms", fixed_asts)
+    plot_asterisms(axs[0, 1], "Uniform Asterisms", uniform_asts)
+    plot_asterisms(axs[1, 0], "Offset Asterisms", offset_asts)
+    plot_asterisms(axs[1, 1], "Real Asterisms", real_asts)
+    plot_asterisms(axs[0, 2], "Mix 1 Asterisms", mixed_asts)
+    plot_asterisms(axs[1, 2], "Mix 2 Asterisms", mix_2_asts)
+
+    fig.tight_layout()
+
+def test_phase_variance():
+    cutout = 100
+    phase = 120
+    n_modes = 21
+    Z = zernike.Zernike(n_modes)
+
+    for i in range(1, n_modes):
+        c = np.array([0]*n_modes)
+        c[i] = 1
+        s = Z.compose(cutout, c)
+        # print(np.var(s, where=util.circle(cutout) > 0))
+
+        s = Z.compose(phase, c)
+        p_var = np.var(s, where=util.circle(phase) > 0)
+        # print(p_var)
+
+        s2 = Z.compose(phase, c)
+        c0 = (phase - cutout) // 2
+        c1 = (phase + cutout) // 2
+        c_var = np.var(s2[c0:c1, c0:c1], where=util.circle(cutout) > 0)
+        # print(c_var)
+
+        k = np.sqrt(p_var / c_var)
+        s2 = s2 * k
+
+        c_var2 = np.var(s2[c0:c1, c0:c1], where=util.circle(cutout) > 0)
+        # print(c_var2)
+
+        print(f"Mode: {i+1}\n\tPhase Size: {phase}\n\tCutout Size: {cutout}\n\tPhase Var: {p_var}\n\tCutout Var: {c_var}\n\tScaled Var: {c_var2}\n\tScaling Factor: {k}")
+
+    c = np.ones_like(c) * np.sqrt(1/20)
+    s = Z.compose(phase, c)
+    p_var = np.var(s, where=util.circle(phase) > 0)
+    c0 = (phase - cutout) // 2
+    c1 = (phase + cutout) // 2
+    c_var = np.var(s[c0:c1, c0:c1], where=util.circle(cutout) > 0)
+    k = np.sqrt(p_var / c_var)
+    s2 = s * k
+    c_var2 = np.var(s2[c0:c1, c0:c1], where=util.circle(cutout) > 0)
+
+    print(f"Modes: {n_modes}\n\tPhase Size: {phase}\n\tCutout Size: {cutout}\n\tPhase Var: {p_var}\n\tCutout Var: {c_var}\n\tScaled Var: {c_var2}\n\tScaling Factor: {k}")
+
+    k_data = []
+    calc_data = []
+    for i in range(100):
+        ks = []
+        p_vars = []
+        c_vars = []
+        scaled_vars = []
+        p_gen = phase_screen.PhaseScreenGenerator(phase, 1.8, 0.07)
+        screens = p_gen.generate(n_modes)
+
+        for screen in screens:
+            # screen = phase_screen.kolmogorov((phase, phase), 1.8, 0.07)
+            p_var = np.var(screen, where=util.circle(phase) > 0)
+            p_vars.append(p_var)
+            c0 = (phase - cutout) // 2
+            c1 = (phase + cutout) // 2
+            c_var = np.var(screen[c0:c1, c0:c1], where=util.circle(cutout) > 0)
+            c_vars.append(c_var)
+            k = np.sqrt(p_var / c_var)
+            s2 = screen * k
+            c_var2 = np.var(s2[c0:c1, c0:c1], where=util.circle(cutout) > 0)
+            scaled_vars.append(c_var2)
+            ks.append(k)
+        calc_k = p_gen.find_scaling((cutout, cutout), screens)
+
+        k_data.append(np.mean(ks))
+        calc_data.append(np.mean(calc_k))
+
+    from scipy.stats import ttest_rel
+
+    # Perform dependent two-sample t-test
+    t_stat, p_value = ttest_rel(k_data, calc_data)
+
+    print("t-statistic:", t_stat)
+    print("p-value:", p_value)
+
+    # print(f"Total Screens: {n_modes}\n\tPhase Size: {phase}\n\tCutout Size: {cutout}\n\tPhase Var: {np.mean(p_vars)}\n\tCutout Var: {np.mean(c_vars)}\n\tScaled Var: {np.mean(scaled_vars)}\n\tScaling Factor: {np.mean(ks)} [{calc_k}]")

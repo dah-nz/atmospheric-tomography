@@ -47,6 +47,9 @@ class Beacon():
     def from_simple_str(string_repr):
         theta, gamma_a, mag = string_repr.split(',')
         return Beacon(float(theta), float(gamma_a), float(mag), arcseconds=True)
+    
+    def copy(self):
+        return Beacon(self.theta, self.gamma, self.magnitude, aperture_mask=self.aperture_mask, arcseconds=False)
 
     def position(self, altitude):
         """
@@ -59,6 +62,11 @@ class Beacon():
         pos = util.azimuth2cart(altitude, self.gamma, self.theta)
         # print(pos, altitude, self.gamma, self.theta)
         return pos 
+    
+    def position_arcsec(self):
+        x = np.cos(self.theta) * self._gamma_arcsec
+        y = np.sin(self.theta) * self._gamma_arcsec
+        return x, y
     
     def position_gaussian(self, base_screen, limiting_angle=120):
 

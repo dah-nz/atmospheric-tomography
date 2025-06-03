@@ -2,7 +2,7 @@ import numpy as np
 
 from tomography import beacon
 from astronomy import asterisms
-from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle
+from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle, lerp
 
 import log
 
@@ -58,6 +58,86 @@ def generate_variable_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, 
 
         asterism_list.append(asterism)
     
+    return asterism_list
+
+def get_test_asterisms(n, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.2, limiting_angle=LIMITING_ANGLE, asterism_size=ASTERISM_SIZE, rng=None, mask=None):
+    """
+    Return a set of n test asterisms
+    Inputs:
+    n               Number of asterisms to generate
+    fixed_rate      Fraction of asterisms that are fixed - guide stars are arranged in an equilateral triangle on a circumscribed circle of a random radius, with randomised rotation.
+    uniform_rate    Fraction of asterisms that are generated from uniformly random guide stars.
+    offset_rate     Fraction of asterisms that have randomised offsets from a 'fixed' asterisms, so it is no longer an equilateral triangle
+
+    The remaining fraction of asterisms are taken from the real asterism pool, with a minimum magnitude of 14.
+    """
+
+    if rng is None:
+        rng = np.random.default_rng()
+
+    total_rate = fixed_rate + uniform_rate + offset_rate
+    if total_rate > 1.0:
+        raise ValueError(f"Total fraction of asterisms is {total_rate}, reduce 'fixed_rate' [{fixed_rate}], 'uniform_rate' [{uniform_rate}] or 'offset_rate' [{offset_rate}]")
+
+    fixed_n = int(n * fixed_rate)
+    uniform_n = int(n * uniform_rate)
+    offset_n = int(n * offset_rate)
+    real_n = n - (fixed_n + uniform_n + offset_n)
+
+    if fixed_n > 0:
+        theta0 = rng.uniform(0, 2*np.pi, size=fixed_n)
+        gamma = rng.beta(3.0, 7.0, size=fixed_n) * limiting_angle
+        fixed = [[beacon.Beacon(t, g, magnitude=8, aperture_mask=mask, arcseconds=True) for t in np.linspace(t0, t0+2*np.pi, asterism_size, endpoint=False)] for t0, g in zip(theta0, gamma)]
+    else:
+        fixed = None
+
+    if uniform_n > 0:
+        gamma = np.sqrt(rng.uniform(0, 1, size=(uniform_n, asterism_size))) * limiting_angle # Square root makes points uniformly distributed across a unit disc (less area in the centre)
+        theta = rng.uniform(0, 1, size=(uniform_n, asterism_size)) * 2 * np.pi
+        uniform = [[beacon.Beacon(t, g, magnitude=8, aperture_mask=mask, arcseconds=True) for g, t in zip(g_ast, t_ast)] for g_ast, t_ast in zip(gamma, theta)]
+    else:
+        uniform = None
+
+    if offset_n > 0:
+        offsets_per_ast = rng.choice(list(range(1, asterism_size+1)), size=offset_n)
+        offset_i_per_ast = rng.choice(list(range(asterism_size)), size=(offset_n, asterism_size))
+        theta_offset = rng.normal(scale=np.pi/(asterism_size*3), size=(offset_n, asterism_size))
+        gamma_offset = rng.normal(scale=0.2, size=(offset_n, asterism_size))
+        fixed_theta0 = rng.uniform(0, 2*np.pi, size=offset_n)
+        fixed_gamma = rng.beta(3.0, 7.0, size=offset_n) * limiting_angle
+
+        offset = []
+        for gamma, theta0, gamma_offsets, theta_offsets, offset_idxs, offsets in zip(fixed_gamma, fixed_theta0, gamma_offset, theta_offset, offset_i_per_ast, offsets_per_ast):
+            gamma = [gamma] * asterism_size
+            theta = np.linspace(theta0, theta0+2*np.pi, asterism_size, endpoint=False)
+            for n in range(offsets):
+                i = offset_idxs[n]
+                if gamma_offsets[i] < 0.0:
+                    a = 0
+                    b = gamma[i]
+                else:
+                    a = gamma[i]
+                    b = limiting_angle
+                g_offset = np.abs(gamma_offsets[i]) * (b-a) + a
+                if g_offset < 0.0:
+                    g_offset = 0.0
+                elif g_offset > limiting_angle:
+                    g_offset = limiting_angle
+                gamma[i] = g_offset
+                theta[i] += theta_offsets[i]
+
+            offset.append([beacon.Beacon(t, g, magnitude=8, aperture_mask=mask, arcseconds=True) for t, g in zip(theta, gamma)])
+    else:
+        offset = None
+
+    if real_n > 0:
+        asterism_data = asterisms.load_data(14, n=real_n, limit=limiting_angle, rng=rng, quick_load=True)
+        real = [[beacon.Beacon(t, g, m, aperture_mask=mask) for g, t, m in stars] for stars in asterism_data]
+    else:
+        real = None
+
+    asterism_list = np.concatenate([arr for arr in (fixed, uniform, offset, real) if arr is not None])
+    rng.shuffle(asterism_list, axis=0)
     return asterism_list
 
 def lengths(asterism):
@@ -374,3 +454,14 @@ def gaussian_area_within_triangle(asterism):
     # plt.show()
 
     return np.sum(g)
+
+def get_asterism_coords(asterism, theta_offset=False):
+    if theta_offset:
+        theta_offset = np.amin([b.theta for b in asterism])
+        ast0 = [b.copy() for b in asterism]
+        for b in ast0:
+            b.theta -= theta_offset
+    else:
+        ast0 = asterism
+    coords = np.array([b.position_arcsec() for b in ast0])
+    return coords[:, 0], coords[:, 1] # x, y

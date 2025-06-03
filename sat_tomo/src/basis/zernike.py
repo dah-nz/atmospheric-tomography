@@ -34,7 +34,9 @@ class Zernike(Basis):
         # Add one to order as zernike function is 1 indexed
         if type(size) is not int:
             size = int(size[0])
-        return generateZernike(size, size, order)
+        z = generateZernike(size, size, order)
+        # print(f"Zernike for order {order}, variance: {np.var(z, where=generateZernike(size,size,1) > 0)}")
+        return z
     
     def compose(self, size, coefficients):
         """ Compose a distortion/aberration phase screen from a set of coefficients and basis functions

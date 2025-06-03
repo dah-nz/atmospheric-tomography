@@ -204,3 +204,6 @@ def point_in_triangle(p1, p2, p3, p):
 
     # return np.all(l >= 0).astype(int) 
     return (a >= 0) & (b >= 0) & (c >= 0)
+
+def lerp(x, a, b):
+    return x*(b-a)+a
