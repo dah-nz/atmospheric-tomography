@@ -1,3 +1,4 @@
+# Standard imports
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -5,15 +6,36 @@ from tqdm import tqdm
 from multiprocessing import Pool, Manager
 import time
 import traceback
+import joblib
 
 import pandas as pd
 import seaborn as sns
 
+# Import sklearn models and utility functions
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix, f1_score
+
+from sklearn.cross_decomposition import PLSRegression
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.pipeline import make_pipeline
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.svm import SVC, SVR
+from sklearn.manifold import TSNE
+import umap
+
+# Import pytorch for ML
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import TensorDataset, DataLoader
+
+# import modules for application specific tomography functions
 from tomography import asterisms, beacon, phase_screen
 from tomography.tomography import GLAO, LeastSquares, get_coeffs_for_asterism, AO
 from basis import zernike
 import util
-import joblib
 
 def run_tests():
 
@@ -21,7 +43,7 @@ def run_tests():
     # test_phase_variance()
     
     f = Filter()
-    f.run_asterism_comparison()
+    # f.run_asterism_comparison()
     f.filter_asterisms()
     # load_angle_data_test()
 
@@ -29,6 +51,9 @@ def run_tests():
 
 
 def load_angle_data_test():
+    """
+    Displays .pak file output, to check that the filtering is saving in the same format as is required by the rest of my software
+    """
     with open(f'data/satellites/angle_data_mag6.pak', 'rb') as f:
         data = joblib.load(f)
 
@@ -40,26 +65,46 @@ def load_angle_data_test():
     print(data[:5])
 
 class Filter():
+    """
+    Class of filtering programs
+    Defines the main test functions
+    """
     def __init__(self):
-        self.n_asterisms = 400
-        self.n_atm = 10
+        # Size of test set
+        self.n_asterisms = 1000
+        self.n_atm = 100
 
+        # Ratio of different asterism types. These should sum to between 0.0 and 1.0 (the difference betwen 1.0 and the sum is the number of real asterisms to use)
+        self.fixed_rate = 1.0
+        self.uniform_rate = 0.0
+        self.offset_rate = 0.0
+
+        # Atmospheric and tomography simulation paramters
         self.N = 21
         self.Z = zernike.Zernike(self.N)
         self.D = 1.8
         self.r0 = 0.25
         self.ap_pix = 100
         self.alts = [1000, 5000, 10000]
+        self.mask = util.circle(self.ap_pix)
+        self.target = beacon.Beacon(0, 0, 10, aperture_mask=self.mask)
+
+        # Different tomography methods
         self.glao = GLAO(self.Z, self.D, self.N, self.alts, self.ap_pix)
         self.ao = AO(self.Z, self.D, self.N, self.alts, self.ap_pix)
         self.lsq = LeastSquares(self.Z, self.D, self.N, self.alts, self.ap_pix, r0=self.r0)
-        self.mask = util.circle(self.ap_pix)
-        self.target = beacon.Beacon(0, 0, 10, aperture_mask=self.mask)
-        self.total = -1
 
+        # Different data points to compute while running each asterism
         self.tomo_methods = ['glao', 'tiptilt', 'ao', 'lsq', 'ol', 'ideal']
         self.metrics = ['coeff_rmse', 'recon_rmse', 'strehl']
-        self.statistics = ['mean', 'std', 'min', 'lq', 'med', 'uq', 'max']
+        self.statistics = ['mean', 'std', 'min', 'lq', 'med', 'uq', 'max', 'raw']
+
+        # When running a filter, use the following:
+        self.filter_method =    'lsq'           # Tomography method to use for filtering
+        self.filter_metric =    'recon_rmse'    # Metric to use for filtering
+        self.filter_statistic = 'mean'          # Statistic to use for filtering
+        self.filter_k =         0.3             # Ratio of open loop (OL) that consitutes "good" for classification
+        self.filter_direction = False           # Direction of good vs bad: True if value higher than OL is classified as good
 
     def worker(self, atm, aq, rq, l):
         try:
@@ -116,10 +161,7 @@ class Filter():
                                     # axs[1].imshow(target_screen)
                                     # axs[2].imshow(r)
                                     var = np.var(r, where=self.mask > 0)
-                                    print(f"{tomo}\n\
-                                          {target_coeffs}\n{coeffs}\n\
-                                          target r0: {phase_screen.calculate_r0(target_screen, self.D)}, recon r0: {phase_screen.calculate_r0(recon, self.D)}, diff r0: {phase_screen.calculate_r0(r, self.D)}\n\
-                                          Variance: {var}, Strehl: {np.exp(-var)}")
+                                    print(f"{tomo}\ntarget r0: {phase_screen.calculate_r0(target_screen, self.D)}\nrecon r0: {phase_screen.calculate_r0(recon, self.D)}\ndiff r0: {phase_screen.calculate_r0(r, self.D)}\nVariance: {var}\nStrehl: {np.exp(-var)}")
                                     result = np.exp(-var)
                                     # plt.show()
                                 case _:
@@ -144,6 +186,8 @@ class Filter():
                                     r = np.percentile(results[tomo][metric], 75)
                                 case 'max':
                                     r = np.amax(results[tomo][metric])
+                                case 'raw':
+                                    r = results[tomo][metric]
 
                             stats[tomo][metric][statistic] = r
                 
@@ -152,7 +196,7 @@ class Filter():
                 t1 = time.time()
                 dt = t1 - t0
                 dt_total = t1 - tstart 
-                print(f"[{id:5}] Simulated asterism {i+1}/{self.total}. Took {dt:5.2f}s. Total time since start: {dt_total:.2f}s")
+                print(f"[{id:5}] Simulated asterism {i+1}/{self.n_asterisms}. Took {dt:5.2f}s. Total time since start: {dt_total:.2f}s")
                 l.acquire()
             l.release()
         except Exception as e:
@@ -163,15 +207,21 @@ class Filter():
         return
 
     def run_asterism_comparison(self):
+        """
+        Filter.run_asterism_comparison()
+
+        Run a set of asterisms on a set of static phase screens.
+        """
 
         # all_asterisms = asterisms.generate_variable_asterisms(n=self.n_asterisms, zero_rate=0.0, fixed_rate=0.0)
         # fixed_asterisms = asterisms.generate_fixed_asterisms(self.n_asterisms, 5, theta_0_random=True)
         # # for angle in range(10, 120, 5):
         # #     fixed_asterisms += asterisms.generate_fixed_asterisms(10, angle, theta_0_random=True)
         # all_asterisms += fixed_asterisms
-        all_asterisms = asterisms.get_test_asterisms(self.n_asterisms, fixed_rate=0.1, uniform_rate=0.2, offset_rate=0.5)
-        self.total = len(all_asterisms)
-
+        all_asterisms = asterisms.get_test_asterisms(self.n_asterisms, 
+                                                     fixed_rate=self.fixed_rate,
+                                                     uniform_rate=self.uniform_rate, 
+                                                     offset_rate=self.offset_rate)
 
         print(f"Generating {self.n_atm} simulated atmospheres")
         atm = phase_screen.Atmosphere(self.n_atm, self.alts, r0=self.r0, D=self.D, aperture_size=self.ap_pix)
@@ -201,7 +251,7 @@ class Filter():
             j, stats = result_queue.get()
 
             if j % 100 == 0:
-                print(f"Loading results for asterism {j+1}/{self.total}")
+                print(f"Loading results for asterism {j+1}/{self.n_asterisms}")
             asterism = all_asterisms[j]
 
             r_dict = {
@@ -210,35 +260,51 @@ class Filter():
                 'gs_2':         asterism[1].to_simple_str(),
                 'gs_3':         asterism[2].to_simple_str()
             }
-            for t in self.tomo_methods:
-                for m in self.metrics:
-                    for s in self.statistics:
+            for s in self.statistics:
+                for t in self.tomo_methods:
+                    for m in self.metrics:
                         r_dict[f'{t}_{m}_{s}'] = stats[t][m][s]
-                    r_dict[f'{t}_{m}_iqr'] = stats[t][m]['uq'] - stats[t][m]['lq']
+                    # r_dict[f'{t}_{m}_iqr'] = stats[t][m]['uq'] - stats[t][m]['lq']
 
             results.append(r_dict)
 
         df = pd.DataFrame(results)
         df.to_csv('data/satellites/asterism_quality_data.csv')
 
-    def filter_asterisms(self):
-        from sklearn.model_selection import train_test_split
-        from sklearn.metrics import mean_squared_error, r2_score
-        from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix, f1_score
-        
-        from sklearn.cross_decomposition import PLSRegression
-        from sklearn.decomposition import PCA
-        from sklearn.linear_model import LinearRegression, Ridge, Lasso
-        from sklearn.pipeline import make_pipeline
-        from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-        from sklearn.svm import SVC, SVR
-        from sklearn.manifold import TSNE
-        import umap
+        def getCircle(radius, n_points, centre=(0,0), angle=2*np.pi):
+            circle = [util.pol2cart(radius, t/n_points*angle) for t in range(n_points + 1)]
+            X = [x+centre[0] for x, _ in circle]
+            Y = [y+centre[1] for _, y in circle]
+            return X, Y
+    
+        xcirc, ycirc = getCircle(120, 64)
+    
+        fig, axs = plt.subplots(1, 1)
+        fig.suptitle("Asterisms")
 
-        import torch
-        import torch.nn as nn
-        import torch.optim as optim
-        from torch.utils.data import TensorDataset, DataLoader
+        def plot_asterisms(ax, title, asts):
+            ax.set_title(title)
+            ax.set_aspect('equal')
+            ax.set_xlabel('Arcseconds')
+            ax.set_ylabel('Arcseconds')
+            for ast in asts:
+                x, y = asterisms.get_asterism_coords(ast, theta_offset=True)
+                ax.scatter(x, y, c='r', alpha=0.2)
+            for ast in asts:
+                x, y = asterisms.get_asterism_coords(ast)
+                x = np.append(x, x[0])
+                y = np.append(y, y[0])
+                ax.plot(x, y, 'b', alpha=0.1)
+            ax.plot(xcirc, ycirc, 'k:', alpha=0.2)
+
+        plot_asterisms(axs, "All Asterisms", all_asterisms)
+
+
+    def filter_asterisms(self):
+        """
+        Filter asterisms for good and bad
+        """
+
 
         df = pd.read_csv('data/satellites/asterism_quality_data.csv', index_col="asterism_id")
 
@@ -246,18 +312,25 @@ class Filter():
         distance_0 = [a[0]._gamma_arcsec for a in asterism_list]
         distance_1 = [a[1]._gamma_arcsec for a in asterism_list]
         distance_2 = [a[2]._gamma_arcsec for a in asterism_list]
-        angle_01 = [a[1].theta - a[0].theta for a in asterism_list]
-        angle_12 = [a[2].theta - a[1].theta for a in asterism_list]
-        
-        tomo_method = 'lsq'
-        metric = 'recon_rmse'
-        statistic = 'mean'
+
+        angle_0 = [a[0].theta for a in asterism_list]
+        angle_1 = [a[1].theta for a in asterism_list]
+        angle_2 = [a[2].theta for a in asterism_list]
+
+        tomo_method = self.filter_method
+        metric = self.filter_metric
+        statistic = self.filter_statistic
+        k = self.filter_k
+        gt = self.filter_direction      # True if higher value is better
 
 
         def norm(a):
             # ZScore normalisation
             a = np.array(a)
-            return (a - a.mean()) / a.std()
+            stdev = a.std()
+            if stdev == 0:
+                return np.zeros_like(a, dtype=np.float32)
+            return (a - a.mean()) / stdev
         
         performance = df[f'{tomo_method}_{metric}_{statistic}']
 
@@ -271,8 +344,9 @@ class Filter():
         df0['distance_0'] = norm(distance_0)
         df0['distance_1'] = norm(distance_1)
         df0['distance_2'] = norm(distance_2)
-        df0['angle_01'] =   norm(angle_01)
-        df0['angle_12'] =   norm(angle_12)
+        df0['angle_0'] =   norm(angle_0)
+        df0['angle_1'] =   norm(angle_1)
+        df0['angle_2'] =   norm(angle_2)
 
         df0['ave_distance'] =          norm([asterisms.ave_distance(a) for a in asterism_list])
         df0['centroid_distance'] =     norm([asterisms.centroid_distance(a) for a in asterism_list])
@@ -313,7 +387,10 @@ class Filter():
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
         X_c = df0.drop(columns='performance')
-        y_c = (df0['performance'] < 0.5 * (df[f'ol_{metric}_{statistic}'].mean())).astype(int)
+        if gt is True:
+            y_c = (df0['performance'] > k * (df[f'ol_{metric}_{statistic}'].mean())).astype(int)
+        else:
+            y_c = (df0['performance'] < k * (df[f'ol_{metric}_{statistic}'].mean())).astype(int)
         # y_c = (df0['performance'] > 0.0).astype(int)
         X_c_train, X_c_test, y_c_train, y_c_test = train_test_split(X_c, y_c, test_size=0.2)
 
@@ -332,8 +409,6 @@ class Filter():
         X_umap = umap_reducer.fit_transform(X)
         ax.scatter(X_umap[:, 0], X_umap[:, 1], X_umap[:, 2], c=y, cmap='viridis')
         fig.suptitle("UMAP 3D")
-
-
 
         print("Calculating 2D t-SNE")
         tsne = TSNE(n_components=2)
@@ -368,6 +443,19 @@ class Filter():
         ax.scatter(X_reduced[:, 0], X_reduced[:, 1], X_reduced[:, 2], c=y, cmap='viridis')
         fig.suptitle("PCA 3D")
 
+        if 10 < n_features:
+            # Display higher dimensional data as a PCA -> t-SNE analysis
+            print("Calculating PCA->t-SNE 2D analysis")
+            pca = PCA(n_components=10)
+            X_pca = pca.fit_transform(X)
+
+            tsne = TSNE(n_components=2)
+            X_tsne = tsne.fit_transform(X_pca)
+
+            plt.figure()
+            plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y_c, cmap='viridis')
+            plt.title("PCA -> t-SNE 2D")
+        
         # Show correlations between variables
         plt.figure()
         correlations = df0.corr()

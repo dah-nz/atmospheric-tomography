@@ -86,7 +86,7 @@ def get_test_asterisms(n, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.2, lim
 
     if fixed_n > 0:
         theta0 = rng.uniform(0, 2*np.pi, size=fixed_n)
-        gamma = rng.beta(3.0, 7.0, size=fixed_n) * limiting_angle
+        gamma = rng.beta(2.0, 3.0, size=fixed_n) * limiting_angle
         fixed = [[beacon.Beacon(t, g, magnitude=8, aperture_mask=mask, arcseconds=True) for t in np.linspace(t0, t0+2*np.pi, asterism_size, endpoint=False)] for t0, g in zip(theta0, gamma)]
     else:
         fixed = None
@@ -104,7 +104,7 @@ def get_test_asterisms(n, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.2, lim
         theta_offset = rng.normal(scale=np.pi/(asterism_size*3), size=(offset_n, asterism_size))
         gamma_offset = rng.normal(scale=0.2, size=(offset_n, asterism_size))
         fixed_theta0 = rng.uniform(0, 2*np.pi, size=offset_n)
-        fixed_gamma = rng.beta(3.0, 7.0, size=offset_n) * limiting_angle
+        fixed_gamma = rng.beta(2.0, 3.0, size=offset_n) * limiting_angle
 
         offset = []
         for gamma, theta0, gamma_offsets, theta_offsets, offset_idxs, offsets in zip(fixed_gamma, fixed_theta0, gamma_offset, theta_offset, offset_i_per_ast, offsets_per_ast):
@@ -401,11 +401,12 @@ def is_target_in_triangle(asterism):
     """
     Returns True if the target is inside the asterism triangle (including edges)
     """
-    p1 = asterism[0].position(1)
-    p2 = asterism[1].position(1)
-    p3 = asterism[2].position(1)
+    p1 = asterism[0].position_arcsec()
+    p2 = asterism[1].position_arcsec()
+    p3 = asterism[2].position_arcsec()
 
-    return point_in_triangle(p1, p2, p3, (0, 0))
+    result = point_in_triangle(p1, p2, p3, (0, 0))
+    return result
 
     # # det1R = x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1)
     # # target location
