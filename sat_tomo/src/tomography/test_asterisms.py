@@ -43,11 +43,13 @@ def run_tests():
     # test_phase_variance()
     
     f = Filter()
-    # f.run_asterism_comparison()
-    f.filter_asterisms()
+    f.run_asterism_comparison()
+    # f.filter_asterisms()
     # load_angle_data_test()
 
     plt.show()
+
+    return # END run_tests
 
 
 def load_angle_data_test():
@@ -64,6 +66,8 @@ def load_angle_data_test():
 
     print(data[:5])
 
+    return # END load_angle_data_test
+
 class Filter():
     """
     Class of filtering programs
@@ -71,13 +75,13 @@ class Filter():
     """
     def __init__(self):
         # Size of test set
-        self.n_asterisms = 1000
+        self.n_asterisms = 10000
         self.n_atm = 100
 
         # Ratio of different asterism types. These should sum to between 0.0 and 1.0 (the difference betwen 1.0 and the sum is the number of real asterisms to use)
-        self.fixed_rate = 1.0
-        self.uniform_rate = 0.0
-        self.offset_rate = 0.0
+        self.fixed_rate = 0.92
+        self.uniform_rate = 0.04
+        self.offset_rate = 0.03
 
         # Atmospheric and tomography simulation paramters
         self.N = 21
@@ -100,11 +104,18 @@ class Filter():
         self.statistics = ['mean', 'std', 'min', 'lq', 'med', 'uq', 'max', 'raw']
 
         # When running a filter, use the following:
-        self.filter_method =    'lsq'           # Tomography method to use for filtering
+        self.filter_method =    'ao'           # Tomography method to use for filtering
         self.filter_metric =    'recon_rmse'    # Metric to use for filtering
         self.filter_statistic = 'mean'          # Statistic to use for filtering
-        self.filter_k =         0.3             # Ratio of open loop (OL) that consitutes "good" for classification
+        self.filter_k =         0.62             # Ratio of open loop (OL) that consitutes "good" for classification
         self.filter_direction = False           # Direction of good vs bad: True if value higher than OL is classified as good
+        self.filter_fraction =  0.2             # Fraction of total data to use for classifying data (set lower than 1.0 for larger sets of data if computation takes too long)
+
+        # Model configuration
+        self.train_test_ratio = 0.2
+        self.svm_kernels = ['linear', 'poly', 'rbf', 'sigmoid']
+
+        return # END Filter.__init__
 
     def worker(self, atm, aq, rq, l):
         try:
@@ -204,7 +215,8 @@ class Filter():
             print(e.args)     # arguments stored in .args
             print(e)
             print(traceback.format_exc(), flush=True)
-        return
+
+        return # END Filter.worker
 
     def run_asterism_comparison(self):
         """
@@ -212,12 +224,6 @@ class Filter():
 
         Run a set of asterisms on a set of static phase screens.
         """
-
-        # all_asterisms = asterisms.generate_variable_asterisms(n=self.n_asterisms, zero_rate=0.0, fixed_rate=0.0)
-        # fixed_asterisms = asterisms.generate_fixed_asterisms(self.n_asterisms, 5, theta_0_random=True)
-        # # for angle in range(10, 120, 5):
-        # #     fixed_asterisms += asterisms.generate_fixed_asterisms(10, angle, theta_0_random=True)
-        # all_asterisms += fixed_asterisms
         all_asterisms = asterisms.get_test_asterisms(self.n_asterisms, 
                                                      fixed_rate=self.fixed_rate,
                                                      uniform_rate=self.uniform_rate, 
@@ -264,7 +270,6 @@ class Filter():
                 for t in self.tomo_methods:
                     for m in self.metrics:
                         r_dict[f'{t}_{m}_{s}'] = stats[t][m][s]
-                    # r_dict[f'{t}_{m}_iqr'] = stats[t][m]['uq'] - stats[t][m]['lq']
 
             results.append(r_dict)
 
@@ -299,14 +304,25 @@ class Filter():
 
         plot_asterisms(axs, "All Asterisms", all_asterisms)
 
+        return # END Filter.run_asterism_comparison
 
     def filter_asterisms(self):
         """
         Filter asterisms for good and bad
         """
+        # load configuration values
+        tomo_method = self.filter_method
+        metric =      self.filter_metric
+        statistic =   self.filter_statistic
+        k =           self.filter_k
+        gt =          self.filter_direction     # True if higher value is better
+        frac =        self.filter_fraction
 
-
+        # Build dataframe from asterism quality data
         df = pd.read_csv('data/satellites/asterism_quality_data.csv', index_col="asterism_id")
+
+        # Load baseline asterism data from initial dataframe
+        # Angles and distances from the target
 
         asterism_list = [[beacon.Beacon.from_simple_str(df.loc[idx, f'gs_{i+1}']) for i in range(3)] for idx in range(df.shape[0])]
         distance_0 = [a[0]._gamma_arcsec for a in asterism_list]
@@ -317,36 +333,21 @@ class Filter():
         angle_1 = [a[1].theta for a in asterism_list]
         angle_2 = [a[2].theta for a in asterism_list]
 
-        tomo_method = self.filter_method
-        metric = self.filter_metric
-        statistic = self.filter_statistic
-        k = self.filter_k
-        gt = self.filter_direction      # True if higher value is better
-
-
-        def norm(a):
-            # ZScore normalisation
-            a = np.array(a)
-            stdev = a.std()
-            if stdev == 0:
-                return np.zeros_like(a, dtype=np.float32)
-            return (a - a.mean()) / stdev
-        
+        # Draw the data for performance from the dataframe
         performance = df[f'{tomo_method}_{metric}_{statistic}']
 
-        # performance = (0.8 * df['ol_mse']) - df['lsq_mse']
-        # performance = (performance - performance.mean()) / performance.std()
-
+        # Build dataframe of features based on asterism geometry
         df0 = pd.DataFrame()
 
         df0['performance'] = performance
+        df0['class'] = self.classification_function(performance, df)
 
         df0['distance_0'] = norm(distance_0)
         df0['distance_1'] = norm(distance_1)
         df0['distance_2'] = norm(distance_2)
-        df0['angle_0'] =   norm(angle_0)
-        df0['angle_1'] =   norm(angle_1)
-        df0['angle_2'] =   norm(angle_2)
+        df0['angle_0'] =    norm(angle_0)
+        df0['angle_1'] =    norm(angle_1)
+        df0['angle_2'] =    norm(angle_2)
 
         df0['ave_distance'] =          norm([asterisms.ave_distance(a) for a in asterism_list])
         df0['centroid_distance'] =     norm([asterisms.centroid_distance(a) for a in asterism_list])
@@ -367,216 +368,209 @@ class Filter():
         df0['area'] =                     norm([asterisms.area(a) for a in asterism_list])
 
         df0['perimeter'] =     norm([asterisms.perimeter(a) for a in asterism_list])
-        df0['in_triangle'] =   norm([asterisms.is_target_in_triangle(a) for a in asterism_list])
+        df0['in_triangle'] =   norm(np.array([asterisms.is_target_in_triangle(a) for a in asterism_list], dtype=np.float32))
         df0['min_angle'] =     norm([asterisms.min_angle(a) for a in asterism_list])
         df0['max_angle'] =     norm([asterisms.max_angle(a) for a in asterism_list])
         df0['gaussian_area'] = norm([asterisms.gaussian_area_within_triangle(a) for a in asterism_list])
 
-        named_columns = [col for col in df0.columns if not col.startswith("Unnamed")]
-        num_named_columns = len(named_columns)
-        print(f"Number of named columns: {num_named_columns}")
-        n_features = num_named_columns - 1
+        if frac < 1.0 and frac > 0.0:
+            df0 = df0.sample(frac=frac)
 
-        df0 = df0.sample(frac=0.2)
 
-        # X = df0.drop(columns='performance')
-        # y = df0['performance']
+        named_columns = [c for c in df0.columns if not c.startswith("Unnamed")]
+        self.n_features = len(named_columns) - 2
+        print(f"Number of features: {self.n_features}")
 
-        X = df0.drop(columns='performance')
-        y = df0['performance']
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+        self.plot_features(df0)
 
-        X_c = df0.drop(columns='performance')
-        if gt is True:
-            y_c = (df0['performance'] > k * (df[f'ol_{metric}_{statistic}'].mean())).astype(int)
-        else:
-            y_c = (df0['performance'] < k * (df[f'ol_{metric}_{statistic}'].mean())).astype(int)
-        # y_c = (df0['performance'] > 0.0).astype(int)
-        X_c_train, X_c_test, y_c_train, y_c_test = train_test_split(X_c, y_c, test_size=0.2)
+        # self.dimensionality_reduction(df0)
+        # self.dimensionality_reduction_ML(df0)
 
+        # self.data_correlation(df0)
+
+        # self.run_classification_models(df0)
+        # self.run_ML_classification(df0)
+
+        return # END Filter.filter_asterisms
+    
+    def plot_features(self, df):
+        rows = 2
+        cols = 3
+
+        figi = 0
+        fig, axs = plt.subplots(rows, cols)
+        fig.suptitle(f"Features {figi+1}")
+
+        X = df.drop(columns=['performance', 'class'])
+        y = df['performance']
+
+        for i, col in enumerate(X.columns):
+            if i >= (figi+1) * (rows * cols):
+                fig.tight_layout()
+                fig, axs = plt.subplots(rows, cols)
+                fig.suptitle(f"Features {figi+1}")
+                figi += 1
+            r = (i - (figi * rows * cols)) // cols
+            c = (i - (figi * rows * cols)) % cols
+            axs[r, c].scatter(df[col], y)
+            axs[r, c].set_title(col)
         
+        fig.tight_layout()
+
+    def dimensionality_reduction(self, df):
+        X = df.drop(columns=['performance', 'class'])
+        y = df['performance']
+
         print("Calculating 2D UMAP")
         plt.figure()
         umap_reducer = umap.UMAP(n_components=2)
-        X_umap = umap_reducer.fit_transform(X_c)
-        plt.scatter(X_umap[:, 0], X_umap[:, 1], c=y_c, cmap='viridis')
+        X_umap = umap_reducer.fit_transform(X)
+        plt.scatter(X_umap[:, 0], X_umap[:, 1], c=y, cmap='viridis')
         plt.title("UMAP 2D")
 
-        print("Calculating 3D UMAP")
-        fig = plt.figure()
-        ax = fig.add_subplot(projection='3d')
-        umap_reducer = umap.UMAP(n_components=3)
-        X_umap = umap_reducer.fit_transform(X)
-        ax.scatter(X_umap[:, 0], X_umap[:, 1], X_umap[:, 2], c=y, cmap='viridis')
-        fig.suptitle("UMAP 3D")
+        # print("Calculating 3D UMAP")
+        # fig = plt.figure()
+        # ax = fig.add_subplot(projection='3d')
+        # umap_reducer = umap.UMAP(n_components=3)
+        # X_umap = umap_reducer.fit_transform(X)
+        # ax.scatter(X_umap[:, 0], X_umap[:, 1], X_umap[:, 2], c=y, cmap='viridis')
+        # fig.suptitle("UMAP 3D")
 
-        print("Calculating 2D t-SNE")
-        tsne = TSNE(n_components=2)
-        X_tsne = tsne.fit_transform(X_c)
+        # print("Calculating 2D t-SNE")
+        # tsne = TSNE(n_components=2)
+        # X_tsne = tsne.fit_transform(X)
 
-        plt.figure()
-        plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y_c, cmap='viridis')
-        plt.title("t-SNE 2D")
+        # plt.figure()
+        # plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y, cmap='viridis')
+        # plt.title("t-SNE 2D")
 
-        print("Calculating 3D t-SNE")
-        fig = plt.figure()
-        ax = fig.add_subplot(projection='3d')
-        tsne2 = TSNE(n_components=3)
-        X_tsne2 = tsne2.fit_transform(X)
-        ax.scatter(X_tsne2[:, 0], X_tsne2[:, 1], X_tsne2[:, 2], c=y, cmap='viridis')
-        fig.suptitle("t-SNE 3D")
+        # print("Calculating 3D t-SNE")
+        # fig = plt.figure()
+        # ax = fig.add_subplot(projection='3d')
+        # tsne2 = TSNE(n_components=3)
+        # X_tsne2 = tsne2.fit_transform(X)
+        # ax.scatter(X_tsne2[:, 0], X_tsne2[:, 1], X_tsne2[:, 2], c=y, cmap='viridis')
+        # fig.suptitle("t-SNE 3D")
 
-        # Display higher dimensional data as 2D using Principal Component Analysis
-        print("Calculating 2D PCA")
-        pca = PCA(n_components=2)
-        X_pca = pca.fit_transform(X_c)
+        # # Display higher dimensional data as 2D using Principal Component Analysis
+        # print("Calculating 2D PCA")
+        # pca = PCA(n_components=2)
+        # X_pca = pca.fit_transform(X)
 
-        plt.figure()
-        plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_c, cmap='viridis')
-        plt.title("PCA 2D")
+        # plt.figure()
+        # plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y, cmap='viridis')
+        # plt.title("PCA 2D")
 
-        print("Calculating 3D PCA")
-        fig = plt.figure()
-        ax = fig.add_subplot(projection='3d')
-        PCA_model = PCA(n_components=3).fit(X)
-        X_reduced = PCA_model.transform(X)
-        ax.scatter(X_reduced[:, 0], X_reduced[:, 1], X_reduced[:, 2], c=y, cmap='viridis')
-        fig.suptitle("PCA 3D")
+        # print("Calculating 3D PCA")
+        # fig = plt.figure()
+        # ax = fig.add_subplot(projection='3d')
+        # PCA_model = PCA(n_components=3).fit(X)
+        # X_reduced = PCA_model.transform(X)
+        # ax.scatter(X_reduced[:, 0], X_reduced[:, 1], X_reduced[:, 2], c=y, cmap='viridis')
+        # fig.suptitle("PCA 3D")
 
-        if 10 < n_features:
+        n_components = 10
+        if n_components < self.n_features:
             # Display higher dimensional data as a PCA -> t-SNE analysis
             print("Calculating PCA->t-SNE 2D analysis")
-            pca = PCA(n_components=10)
+            pca = PCA(n_components=n_components)
             X_pca = pca.fit_transform(X)
 
             tsne = TSNE(n_components=2)
             X_tsne = tsne.fit_transform(X_pca)
 
             plt.figure()
-            plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y_c, cmap='viridis')
+            plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y, cmap='viridis')
             plt.title("PCA -> t-SNE 2D")
+
+            print("Calculating PCA->UMAP 2D analysis")
+            pca = PCA(n_components=n_components)
+            X_pca = pca.fit_transform(X)
+
+            tsne = umap.UMAP(n_components=2)
+            X_tsne = tsne.fit_transform(X_pca)
+
+            plt.figure()
+            plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y, cmap='viridis')
+            plt.title("PCA -> UMAP 2D")
+
+        return # END Filter.dimensionality_reduction
         
+    def data_correlation(self, df):
         # Show correlations between variables
         plt.figure()
-        correlations = df0.corr()
+        correlations = df.corr()
         sns.heatmap(correlations, annot=True)
 
-        def regression(X_train, X_test, y_train, y_test, model, name):
-            model.fit(X_train, y_train)
+        return # END Filter.data_correlation
 
-            y_pred = model.predict(X_test).flatten()
-        
-            df = pd.DataFrame()
-            df['prediction'] = y_pred
-            df['test'] = y_test.to_numpy()
+    def classification_function(self, performance, df_raw):
+        if self.filter_direction is True:
+            y = (performance > self.filter_k * (df_raw[f'ol_{self.filter_metric}_{self.filter_statistic}'].mean())).astype(int)
+        else:
+            y = (performance < self.filter_k * (df_raw[f'ol_{self.filter_metric}_{self.filter_statistic}'].mean())).astype(int)
 
-            print(name)
-            print("R² score:", r2_score(y_test, y_pred))
-            print("MSE:", mean_squared_error(y_test, y_pred))
-            print("\n")
+        return y
+        # END Filter.classification_data
 
-            sns.lmplot(data=df, x='test', y='prediction')
-            plt.plot([df['test'].min(), df['test'].max()], [df['test'].min(), df['test'].max()], 'r:')
-            plt.title(name)
+    def split_data(self, df, classification=None):
+        X = df.drop(columns=['performance', 'class'])
 
-        def classification(X_c_train, X_c_test, y_c_train, y_c_test, model, name):
-            model.fit(X_c_train, y_c_train)
+        if classification:
+            y = df['class']
+        else:
+            y = df['performance']
 
-            y_pred = model.predict(X_c_test)
-            
-            df = pd.DataFrame()
-            df['prediction'] = y_pred
-            df['test'] = y_c_test.to_numpy()
+        return train_test_split(X, y, test_size=self.train_test_ratio)
+        #END Filter.split_data
 
-            sns.lmplot(data=df, x='test', y='prediction')
-            plt.plot([df['test'].min(), df['test'].max()], [df['test'].min(), df['test'].max()], 'r:')
-            plt.title(name)
-
-            accuracy = accuracy_score(df['test'], df['prediction'])
-            precision = precision_score(df['test'], df['prediction'])
-            recall = recall_score(df['test'], df['prediction'])
-
-            print(name)
-            print(f"Accuracy:  {accuracy:.2f}      Proportion of correct predictions (both positives and negatives.)")
-            print(f"Precision: {precision:.2f}      TP / (TP + FP) — How many predicted positives are truly positive?")
-            print(f"Recall:    {recall:.2f}      TP / (TP + FN) — How many actual positives were correctly predicted?")
-
-            cm = confusion_matrix(df['test'], df['prediction'])
-            print("Confusion Matrix:\n", cm)
-
-            # F1 Score
-            f1 = f1_score(df['test'], df['prediction'])
-            print(f"F1 Score: {f1:.2f}\n\n")
+    def run_regression_models(self, df):
+        # Data for regession testing
+        X_trn, X_tst, y_trn, y_tst = self.split_data(df)
 
         # Partial Least Squares Regression (PLS)
         model = PLSRegression(n_components=2)
-        regression(X_train, X_test, y_train, y_test, model, "Partial Least Squares Regression")
+        regression(X_trn, X_tst, y_trn, y_tst, model, "Partial Least Squares Regression")
 
         # Principal Component Regression (PCR)
         pcr = make_pipeline(PCA(n_components=2), LinearRegression())
-        regression(X_train, X_test, y_train, y_test, pcr, "Principal Component Regression")
+        regression(X_trn, X_tst, y_trn, y_tst, pcr, "Principal Component Regression")
 
         # Ridge Regression
         rdg = Ridge(alpha=0.1)
-        regression(X_train, X_test, y_train, y_test, rdg, "Ridge Regression")
+        regression(X_trn, X_tst, y_trn, y_tst, rdg, "Ridge Regression")
         
         # Lasso Regression
         lso = Lasso(alpha=0.1)
-        regression(X_train, X_test, y_train, y_test, lso, "Lasso Regression")
+        regression(X_trn, X_tst, y_trn, y_tst, lso, "Lasso Regression")
 
+        for kernel in self.svm_kernels:
+            svr = SVR(kernel=kernel, C=1.0, epsilon=0.1)
+            regression(X_trn, X_tst, y_trn, y_tst, svr, f"Support Vector Regression [{kernel}]")
+
+        return # END Filter.run_regression_models
+
+
+    def run_classification_models(self, df):
+        # Data for classification testing
+        X_trn, X_tst, y_trn, y_tst = self.split_data(df, classification=True)
         # Linear Discriminant Analysis
         lda = LinearDiscriminantAnalysis()
-        classification(X_c_train, X_c_test, y_c_train, y_c_test, lda, "Linear Discriminant Analysis")
+        classification(X_trn, X_tst, y_trn, y_tst, lda, "Linear Discriminant Analysis")
 
         # Support Vector Machine
         # for kernel in ['linear', 'poly', 'rbf', 'sigmoid']:
-        for kernel in ['linear', 'rbf']:
+        for kernel in self.svm_kernels:
             clf = SVC(kernel=kernel)
-            classification(X_c_train, X_c_test, y_c_train, y_c_test, clf, f"Support Vector Classifier [{kernel}]")
+            classification(X_trn, X_tst, y_trn, y_tst, clf, f"Support Vector Classifier [{kernel}]")
 
-            svr = SVR(kernel=kernel, C=1.0, epsilon=0.1)
-            regression(X_train, X_test, y_train, y_test, svr, f"Support Vector Regression [{kernel}]")
-        
-        # Machine Learning Regression
-        class ML_Model():
-            def __init__(self, nn_model, loss, cls=False):
-                self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-                self.criterion = loss()
-                self.model = nn_model()
-                self.optimizer = optim.AdamW(self.model.parameters(), lr=0.01, weight_decay=1e-4)
-                self.classifier = cls
-            def fit(self, X, y):
-                X_nn = torch.tensor(X.to_numpy(), dtype=torch.float32)
-                y_nn = torch.tensor(y.to_numpy(), dtype=torch.float32)
+        return # END Filter.run_regression_models
 
-                if self.classifier:
-                    self.unique_vals, indices = y_nn.unique(sorted=True, return_inverse=True)
-                    y_nn = nn.functional.one_hot(indices, num_classes=len(self.unique_vals)).float()
+    def run_ML_regression(self, df):
 
-                dataset = TensorDataset(X_nn, y_nn)
-                batch_size = 100
-                loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-                self.model.to(self.device)
+        X_trn, X_tst, y_trn, y_tst = self.split_data(df)
 
-                epochs = 16
-                self.model.train()
-                for epoch in range(epochs):
-                    for batch_X, batch_y in loader:
-                        outputs = self.model(batch_X.to(self.device))
-                        loss = self.criterion(outputs, batch_y.to(self.device))
-                        self.optimizer.zero_grad()
-                        loss.backward()
-                        self.optimizer.step()
-                    if epoch == 0 or (epoch % 10 == 9):
-                        print(f"Epoch {epoch+1}/{epochs} complete")
-            def predict(self, X_test):
-                self.model.eval()
-                with torch.no_grad():
-                    X_nn = torch.tensor(X_test.to_numpy(), dtype=torch.float32)
-                    y_pred = self.model(X_nn.to(self.device)).detach()
-                if self.classifier:
-                    y_pred = self.unique_vals[torch.argmax(y_pred.to('cpu'), dim=1)]
-                return y_pred.squeeze().to('cpu').numpy()
+        n_features = self.n_features
 
         class RegressionModel(nn.Module):
             def __init__(self):
@@ -592,10 +586,17 @@ class Filter():
                 )
             def forward(self, x):
                 return self.network(x)
-            
+ 
         reg_model = ML_Model(RegressionModel, nn.MSELoss)
-        regression(X_train, X_test, y_train, y_test, reg_model, "ML Regression")
-            
+        regression(X_trn, X_tst, y_trn, y_tst, reg_model, "ML Regression")
+
+        return # END Filter.run_ML_regression
+    
+    def run_ML_classification(self, df):
+        X_trn, X_tst, y_trn, y_tst = self.split_data(df, classification=True)
+
+        n_features = self.n_features
+
         class ClassificationModel(nn.Module):
             def __init__(self):
                 super(ClassificationModel, self).__init__()
@@ -612,20 +613,118 @@ class Filter():
                 return self.network(x)
 
         cls_model = ML_Model(ClassificationModel, nn.CrossEntropyLoss, cls=True)
-        classification(X_c_train, X_c_test, y_c_train, y_c_test, cls_model, "ML Classification")
-        
-        return
+        classification(X_trn, X_tst, y_trn, y_tst, cls_model, "ML Classification")
 
+    def dimensionality_reduction_ML(self, df):
+        X_trn, X_tst, y_trn, y_tst = self.split_data(df)
+
+        n_features = self.n_features
+
+        class Autoencoder(nn.Module):
+            def __init__(self):
+                super(Autoencoder, self).__init__()
+                self.encoder = nn.Sequential(
+                    nn.Linear(n_features, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, 16),
+                    nn.ReLU(),
+                    nn.Linear(16, 8),
+                )
+
+                self.decoder = nn.Sequential(
+                    nn.Linear(8, 16),
+                    nn.ReLU(),
+                    nn.Linear(16, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, n_features)
+                )
+            def forward(self, x):
+                x = self.encoder(x)
+                x = self.decoder(x)
+                return x
+           
+        print("Calculating ML -> UMAP 2D (Auto-encoder)")
+        ae_model = ML_AE(Autoencoder, nn.MSELoss, cls=False)
+
+        ae_model.fit(X_trn, X_trn)
+
+        Z_encoding = ae_model.encode(X_tst)
+
+        tsne = umap.UMAP(n_components=2)
+        X_tsne = tsne.fit_transform(Z_encoding)
+
+        plt.figure()
+        plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y_tst, cmap='viridis')
+        plt.title("Autoencoder -> UMAP 2D")
+
+        tsne = TSNE(n_components=2)
+        X_tsne = tsne.fit_transform(Z_encoding)
+
+        plt.figure()
+        plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y_tst, cmap='viridis')
+        plt.title("Autoencoder -> TSNE 2D")
+
+        class Autodecoder(nn.Module):
+            def __init__(self):
+                super(Autodecoder, self).__init__()
+                self.encoder = nn.Sequential(
+                    nn.Linear(n_features, 32),
+                    nn.ReLU(),
+                    nn.Dropout(p=0.5),
+                    nn.Linear(32, 64),
+                    nn.ReLU(),
+                    nn.Dropout(p=0.5),
+                    nn.Linear(64, 128),
+                )
+
+                self.decoder = nn.Sequential(
+                    nn.Linear(128, 64),
+                    nn.ReLU(),
+                    nn.Dropout(p=0.5),
+                    nn.Linear(64, 32),
+                    nn.ReLU(),
+                    nn.Dropout(p=0.5),
+                    nn.Linear(32, n_features)
+                )
+
+            def forward(self, x):
+                x = self.encoder(x)
+                x = self.decoder(x)
+                return x
+
+        print("Calculating ML -> UMAP 2D (Auto-decoder)")
+        ae_model = ML_AE(Autodecoder, nn.MSELoss, cls=False)
+
+        ae_model.fit(X_trn, X_trn)
+
+        Z_encoding = ae_model.encode(X_tst)
+
+        tsne = umap.UMAP(n_components=2)
+        X_tsne = tsne.fit_transform(Z_encoding)
+
+        plt.figure()
+        plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y_tst, cmap='viridis')
+        plt.title("Autodecoder -> UMAP 2D")
+
+        tsne = TSNE(n_components=2)
+        X_tsne = tsne.fit_transform(Z_encoding)
+
+        plt.figure()
+        plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=y_tst, cmap='viridis')
+        plt.title("Autodecoder -> TSNE 2D")
+
+        return # END Filter.dimensionality_reduction_ML
+    
+    # END_CLASS Filter
 
 def test_asterism_generation():
 
-    fixed_asts =    asterisms.get_test_asterisms(100, fixed_rate=1.0, uniform_rate=0.0, offset_rate=0.0)
-    uniform_asts =  asterisms.get_test_asterisms(100, fixed_rate=0.0, uniform_rate=1.0, offset_rate=0.0)
-    offset_asts =   asterisms.get_test_asterisms(100, fixed_rate=0.0, uniform_rate=0.0, offset_rate=1.0)
-    real_asts =     asterisms.get_test_asterisms(100, fixed_rate=0.0, uniform_rate=0.0, offset_rate=0.0)
-
-    mixed_asts =     asterisms.get_test_asterisms(100, fixed_rate=0.1, uniform_rate=0.2, offset_rate=0.5)
-    mix_2_asts =     asterisms.get_test_asterisms(100, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.4)
+    fixed_asts =   asterisms.get_test_asterisms(100, fixed_rate=1.0, uniform_rate=0.0, offset_rate=0.0)
+    uniform_asts = asterisms.get_test_asterisms(100, fixed_rate=0.0, uniform_rate=1.0, offset_rate=0.0)
+    offset_asts =  asterisms.get_test_asterisms(100, fixed_rate=0.0, uniform_rate=0.0, offset_rate=1.0)
+    real_asts =    asterisms.get_test_asterisms(100, fixed_rate=0.0, uniform_rate=0.0, offset_rate=0.0)
+    mixed_asts =   asterisms.get_test_asterisms(100, fixed_rate=0.1, uniform_rate=0.2, offset_rate=0.5)
+    mix_2_asts =   asterisms.get_test_asterisms(100, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.4)
     
 
     def getCircle(radius, n_points, centre=(0,0), angle=2*np.pi):
@@ -662,6 +761,8 @@ def test_asterism_generation():
     plot_asterisms(axs[1, 2], "Mix 2 Asterisms", mix_2_asts)
 
     fig.tight_layout()
+
+    return # END test_asterism_generation
 
 def test_phase_variance():
     cutout = 100
@@ -742,3 +843,152 @@ def test_phase_variance():
     print("p-value:", p_value)
 
     # print(f"Total Screens: {n_modes}\n\tPhase Size: {phase}\n\tCutout Size: {cutout}\n\tPhase Var: {np.mean(p_vars)}\n\tCutout Var: {np.mean(c_vars)}\n\tScaled Var: {np.mean(scaled_vars)}\n\tScaling Factor: {np.mean(ks)} [{calc_k}]")
+
+    return # END test_phase_variance
+
+def norm(a):
+    """
+    Normalise an array.
+    This uses a standard norm to a range of 0-1
+    """
+    a = np.array(a)
+    mx = a.max()
+    mn = a.min()
+
+    # Prevent division by zero
+    if mx == mn:
+        return a - mn
+        
+    return (a - mn) / (mx - mn)
+    # END norm
+
+def znorm(a):
+    """
+    Normalise an array.
+    This uses Z-score normalisation
+    {a - mean(a)}/stdev(a)
+    """
+    a = np.array(a)
+    stdev = a.std()
+
+    # If the stdev is zero, all the data is the same, so a - mean(a) = 0 for all values of a
+    if stdev == 0:
+        return np.zeros_like(a, dtype=np.float32)
+    
+    return (a - a.mean()) / stdev
+    # END znorm
+
+def regression(X_train, X_test, y_train, y_test, model, name):
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test).flatten()
+
+    df = pd.DataFrame()
+    df['prediction'] = y_pred
+    df['test'] = y_test.to_numpy()
+
+    print(name)
+    print("R² score:", r2_score(y_test, y_pred))
+    print("MSE:", mean_squared_error(y_test, y_pred))
+    print("\n")
+
+    sns.lmplot(data=df, x='test', y='prediction')
+    plt.plot([df['test'].min(), df['test'].max()], [df['test'].min(), df['test'].max()], 'r:')
+    plt.title(name)
+
+    return # END regression
+
+def classification(X_train, X_test, y_train, y_test, model, name):
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+    
+    dfc = pd.DataFrame()
+    dfc['prediction'] = y_pred
+    dfc['test'] = y_test.to_numpy()
+
+    sns.lmplot(data=dfc, x='test', y='prediction')
+    plt.plot([dfc['test'].min(), dfc['test'].max()], [dfc['test'].min(), dfc['test'].max()], 'r:')
+    plt.title(name)
+
+    accuracy = accuracy_score(dfc['test'], dfc['prediction'])
+    precision = precision_score(dfc['test'], dfc['prediction'])
+    recall = recall_score(dfc['test'], dfc['prediction'])
+
+    print(name)
+    print(f"Accuracy:  {accuracy:.2f}      Proportion of correct predictions (both positives and negatives.)")
+    print(f"Precision: {precision:.2f}      TP / (TP + FP) — How many predicted positives are truly positive?")
+    print(f"Recall:    {recall:.2f}      TP / (TP + FN) — How many actual positives were correctly predicted?")
+
+    cm = confusion_matrix(dfc['test'], dfc['prediction'])
+    print("Confusion Matrix ([[TN, FP], [FN, TP]]):\n", cm)
+
+    # F1 Score
+    f1 = f1_score(dfc['test'], dfc['prediction'])
+    print(f"F1 Score: {f1:.2f}      (2 x P x R) / (P + R)\n\n")
+
+    return # END classification
+
+# Machine Learning Regression
+class ML_Model():
+    def __init__(self, nn_model, loss, cls=False):
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.criterion = loss()
+        self.model = nn_model()
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=0.01, weight_decay=1e-4)
+        self.classifier = cls
+
+        return # END ML_Model.__init__
+
+    def fit(self, X, y):
+        X_nn = torch.tensor(X.to_numpy(), dtype=torch.float32)
+        y_nn = torch.tensor(y.to_numpy(), dtype=torch.float32)
+
+        if self.classifier:
+            self.unique_vals, indices = y_nn.unique(sorted=True, return_inverse=True)
+            y_nn = nn.functional.one_hot(indices, num_classes=len(self.unique_vals)).float()
+
+        dataset = TensorDataset(X_nn, y_nn)
+        batch_size = 100
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        self.model.to(self.device)
+
+        epochs = 16
+        self.model.train()
+        for epoch in range(epochs):
+            epoch_loss = []
+            for batch_X, batch_y in loader:
+                outputs = self.model(batch_X.to(self.device))
+                loss = self.criterion(outputs, batch_y.to(self.device))
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                epoch_loss.append(loss.item())
+            # if epoch == 0 or (epoch % 10 == 9):
+            print(f"Epoch {epoch+1}/{epochs} complete [{np.mean(epoch_loss)}]")
+
+        return # END ML_Model.fit
+
+    def predict(self, X_test):
+        self.model.eval()
+        with torch.no_grad():
+            X_nn = torch.tensor(X_test.to_numpy(), dtype=torch.float32)
+            y_pred = self.model(X_nn.to(self.device)).detach()
+        if self.classifier:
+            y_pred = self.unique_vals[torch.argmax(y_pred.to('cpu'), dim=1)]
+
+        return y_pred.squeeze().to('cpu').numpy()
+        # END ML_Model.predict
+    # END_CLASS ML_Model
+
+class ML_AE(ML_Model):
+    def encode(self, X_test):
+        self.model.eval()
+        with torch.no_grad():
+            X_nn = torch.tensor(X_test.to_numpy(), dtype=torch.float32)
+            Z_encode = self.model.encoder(X_nn.to(self.device)).detach()
+
+        return Z_encode.squeeze().to('cpu').numpy()
+        # END ML_Model.encode
+    
+    
