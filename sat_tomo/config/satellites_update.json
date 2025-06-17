@@ -1,0 +1,11 @@
+[
+    {
+      "satellites": true,
+      "period": 72,
+      "num_sats": 500,
+      "sat_del_t": 15,
+      "asterism_size": 5,
+      "magnitude": 14,
+      "max_magnitude": 14
+    }
+  ]

@@ -3,6 +3,7 @@ import numpy as np
 from tomography import beacon
 from astronomy import asterisms
 from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle, lerp
+from itertools import combinations
 
 import log
 
@@ -59,6 +60,17 @@ def generate_variable_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, 
         asterism_list.append(asterism)
     
     return asterism_list
+
+def get_test_asterisms_a_choose_b(n, limiting_angle=LIMITING_ANGLE, asterism_size=3, group_size=5, rng=None, mask=None):
+    if rng is None:
+        rng = np.random.default_rng()
+
+    asterism_data = asterisms.load_data(14, n=n, limit=limiting_angle, rng=rng, quick_load=True, asterism_size=group_size)
+    real = [[beacon.Beacon(t, g, m, aperture_mask=mask) for g, t, m in stars] for stars in asterism_data]
+
+    groups = [combinations(stars, asterism_size) for stars in real]
+
+    return groups
 
 def get_test_asterisms(n, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.2, limiting_angle=LIMITING_ANGLE, asterism_size=ASTERISM_SIZE, rng=None, mask=None):
     """

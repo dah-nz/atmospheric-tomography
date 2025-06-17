@@ -1,6 +1,6 @@
 [
     {
-      "display_training": true,
-      "display_asterisms": false
+      "display_training": false,
+      "display_asterisms": true
     }
   ]

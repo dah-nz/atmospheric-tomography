@@ -233,7 +233,7 @@ class Satellite(EarthSatellite):
         return exporter.export_tle(self.model)
 
 class SatelliteMap():
-    def __init__(self, tele=None, n_sats=500, star_magnitude=14, time_delta=30, time_period=72, asterism_size=3):
+    def __init__(self, tele=None, n_sats=500, star_magnitude=14, time_delta=30, time_period=72, asterism_size=3, max_magnitude=6):
         self.n_processes = 8
         self.n_workers = 5
 
@@ -246,7 +246,7 @@ class SatelliteMap():
         else:
             self.tele = tele
 
-        self.star_mags = list(range(6, star_magnitude + 1))
+        self.star_mags = list(range(max_magnitude, star_magnitude + 1))
 
         self.time_period = time_period
         self.dt = dt.timedelta(seconds=time_delta)
@@ -319,25 +319,31 @@ class SatelliteMap():
         log.info(" > Saving satellite data")
         
         for m, d in distances.items():    
-            fn_pak = f"data/satellites/angle_data_mag{m}.pak"
-            with open(fn_pak, 'rb') as f:
-                log.debug(f"Loading old angle data from <{fn_pak}>")
-                angles = joblib.load(f)
+            fn_pak = f"data/satellites/angle_data_{self.asterism_size}_mag{m}.pak"
+            try:
+                with open(fn_pak, 'rb') as f:
+                    log.debug(f"Loading old angle data from <{fn_pak}>")
+                    angles = joblib.load(f)
 
-            angles = angles + d
+                angles = angles + d
+            except FileNotFoundError:
+                log.debug(f"No old angle data (<{fn_pak}> not found)")
+                angles = d
 
-            fn_temp = f"data/satellites/angle_data_mag{m}.temp"
+            fn_temp = f"data/satellites/angle_data_{self.asterism_size}_mag{m}.temp"
             with open(fn_temp, 'wb') as f:
                 log.debug(f"Saving new angle data to <{fn_temp}>")
                 joblib.dump(angles, f)
 
-            fn_old = f"data/satellites/angle_data_mag{m}.old"
+            fn_old = f"data/satellites/angle_data_{self.asterism_size}_mag{m}.old"
             try:
                 os.rename(fn_pak, fn_old)
                 log.debug(f"Renaming <{fn_pak}> to <{fn_old}>")
             except FileExistsError:
                 os.replace(fn_pak, fn_old)
                 log.debug(f"Replacing <{fn_pak}> with <{fn_old}>")
+            except FileNotFoundError:
+                log.debug(f"File <{fn_pak}> not found, nothing to save")
 
             log.debug(f"Replacing <{fn_temp}> with <{fn_pak}>")
             os.replace(fn_temp, fn_pak)
@@ -496,19 +502,19 @@ class SatelliteMap():
 
         return # starmap_worker()
     
-def load_map(mag):
-    fn_pak = f"data/satellites/angle_data_mag{mag}.pak"
+def load_map(mag, asterism_size=3):
+    fn_pak = f"data/satellites/angle_data_{asterism_size}_mag{mag}.pak"
     with open(fn_pak, 'rb') as f:
         log.debug(f"Loading statellite angle data from <{fn_pak}>")
         angles = joblib.load(f)
 
     return angles
 
-def clean_maps():
+def clean_maps(asterism_size=3):
     for m in range(6, 14 + 1):
-        fn_pak = f"data/satellites/angle_data_mag{m}.pak"
-        fn_temp = f"data/satellites/angle_data_mag{m}.temp"
-        fn_old = f"data/satellites/angle_data_mag{m}.old"
+        fn_pak = f"data/satellites/angle_data_{asterism_size}_mag{m}.pak"
+        fn_temp = f"data/satellites/angle_data_{asterism_size}_mag{m}.temp"
+        fn_old = f"data/satellites/angle_data_{asterism_size}_mag{m}.old"
 
         with open(fn_old, 'rb') as f:
             log.debug(f"Loading old angle data from <{fn_old}>")

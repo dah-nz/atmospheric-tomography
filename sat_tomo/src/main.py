@@ -48,15 +48,18 @@ if __name__ == "__main__":
                                                 star_magnitude=cfg.magnitude,
                                                 time_period=cfg.period,
                                                 time_delta=cfg.sat_del_t,
-                                                asterism_size=cfg.asterism_size)
+                                                asterism_size=cfg.asterism_size,
+                                                max_magnitude=cfg.max_magnitude)
         sats.build()
 
     if cfg.display_asterisms:
         # print("Cleaning old data")
         # astronomy.satellite.clean_maps()
         print("Displaying asterism data")
-        data = astronomy.asterisms.load_data(cfg.magnitude)
-        display.asterisms()
+        data = astronomy.asterisms.load_data(cfg.magnitude, limit=120, asterism_size=5)
+        print(data[:5])
+        print(len(data))
+        # display.asterisms()
 
     if cfg.train_models:
         log.info(" > Start model training < ")

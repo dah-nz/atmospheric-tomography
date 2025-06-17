@@ -266,3 +266,22 @@ class Beacon():
         x, y = self.position(1)
         v = np.array([x, y, 1])
         return v / np.linalg.norm(v)
+    
+    def offset(self, x=0.0, y=0.0, gamma=0.0, theta=0.0):
+        """
+        Return a beacon that has some minor offset from this beacon
+
+        Parameters
+        ----------
+        x:      Offset in the x cartesian direction                 (arcseconds)
+        y:      Offset in the y cartesian direction                 (arcseconds)
+        gamma:  Offset in the gamma direction, from optical axis    (arcseconds)
+        theta:  Offset in the theta direction, around optical axis  (arcseconds)
+        """
+
+        if x != 0.0 or y != 0.0:
+            x_p, y_p = self.position_arcsec()
+            g, t = util.cart2pol(x_p+x, y_p+y)
+            return Beacon(t, g, self.magnitude, arcseconds=True, aperture_mask=self.aperture_mask)
+        else:
+            return Beacon(self.theta+util.arcsec2rad(theta), self._gamma_arcsec+gamma, self.magnitude, arcseconds=True, aperture_mask=self.aperture_mask)

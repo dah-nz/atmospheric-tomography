@@ -31,7 +31,8 @@ class Config():
         parser = argparse.ArgumentParser(prog='main.py',
                                      description="Runs different elements of the atmoshperic tomography simulator")
         
-        parser.add_argument('-m', '--magnitude', action='store', default=14, type=int, help='Limiting magnitude of background stars')
+        parser.add_argument('-m', '--magnitude', action='store', default=14, type=int, help='Minimum limiting magnitude of background stars used for asterisms. All brighter stars will be used.')
+        parser.add_argument('--max_magnitude', action='store', default=6, type=int, help='Maximum limiting magnitude of background stars used for finding asterisms. All brighter stars will be used.')
         parser.add_argument('-b', '--build_star_map', action='store_true', help='Build star maps')
         parser.add_argument('-s', '--satellites', action='store_true', help="Calculate satellite passes from fresh TLEs")
         parser.add_argument('-p', '--period', action='store', default=24.0, help="Period over which to calculate satellite passes (hours)")
@@ -57,9 +58,9 @@ class Config():
         parser.add_argument('--save_frequency', action='store', default=16, type=int, help='Frequency to save intermediary model parameters')
         parser.add_argument('--limiting_angle', action='store', default=120, type=int, help='Limiting outer angle for variable asterisms')
 
-        parser.add_argument('--num_sats', action='store', default=500, help="Number of satellites to calculate asterisms from")
-        parser.add_argument('--sat_del_t', action='store', default=30, help="Time delta between satellite location checks (s)")
-        parser.add_argument('--asterism_size', action='store', default=3, help="Number of stars in asterisms")
+        parser.add_argument('--num_sats', action='store', default=500, type=int, help="Number of satellites to calculate asterisms from")
+        parser.add_argument('--sat_del_t', action='store', default=30, type=int, help="Time delta between satellite location checks (s)")
+        parser.add_argument('--asterism_size', action='store', default=3, type=int, help="Number of stars in asterisms")
         
         parser.add_argument('--shwfs', action='store_true', help="Use Shack-Hartmann WFS for estimating guide-star wavefront modes")
         parser.add_argument('--noise', action='store_true', help='Turn on noise in the SHWFS')
@@ -86,6 +87,9 @@ class Config():
         except argparse.ArgumentTypeError as e:
             print(e)
             quit()
+
+        if type(args.sat_del_t) is str:
+            args.sat_del_t = float(args.sat_del_t)
 
         if type(args.period) is str:
             args.period = float(args.period)
