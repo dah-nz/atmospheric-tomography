@@ -3,7 +3,6 @@ import numpy as np
 from tomography import beacon
 from astronomy import asterisms
 from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle, lerp
-from itertools import combinations
 
 import log
 
@@ -13,6 +12,10 @@ log.setup_logger(logger)
 ASTERISM_SIZE = 3
 LIMITING_ANGLE = 120
 DEFAULT_M = 8   # default magnitude
+
+def perturb_asterism(asterism, perturbation):
+    x, y = perturbation
+    return [b.offset(x=x, y=y) for b in asterism]
 
 def generate_fixed_asterisms(n, angle, mask=None, theta_0_random=False):
     logger.info(f"Generating fixed asterisms with {ASTERISM_SIZE} stars. Fixed angle of {angle}\"")
@@ -66,11 +69,11 @@ def get_test_asterisms_a_choose_b(n, limiting_angle=LIMITING_ANGLE, asterism_siz
         rng = np.random.default_rng()
 
     asterism_data = asterisms.load_data(14, n=n, limit=limiting_angle, rng=rng, quick_load=True, asterism_size=group_size)
-    real = [[beacon.Beacon(t, g, m, aperture_mask=mask) for g, t, m in stars] for stars in asterism_data]
+    groups = [[beacon.Beacon(t, g, m, aperture_mask=mask) for g, t, m in stars] for stars in asterism_data]
 
-    groups = [combinations(stars, asterism_size) for stars in real]
-
+    # groups = [combinations(stars, asterism_size) for stars in real]
     return groups
+
 
 def get_test_asterisms(n, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.2, limiting_angle=LIMITING_ANGLE, asterism_size=ASTERISM_SIZE, rng=None, mask=None):
     """
@@ -283,6 +286,12 @@ def min_distance(asterism):
     Return the minimum distance of three guide stars from the target location
     """
     return np.amin([a._gamma_arcsec for a in asterism])
+
+def max_distance(asterism):
+    """
+    Return the minimum distance of three guide stars from the target location
+    """
+    return np.amax([a._gamma_arcsec for a in asterism])
 
 def ave_distance(asterism):
     """

@@ -45,6 +45,7 @@ class Beacon():
         return f"{float(self.theta)},{float(self._gamma_arcsec)},{float(self.magnitude)}"
     
     def from_simple_str(string_repr):
+        # print(string_repr)
         theta, gamma_a, mag = string_repr.split(',')
         return Beacon(float(theta), float(gamma_a), float(mag), arcseconds=True)
     

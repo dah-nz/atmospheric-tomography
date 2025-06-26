@@ -9,6 +9,10 @@ from tomography import tomography as tomo
 from tomography import beacon, phase_screen, projection, wavefront, asterisms
 from basis import zernike
 
+from tqdm import tqdm
+
+from itertools import combinations
+
 import util
 
 def run_tests():
@@ -87,7 +91,7 @@ def test_leastsquares():
 
     D = 1.8
     N = 21
-    N_TESTS = 256
+    N_TESTS = 10
     N_GS = 3
 
     test_variable = True # Test variable or fixed asterisms
@@ -172,12 +176,15 @@ def test_leastsquares():
 
     from astronomy.asterisms import load_data, sample
 
-    for nagle in angles:
+    for nagle in tqdm(angles):
         
         fixed_asts = asterisms.generate_fixed_asterisms(N_TESTS, nagle, mask=mask)
         
-        data = load_data(14, limit=nagle, quick_load=True, use_cache=False)
-        var_asts = [[beacon.Beacon(t, g, magnitude=m, aperture_mask=mask) for g, t, m in a] for a in data]
+        data = load_data(14, limit=nagle, quick_load=True, use_cache=False, asterism_size=5)
+        var_asts = []
+        for guidestars in data:
+            for ast in combinations(guidestars, 3):
+                var_asts.append([beacon.Beacon(t, g, magnitude=m, aperture_mask=mask) for g, t, m in ast])
         # asts = asterisms.generate_variable_asterisms(N_TESTS, limiting_angle=nagle, zero_rate=0.0, fixed_rate=0.0, mask=mask)
         if len(var_asts) < N_TESTS:
             for n in range(N_TESTS - len(var_asts)):
@@ -343,7 +350,7 @@ def test_leastsquares():
             m, cl = style[si]
             # plt.plot(angles, aves[k], color=c, marker=m, linestyle='dashed', alpha=0.6, label=f"{k} - Mean")
             for c, (i, ls) in centiles.items():
-                plt.plot(angles, data[c][k], color=cl, marker=m, linestyle=ls, alpha=0.6, label=f"{k} - {c}")
+                plt.plot(angles, data[c][k], color=cl, marker=m, linestyle=ls, alpha=0.4, label=f"{k} - {c}")
             si += 1
     plt.xlabel("Radius (\")")
     plt.ylabel("MSE (rad²)")

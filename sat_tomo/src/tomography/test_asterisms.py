@@ -7,9 +7,13 @@ from multiprocessing import Pool, Manager
 import time
 import traceback
 import joblib
+import math
+import ast
 
 import pandas as pd
 import seaborn as sns
+
+from itertools import combinations
 
 # Import sklearn models and utility functions
 from sklearn.model_selection import train_test_split
@@ -43,8 +47,8 @@ def run_tests():
     # test_phase_variance()
     
     f = Filter()
-    f.run_asterism_comparison()
-    # f.filter_asterisms()
+    # f.run_asterism_comparison()
+    f.filter_asterisms()
     # load_angle_data_test()
 
     plt.show()
@@ -75,7 +79,7 @@ class Filter():
     """
     def __init__(self):
         # Size of test set
-        self.n_asterisms = 10000
+        self.n_asterisms = 8
         self.n_atm = 100
 
         # Ratio of different asterism types. These should sum to between 0.0 and 1.0 (the difference betwen 1.0 and the sum is the number of real asterisms to use)
@@ -99,12 +103,12 @@ class Filter():
         self.lsq = LeastSquares(self.Z, self.D, self.N, self.alts, self.ap_pix, r0=self.r0)
 
         # Different data points to compute while running each asterism
-        self.tomo_methods = ['glao', 'tiptilt', 'ao', 'lsq', 'ol', 'ideal']
+        self.tomo_methods = ['glao', 'tiptilt', 'ao', 'lsq', 'lsq_p', 'ol', 'ideal']
         self.metrics = ['coeff_rmse', 'recon_rmse', 'strehl']
-        self.statistics = ['mean', 'std', 'min', 'lq', 'med', 'uq', 'max', 'raw']
+        self.statistics = ['mean', 'std', 'min', 'lq', 'med', 'uq', 'max', 'coeffs']
 
         # When running a filter, use the following:
-        self.filter_method =    'ao'           # Tomography method to use for filtering
+        self.filter_method =    'glao'          # Tomography method to use for filtering
         self.filter_metric =    'recon_rmse'    # Metric to use for filtering
         self.filter_statistic = 'mean'          # Statistic to use for filtering
         self.filter_k =         0.62             # Ratio of open loop (OL) that consitutes "good" for classification
@@ -115,99 +119,137 @@ class Filter():
         self.train_test_ratio = 0.2
         self.svm_kernels = ['linear', 'poly', 'rbf', 'sigmoid']
 
+        self.star_label = 'abcdefghijklmnopqrstuvwxyz'
+
+        max_perturb = 1 # arcseconds
+        n_perturbs = 5 # number of perturbations in each direction
+        x = np.linspace(-max_perturb, max_perturb, n_perturbs)
+        y = np.linspace(-max_perturb, max_perturb, n_perturbs)
+        self.perturbations = np.stack(np.meshgrid(x, y)).T.reshape(-1, 2)
+        self.max_perturbation = np.amax(np.abs(self.perturbations))
+        self.perturbations = [tuple(p) for p in self.perturbations]
+
         return # END Filter.__init__
 
     def worker(self, atm, aq, rq, l):
         try:
             tstart = time.time()
-            id = os.getpid()
+            worker_id = os.getpid()
             l.acquire()
             while not aq.empty():
-                i, asterism = aq.get()
+                i, asterism_group = aq.get()
                 l.release()
+
                 t0 = time.time()
+                star_ids = list(range(len(asterism_group)))
 
-                results = {
-                    t: {m: [] for m in self.metrics} for t in self.tomo_methods
-                }
+                group_data = {}
 
-                stats = {
-                    t: {m: {} for m in self.metrics} for t in self.tomo_methods
-                }
+                for asterism_ids in combinations(star_ids, 3):
+
+                    asterism_id = ''.join([self.star_label[id] for id in asterism_ids])
+                    asterism = [asterism_group[id] for id in asterism_ids]
+
+                    td = time.time()
+
+                    print(f"[{worker_id:5}] Simulating asterism {asterism_id} (asterism group {i+1}/{self.n_asterisms}). Time since start: {td-tstart:.2f}s")
+
+                    results = {
+                        p: {t: {m: [] for m in self.metrics} for t in self.tomo_methods } for p in self.perturbations
+                    }
+
+                    coeff_data = {
+                        p: {} for p in self.perturbations
+                    }
+
+                    stats = {
+                        p: {t: {m: {} for m in self.metrics} for t in self.tomo_methods } for p in self.perturbations
+                    }
+
+
+                    for perturbation in self.perturbations:
+
+                        p_ast = asterisms.perturb_asterism(asterism, perturbation)
                 
-                for screens in atm:
-                    target_coeffs = self.target.cutout_coeffs(self.Z, self.D, self.alts, screens, atm.metapupil_diameters)
-                    target_screen = self.target.total_cutout(self.D, self.alts, screens, atm.metapupil_diameters)
-                    ast_coeffs = get_coeffs_for_asterism(asterism, self.Z, self.D, screens, self.alts, atm.metapupil_diameters)
+                        for screens in atm:
+                            target_coeffs = self.target.cutout_coeffs(self.Z, self.D, self.alts, screens, atm.metapupil_diameters)
+                            target_screen = self.target.total_cutout(self.D, self.alts, screens, atm.metapupil_diameters)
+                            ast_coeffs = get_coeffs_for_asterism(p_ast, self.Z, self.D, screens, self.alts, atm.metapupil_diameters)
+                            coeff_data[perturbation]['target'] = target_coeffs
+                            coeff_data[perturbation]['guidestars'] = ast_coeffs
 
-                    for tomo in self.tomo_methods:
-                        match tomo:
-                            case 'glao':
-                                coeffs = self.glao.run(asterism, self.target, ast_coeffs)
-                            case 'tiptilt':
-                                coeffs = np.zeros_like(target_coeffs)
-                                coeffs[:3] = target_coeffs[:3]
-                            case 'ao':
-                                coeffs = self.ao.run(asterism, self.target, ast_coeffs)
-                            case 'lsq':
-                                coeffs = self.lsq.run(asterism, self.target, ast_coeffs)
-                            case 'ideal':
-                                coeffs = target_coeffs
-                            case _:
-                                coeffs = np.zeros_like(target_coeffs)
+                            for tomo in self.tomo_methods:
+                                match tomo:
+                                    case 'glao':
+                                        coeffs = self.glao.run(p_ast, self.target, ast_coeffs)
+                                    case 'tiptilt':
+                                        coeffs = np.zeros_like(target_coeffs)
+                                        coeffs[:3] = target_coeffs[:3]
+                                    case 'ao':
+                                        coeffs = self.ao.run(p_ast, self.target, ast_coeffs)
+                                    case 'lsq':
+                                        coeffs = self.lsq.run(p_ast, self.target, ast_coeffs)
+                                    case 'lsq_p': # Use baseline projection matrices, but measurements from perturbation
+                                        coeffs = self.lsq.run(asterism, self.target, ast_coeffs)
+                                    case 'ideal':
+                                        coeffs = target_coeffs
+                                    case _:
+                                        coeffs = np.zeros_like(target_coeffs)
 
-                        for metric in self.metrics:
-                            match metric:
-                                case 'recon_rmse':
-                                    recon = self.Z.compose(target_screen.shape, coeffs)
-                                    result = util.rmse(recon, target_screen, mask=self.mask)
-                                case 'coeff_rmse':
-                                    result = util.rmse(coeffs, target_coeffs)
-                                case 'strehl':
-                                    recon = self.Z.compose(target_screen.shape, coeffs)
-                                    # fig, axs = plt.subplots(1, 3)
-                                    # fig.suptitle(tomo)
-                                    r = recon - target_screen
-                                    # axs[0].imshow(recon)
-                                    # axs[1].imshow(target_screen)
-                                    # axs[2].imshow(r)
-                                    var = np.var(r, where=self.mask > 0)
-                                    print(f"{tomo}\ntarget r0: {phase_screen.calculate_r0(target_screen, self.D)}\nrecon r0: {phase_screen.calculate_r0(recon, self.D)}\ndiff r0: {phase_screen.calculate_r0(r, self.D)}\nVariance: {var}\nStrehl: {np.exp(-var)}")
-                                    result = np.exp(-var)
-                                    # plt.show()
-                                case _:
-                                    result = np.nan
-                            results[tomo][metric].append(result)
+                                for metric in self.metrics:
+                                    match metric:
+                                        case 'recon_rmse':
+                                            recon = self.Z.compose(target_screen.shape, coeffs)
+                                            result = util.rmse(recon, target_screen, mask=self.mask)
+                                        case 'coeff_rmse':
+                                            result = util.rmse(coeffs, target_coeffs)
+                                        case 'strehl':
+                                            recon = self.Z.compose(target_screen.shape, coeffs)
+                                            # fig, axs = plt.subplots(1, 3)
+                                            # fig.suptitle(tomo)
+                                            r = recon - target_screen
+                                            # axs[0].imshow(recon)
+                                            # axs[1].imshow(target_screen)
+                                            # axs[2].imshow(r)
+                                            var = np.var(r, where=self.mask > 0)
+                                            # print(f"{tomo}\ntarget r0: {phase_screen.calculate_r0(target_screen, self.D)}\nrecon r0: {phase_screen.calculate_r0(recon, self.D)}\ndiff r0: {phase_screen.calculate_r0(r, self.D)}\nVariance: {var}\nStrehl: {np.exp(-var)}")
+                                            result = np.exp(-var)
+                                            # plt.show()
+                                        case _:
+                                            result = np.nan
+                                    results[perturbation][tomo][metric].append(result)
 
-                for tomo in self.tomo_methods:
-                    for metric in self.metrics:
-                        for statistic in self.statistics:
-                            match statistic:
-                                case 'std':
-                                    r = np.std(results[tomo][metric])
-                                case 'mean':
-                                    r = np.mean(results[tomo][metric])
-                                case 'min':
-                                    r = np.amin(results[tomo][metric])
-                                case 'lq':
-                                    r = np.percentile(results[tomo][metric], 25)
-                                case 'med':
-                                    r = np.median(results[tomo][metric])
-                                case 'uq':
-                                    r = np.percentile(results[tomo][metric], 75)
-                                case 'max':
-                                    r = np.amax(results[tomo][metric])
-                                case 'raw':
-                                    r = results[tomo][metric]
+                        for tomo in self.tomo_methods:
+                            for metric in self.metrics:
+                                for statistic in self.statistics:
+                                    match statistic:
+                                        case 'std':
+                                            r = np.std(results[perturbation][tomo][metric])
+                                        case 'mean':
+                                            r = np.mean(results[perturbation][tomo][metric])
+                                        case 'min':
+                                            r = np.amin(results[perturbation][tomo][metric])
+                                        case 'lq':
+                                            r = np.percentile(results[perturbation][tomo][metric], 25)
+                                        case 'med':
+                                            r = np.median(results[perturbation][tomo][metric])
+                                        case 'uq':
+                                            r = np.percentile(results[perturbation][tomo][metric], 75)
+                                        case 'max':
+                                            r = np.amax(results[perturbation][tomo][metric])
+                                        case 'raw':
+                                            r = results[perturbation][tomo][metric]
 
-                            stats[tomo][metric][statistic] = r
-                
-                rq.put((i, stats))
+                                    stats[perturbation][tomo][metric][statistic] = r
+                    
+                    group_data[asterism_id] = (stats, coeff_data)
+
+                rq.put((i, group_data))
 
                 t1 = time.time()
                 dt = t1 - t0
                 dt_total = t1 - tstart 
-                print(f"[{id:5}] Simulated asterism {i+1}/{self.n_asterisms}. Took {dt:5.2f}s. Total time since start: {dt_total:.2f}s")
+                print(f"[{worker_id:5}] Simulated asterism {i+1}/{self.n_asterisms}. Took {dt:5.2f}s. Total time since start: {dt_total:.2f}s")
                 l.acquire()
             l.release()
         except Exception as e:
@@ -224,13 +266,11 @@ class Filter():
 
         Run a set of asterisms on a set of static phase screens.
         """
-        all_asterisms = asterisms.get_test_asterisms(self.n_asterisms, 
-                                                     fixed_rate=self.fixed_rate,
-                                                     uniform_rate=self.uniform_rate, 
-                                                     offset_rate=self.offset_rate)
+        all_asterisms = asterisms.get_test_asterisms_a_choose_b(self.n_asterisms)
 
         print(f"Generating {self.n_atm} simulated atmospheres")
-        atm = phase_screen.Atmosphere(self.n_atm, self.alts, r0=self.r0, D=self.D, aperture_size=self.ap_pix)
+        limit = asterisms.LIMITING_ANGLE + self.max_perturbation     # Increase limiting angle for atmosphere generation to account for asterism perturbations.
+        atm = phase_screen.Atmosphere(self.n_atm, self.alts, r0=self.r0, D=self.D, aperture_size=self.ap_pix, limiting_angle=limit)
         print(f"Completed simulating {self.n_atm} atmospheres")
 
         manager = Manager()
@@ -238,8 +278,8 @@ class Filter():
         result_queue = manager.Queue()
         lock = manager.Lock()
 
-        for i, asterism in tqdm(enumerate(all_asterisms)):
-            asterism_queue.put((i, asterism))
+        for i, asterism_group in tqdm(enumerate(all_asterisms)):
+            asterism_queue.put((i, asterism_group))
 
         n_processes = 8
         print("Run multi-processing for asterism quality filtering")
@@ -254,24 +294,31 @@ class Filter():
         results = []
 
         while not result_queue.empty():
-            j, stats = result_queue.get()
+            j, group_data = result_queue.get()
 
             if j % 100 == 0:
                 print(f"Loading results for asterism {j+1}/{self.n_asterisms}")
             asterism = all_asterisms[j]
 
-            r_dict = {
-                'asterism_id':  j,
-                'gs_1':         asterism[0].to_simple_str(),
-                'gs_2':         asterism[1].to_simple_str(),
-                'gs_3':         asterism[2].to_simple_str()
-            }
-            for s in self.statistics:
-                for t in self.tomo_methods:
-                    for m in self.metrics:
-                        r_dict[f'{t}_{m}_{s}'] = stats[t][m][s]
+            for ast_id in group_data.keys():
+                for p in self.perturbations:
+                    r_dict = {
+                        'group_id':  j
+                    }
+                    for i in range(len(asterism)):
+                        r_dict[f'gs_{self.star_label[i]}'] = asterism[i].to_simple_str()
 
-            results.append(r_dict)
+                    r_dict['asterism_id'] = ast_id
+                    r_dict['perturbation'] = p
+
+                    for s in self.statistics:
+                        for t in self.tomo_methods:
+                            for m in self.metrics:
+                                r_dict[f'{t}_{m}_{s}'] = group_data[ast_id][0][p][t][m][s]
+                    r_dict['target_coeffs'] = repr(group_data[ast_id][1][p]['target'])
+                    r_dict['asterism_coeffs'] = repr(group_data[ast_id][1][p]['guidestars'])
+
+                    results.append(r_dict)
 
         df = pd.DataFrame(results)
         df.to_csv('data/satellites/asterism_quality_data.csv')
@@ -319,69 +366,74 @@ class Filter():
         frac =        self.filter_fraction
 
         # Build dataframe from asterism quality data
-        df = pd.read_csv('data/satellites/asterism_quality_data.csv', index_col="asterism_id")
+        df = pd.read_csv('data/satellites/asterism_quality_data.csv') #, index_col="group_id")
+        
 
+        # df_no_perturb = df[df['perturbation'] == "(0.0, 0.0)"]
+        # print(df_no_perturb)
+        # print(df_no_perturb.shape)
         # Load baseline asterism data from initial dataframe
         # Angles and distances from the target
 
-        asterism_list = [[beacon.Beacon.from_simple_str(df.loc[idx, f'gs_{i+1}']) for i in range(3)] for idx in range(df.shape[0])]
-        distance_0 = [a[0]._gamma_arcsec for a in asterism_list]
-        distance_1 = [a[1]._gamma_arcsec for a in asterism_list]
-        distance_2 = [a[2]._gamma_arcsec for a in asterism_list]
-
-        angle_0 = [a[0].theta for a in asterism_list]
-        angle_1 = [a[1].theta for a in asterism_list]
-        angle_2 = [a[2].theta for a in asterism_list]
-
-        # Draw the data for performance from the dataframe
-        performance = df[f'{tomo_method}_{metric}_{statistic}']
+        asterism_list = []
+        for idx in df['group_id'].unique():
+            for id in df['asterism_id'].unique():
+                # id = ''.join([self.star_label[i] for i in comb])
+                # print(idx, id)
+                asterism_list.append((idx, id, [beacon.Beacon.from_simple_str(df.loc[(df['group_id'] == idx) & (df['asterism_id'] == id), f'gs_{a}'].iloc[0]) for a in id]))
 
         # Build dataframe of features based on asterism geometry
         df0 = pd.DataFrame()
 
-        df0['performance'] = performance
-        df0['class'] = self.classification_function(performance, df)
+        df0['group_id'] = [group_id for group_id, _, _ in asterism_list]
+        df0['asterism_id'] = [ast_id for _, ast_id, _ in asterism_list]
+        df0['performance'] = [df.loc[(df['group_id'] == group_id)
+                                      & (df['asterism_id'] == ast_id)
+                                      & (df['perturbation'] == "(0.0, 0.0)"),
+                                      f'{tomo_method}_{metric}_{statistic}'] for group_id, ast_id, _ in asterism_list]
 
-        df0['distance_0'] = norm(distance_0)
-        df0['distance_1'] = norm(distance_1)
-        df0['distance_2'] = norm(distance_2)
-        df0['angle_0'] =    norm(angle_0)
-        df0['angle_1'] =    norm(angle_1)
-        df0['angle_2'] =    norm(angle_2)
+        df0['distance_0'] = norm([a[0]._gamma_arcsec for _, _, a in asterism_list])
+        df0['distance_1'] = norm([a[1]._gamma_arcsec for _, _, a in asterism_list])
+        df0['distance_2'] = norm([a[2]._gamma_arcsec for _, _, a in asterism_list])
+        df0['angle_0'] =    norm([a[0].theta for _, _, a in asterism_list])
+        df0['angle_1'] =    norm([a[1].theta for _, _, a in asterism_list])
+        df0['angle_2'] =    norm([a[2].theta for _, _, a in asterism_list])
 
-        df0['ave_distance'] =          norm([asterisms.ave_distance(a) for a in asterism_list])
-        df0['centroid_distance'] =     norm([asterisms.centroid_distance(a) for a in asterism_list])
-        df0['circumcentre_distance'] = norm([asterisms.circumcentre_distance(a) for a in asterism_list])
-        df0['circumcircle_radius'] =   norm([asterisms.circumcircle_radius(a) for a in asterism_list])
-        df0['length_ratio'] =          norm([asterisms.length_ratio(a) for a in asterism_list])
+        df0['ave_distance'] =          norm([asterisms.ave_distance(a) for _, _, a in asterism_list])
+        df0['min_distance'] =          norm([asterisms.min_distance(a) for _, _, a in asterism_list])
+        df0['max_distance'] =          norm([asterisms.max_distance(a) for _, _, a in asterism_list])
+        df0['area'] =                  norm([asterisms.area(a) for _, _, a in asterism_list])
+        df0['centroid_distance'] =     norm([asterisms.centroid_distance(a) for _, _, a in asterism_list])
+        df0['circumcentre_distance'] = norm([asterisms.circumcentre_distance(a) for _, _, a in asterism_list])
+        df0['circumcircle_radius'] =   norm([asterisms.circumcircle_radius(a) for _, _, a in asterism_list])
+        df0['edge_length_ratio'] =     norm([asterisms.length_ratio(a) for _, _, a in asterism_list])
+        df0['ave_edge_length'] =       norm([asterisms.average_side_length(a) for _, _, a in asterism_list])
+        df0['min_edge_length'] =       norm([asterisms.minimum_side_length(a) for _, _, a in asterism_list])
+        df0['max_edge_length'] =       norm([asterisms.maximum_side_length(a) for _, _, a in asterism_list])
+        df0['incentre_distance'] =     norm([asterisms.incentre_distance(a) for _, _, a in asterism_list])
+        df0['incircle_radius'] =       norm([asterisms.incircle_radius(a) for _, _, a in asterism_list])
+        df0['perimeter_area_ratio'] =  norm([asterisms.perimeter_area_ratio(a) for _, _, a in asterism_list])
+        df0['edge_length_extreme_stars'] = norm([asterisms.closest_furthest_side_length(a) for _, _, a in asterism_list])
+        df0['distance_to_closest_edge'] =  norm([asterisms.distance_to_closest_line(a) for _, _, a in asterism_list])
+        df0['perimeter'] =          norm([asterisms.perimeter(a) for _, _, a in asterism_list])
+        df0['min_interior_angle'] = norm([asterisms.min_angle(a) for _, _, a in asterism_list])
+        df0['max_interior_angle'] = norm([asterisms.max_angle(a) for _, _, a in asterism_list])
+        df0['gaussian_area'] =      norm([asterisms.gaussian_area_within_triangle(a) for _, _, a in asterism_list])
+        df0['aperture_overlap'] =   norm([asterisms.overlap(a, [1000, 5000, 10000]) for _, _, a in asterism_list])
+        df0['target_in_triangle'] = norm([np.array(asterisms.is_target_in_triangle(a), dtype=np.float32) for _, _, a in asterism_list])
 
-        df0['overlap'] =                      norm([asterisms.overlap(a, [1000, 5000, 10000]) for a in asterism_list])
-        df0['closest_furthest_side_length'] = norm([asterisms.closest_furthest_side_length(a) for a in asterism_list])
-        df0['ave_side_length'] =              norm([asterisms.average_side_length(a) for a in asterism_list])
-        df0['min_side_length'] =              norm([asterisms.minimum_side_length(a) for a in asterism_list])
-        df0['max_side_length'] =              norm([asterisms.maximum_side_length(a) for a in asterism_list])
-
-        df0['distance_to_closest_line'] = norm([asterisms.distance_to_closest_line(a) for a in asterism_list])
-        df0['incentre_distance'] =        norm([asterisms.incentre_distance(a) for a in asterism_list])
-        df0['incircle_radius'] =          norm([asterisms.incircle_radius(a) for a in asterism_list])
-        df0['perimeter_area_ratio'] =     norm([asterisms.perimeter_area_ratio(a) for a in asterism_list])
-        df0['area'] =                     norm([asterisms.area(a) for a in asterism_list])
-
-        df0['perimeter'] =     norm([asterisms.perimeter(a) for a in asterism_list])
-        df0['in_triangle'] =   norm(np.array([asterisms.is_target_in_triangle(a) for a in asterism_list], dtype=np.float32))
-        df0['min_angle'] =     norm([asterisms.min_angle(a) for a in asterism_list])
-        df0['max_angle'] =     norm([asterisms.max_angle(a) for a in asterism_list])
-        df0['gaussian_area'] = norm([asterisms.gaussian_area_within_triangle(a) for a in asterism_list])
-
-        if frac < 1.0 and frac > 0.0:
-            df0 = df0.sample(frac=frac)
+        # if frac < 1.0 and frac > 0.0:
+        #     df0 = df0.sample(frac=frac)
 
 
         named_columns = [c for c in df0.columns if not c.startswith("Unnamed")]
-        self.n_features = len(named_columns) - 2
+        self.n_features = len(named_columns) - 3
         print(f"Number of features: {self.n_features}")
 
-        self.plot_features(df0)
+        # self.plot_features(df0)
+        # self.comparison(df0)
+
+        self.perturbation_analysis(df)
 
         # self.dimensionality_reduction(df0)
         # self.dimensionality_reduction_ML(df0)
@@ -393,6 +445,219 @@ class Filter():
 
         return # END Filter.filter_asterisms
     
+    def perturbation_analysis(self, df):
+        tomo_methods = ['glao', 'lsq', 'lsq_p']
+        metrics = ['coeff_rmse', 'recon_rmse']
+        statistics = ['mean']
+
+        plots = [(method, metric, stat) for method in tomo_methods for metric in metrics for stat in statistics]
+
+        # errors = {}
+
+        for method, metric, statistic in plots:
+            print(f'Perturbation of {method}_{metric}_{statistic}')
+            # errors[f'{method}_{metric}_{statistic}'] = {}
+            baseline = df[df['perturbation'] == "(0.0, 0.0)"][['group_id', 'asterism_id', f'{method}_{metric}_{statistic}']]
+            baseline = baseline.rename(columns={f'{method}_{metric}_{statistic}': f'{method}_{metric}_{statistic}_baseline'})
+
+            df = df.merge(baseline, on=['group_id', 'asterism_id'], how='left')
+            df[f'{method}_{metric}_{statistic}_diff'] = df[f'{method}_{metric}_{statistic}'] - df[f'{method}_{metric}_{statistic}_baseline']
+
+            # for perturbation in df['perturbation'].unique():
+            #     if perturbation != "(0.0, 0.0)":
+            #         errors[f'{method}_{metric}_{statistic}'][perturbation] = []
+            #         for group_id in df['group_id'].unique():
+            #             for asterism_id in df['asterism_id'].unique():
+            #                 perf0 = df.loc[(df['group_id'] == group_id) & (df['asterism_id'] == asterism_id) & (df['perturbation'] == "(0.0, 0.0)")]
+            #                 perf = df.loc[(df['group_id'] == group_id) & (df['asterism_id'] == asterism_id) & (df['perturbation'] == perturbation)]
+            #                 error = perf0[f"{method}_{metric}_{statistic}"].iloc[0] - perf[f"{method}_{metric}_{statistic}"].iloc[0]
+            #                 errors[f'{method}_{metric}_{statistic}'][perturbation].append(error)
+
+        for method, metric, statistic in plots:  
+            fig, axs = plt.subplots(5, 5)
+            fig.suptitle(f'Perturbation of {method}_{metric}_{statistic}')
+            
+            # Column labels
+            for j, label in enumerate(['-1.0"', '-0.5"', '0.0"', '0.5"', '1.0"']):
+                fig.text(0.19 + j * 0.16, 0.92, label, ha='center', va='center', fontsize=12)
+
+            # Row labels
+            for i, label in enumerate(['1.0"', '0.5"', '0.0"', '-0.5"', '-1.0"']):
+                fig.text(0.08, 0.83 - i * 0.16, label, ha='center', va='center', rotation='vertical', fontsize=12)
+
+            for perturbation in df['perturbation'].unique():
+                if perturbation != "(0.0, 0.0)":
+                    pert = eval(perturbation)
+
+                    errors = df[df['perturbation'] == perturbation][f"{method}_{metric}_{statistic}_diff"].tolist()
+
+                    c = int(pert[0] * 2. + 2.)
+                    r = int(2. - pert[1] * 2.)
+                    axs[r, c].hist(errors, bins=30, color='b')
+                    # axs[r, c].set_xlabel('ΔRMSE (rads)')
+                else:
+                    values = df[df['perturbation'] == perturbation][f"{method}_{metric}_{statistic}"].tolist()
+                    axs[2, 2].hist(values, bins=30, color='r')
+                    # axs[2, 2].set_xlabel('RMSE (rads)')
+                
+            for i in range(5):
+                axs[4, i].set_xlabel('RMSE (rads)')
+                axs[i, 0].set_ylabel('Count')
+                
+            # fig.tight_layout()
+        
+        fig, axs = plt.subplots(5, 5)
+        fig.suptitle("Perturbation measurement error")
+
+        # Column labels
+        for j, label in enumerate(['-1.0"', '-0.5"', '0.0"', '0.5"', '1.0"']):
+            fig.text(0.19 + j * 0.16, 0.92, label, ha='center', va='center', fontsize=12)
+
+        # Row labels
+        for i, label in enumerate(['1.0"', '0.5"', '0.0"', '-0.5"', '-1.0"']):
+            fig.text(0.08, 0.83 - i * 0.16, label, ha='center', va='center', rotation='vertical', fontsize=12)
+
+        def to_arr(s):
+            array = np.array
+            float32 = np.float32
+            return eval(s)
+
+            # import re
+            # s=re.sub('\[ +', '[', s.strip())
+            # # Replace commas and spaces
+            # s=re.sub('[,\s]+', ', ', s)
+            # return np.array(ast.literal_eval(s))
+
+        baseline_coeffs = df[df['perturbation'] == "(0.0, 0.0)"]["asterism_coeffs"].tolist()
+        baseline_coeffs = np.array([to_arr(b) for b in baseline_coeffs])
+        baseline_coeffs = baseline_coeffs.reshape(baseline_coeffs.shape[0], -1)
+
+        for perturbation in df['perturbation'].unique():
+            if perturbation != "(0.0, 0.0)":
+                pert = eval(perturbation)
+
+                coeffs = df[df['perturbation'] == perturbation]["asterism_coeffs"].tolist()
+                coeffs = np.array([to_arr(b) for b in coeffs])
+                coeffs = coeffs.reshape(coeffs.shape[0], -1)
+
+                errors = [util.rmse(a, b) for a, b in zip(coeffs, baseline_coeffs)]
+
+                c = int(pert[0] * 2. + 2.)
+                r = int(2. - pert[1] * 2.)
+                axs[r, c].hist(errors, bins=30, color='b')
+            else:
+                coeffs = df[df['perturbation'] == perturbation]["asterism_coeffs"].tolist()
+                coeffs = np.array([to_arr(b) for b in coeffs])
+                print(coeffs.shape)
+                axs[2, 2].hist(np.sqrt(np.mean(coeffs*coeffs, axis=(1, 2))), bins=30, color='r')
+
+        for i in range(5):
+            axs[4, i].set_xlabel('ΔRMSE (rads)')
+            axs[i, 0].set_ylabel('Count')
+
+    
+    def comparison(self, df):
+        features = df.drop(columns=['performance', 'asterism_id', 'group_id'])
+        feature_list = features.columns
+        group_ids = df['group_id'].unique().tolist()
+        asterism_ids = df['asterism_id'].unique().tolist()
+
+        group_asterism_ids = [(gid, aid) for gid in group_ids for aid in asterism_ids]
+
+        total = math.comb(len(group_asterism_ids), 2)
+
+        pairs = combinations(group_asterism_ids, 2)
+        asterism_pairs = combinations(asterism_ids, 2)
+
+        data = {}
+        for feature in feature_list:
+            data[feature] = { 'greater': 0, 'less than': 0, 'equal': 0, 'equal performance': 0 }
+
+        total /= 100
+        eps = 1e-3
+
+        rng = np.random.default_rng()
+        pairs = rng.choice(pairs, total)
+
+        print(len(group_asterism_ids), total)
+
+        for ga0, ga1 in tqdm(pairs, total=total):
+            g0, a0 = ga0
+            g1, a1 = ga1
+
+            p0 = df.loc[(df['group_id'] == g0) & (df['asterism_id'] == a0), 'performance'].values[0]
+            p1 = df.loc[(df['group_id'] == g1) & (df['asterism_id'] == a1), 'performance'].values[0]
+            for feature in feature_list:
+                v0 = df.loc[(df['group_id'] == g0) & (df['asterism_id'] == a0), feature].values[0]
+                v1 = df.loc[(df['group_id'] == g1) & (df['asterism_id'] == a1), feature].values[0]
+
+                if v1 == v0:
+                    data[feature]['equal'] += 1
+                elif p1 < (p0 + eps) and p1 > (p0 - eps):
+                    data[feature]['equal performance'] += 1
+                elif p0 < p1:
+                    data[feature]['greater'] += int(v0 > v1)
+                    data[feature]['less than'] += int(v0 < v1)
+                elif p0 > p1: # p0 performed worse
+                    data[feature]['greater'] += int(v1 > v0)
+                    data[feature]['less than'] += int(v1 < v0)
+            
+            # total += 1
+            
+
+        # for group_id in group_ids:
+        #     for a0, a1 in asterism_pairs:
+        #         p0 = df.loc[(df['group_id'] == group_id) & (df['asterism_id'] == a0), 'performance'].values[0]
+                
+        #         p1 = df.loc[(df['group_id'] == group_id) & (df['asterism_id'] == a1), 'performance'].values[0]
+        #         for feature in feature_list:
+        #             v0 = df.loc[(df['group_id'] == group_id) & (df['asterism_id'] == a0), feature].values[0]
+        #             v1 = df.loc[(df['group_id'] == group_id) & (df['asterism_id'] == a1), feature].values[0]
+                    
+
+        #             if v1 == v0:
+        #                 data[feature]['equal'] += 1
+        #             elif p1 < (p0 + eps) and p1 > (p0 - eps):
+        #                 data[feature]['equal performance'] += 1
+        #             elif p0 < p1:
+        #                 data[feature]['greater'] += int(v0 > v1)
+        #                 data[feature]['less than'] += int(v0 < v1)
+        #             elif p0 > p1: # p0 performed worse
+        #                 data[feature]['greater'] += int(v1 > v0)
+        #                 data[feature]['less than'] += int(v1 < v0)
+
+        #         total += 1
+
+        # X locations for the groups
+        x = np.arange(len(feature_list))  # [0, 1, 2]
+        width = 0.7 / 4  # width of each bar
+
+        gt = [data[f]['greater'] for f in feature_list]
+        lt = [data[f]['less than'] for f in feature_list]
+        eq = [data[f]['equal'] for f in feature_list]
+        ep = [data[f]['equal performance'] for f in feature_list]
+
+        lt = np.array(lt) / total
+        gt = np.array(gt) / total
+        eq = np.array(eq) / total
+        ep = np.array(ep) / total
+
+        # Plot grouped bars
+        plt.plot([-width, max(x)+width], [0.5, 0.5], 'k:', alpha=0.2)
+        plt.bar(x - 3*width/2, gt, width, label='Better performance when larger')
+        plt.bar(x - width/2, lt, width, label='Better performance when smaller')
+        plt.bar(x + width/2, eq, width, label='Values equal')
+        plt.bar(x + 3*width/2, ep, width, label='Performance equal')
+
+        # Add labels, title, ticks, and legend
+        plt.xlabel('Feature')
+        plt.ylabel('Value')
+        plt.title('Relative Performance')
+        plt.xticks(x, feature_list, rotation=90)
+        plt.legend()
+        plt.tight_layout()
+
+    
     def plot_features(self, df):
         rows = 2
         cols = 3
@@ -401,7 +666,7 @@ class Filter():
         fig, axs = plt.subplots(rows, cols)
         fig.suptitle(f"Features {figi+1}")
 
-        X = df.drop(columns=['performance', 'class'])
+        X = df.drop(columns=['performance', 'asterism_id', 'group_id'])
         y = df['performance']
 
         for i, col in enumerate(X.columns):
@@ -412,13 +677,13 @@ class Filter():
                 figi += 1
             r = (i - (figi * rows * cols)) // cols
             c = (i - (figi * rows * cols)) % cols
-            axs[r, c].scatter(df[col], y)
+            axs[r, c].scatter(df[col].to_list(), y)
             axs[r, c].set_title(col)
         
         fig.tight_layout()
 
     def dimensionality_reduction(self, df):
-        X = df.drop(columns=['performance', 'class'])
+        X = df.drop(columns=['performance', 'asterism_id', 'group_id'])
         y = df['performance']
 
         print("Calculating 2D UMAP")
@@ -514,7 +779,7 @@ class Filter():
         # END Filter.classification_data
 
     def split_data(self, df, classification=None):
-        X = df.drop(columns=['performance', 'class'])
+        X = df.drop(columns=['performance', 'asterism_id', 'group_id'])
 
         if classification:
             y = df['class']
