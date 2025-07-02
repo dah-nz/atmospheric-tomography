@@ -418,34 +418,60 @@ def distance_to_closest_line(asterism):
 
     return rad2arcsec(min(d01, d02, d12))
 
+
+def polar_to_cartesian(r, theta):
+    return np.array([r * np.cos(theta), r * np.sin(theta)])
+
+    return -d if inside else d
+
 def is_target_in_triangle(asterism):
     """
-    Returns True if the target is inside the asterism triangle (including edges)
+    Returns the SDF value for the target inside the triangle.
     """
+
+    def point_in_triangle(P, A, B, C):
+        v0 = C - A
+        v1 = B - A
+        v2 = P - A
+
+        dot00 = np.dot(v0, v0)
+        dot01 = np.dot(v0, v1)
+        dot02 = np.dot(v0, v2)
+        dot11 = np.dot(v1, v1)
+        dot12 = np.dot(v1, v2)
+
+        denom = dot00 * dot11 - dot01 * dot01
+        if denom == 0:
+            return False  # Degenerate triangle
+
+        u = (dot11 * dot02 - dot01 * dot12) / denom
+        v = (dot00 * dot12 - dot01 * dot02) / denom
+
+        return (u >= 0) and (v >= 0) and (u + v <= 1)
+
+    def point_segment_distance(P, A, B):
+        AB = B - A
+        t = np.dot(P - A, AB) / np.dot(AB, AB)
+        t = np.clip(t, 0, 1)
+        closest = A + t * AB
+        return np.linalg.norm(P - closest)
+
+    def signed_distance_triangle(P, A, B, C):
+
+        inside = point_in_triangle(P, A, B, C)
+
+        d1 = point_segment_distance(P, A, B)
+        d2 = point_segment_distance(P, B, C)
+        d3 = point_segment_distance(P, C, A)
+
+        d = min(d1, d2, d3)
+        return d if inside else -d
     p1 = asterism[0].position_arcsec()
     p2 = asterism[1].position_arcsec()
     p3 = asterism[2].position_arcsec()
 
-    result = point_in_triangle(p1, p2, p3, (0, 0))
-    return result
+    return signed_distance_triangle((0.0, 0.0), p1, p2, p3)
 
-    # # det1R = x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1)
-    # # target location
-    # x = 0
-    # y = 0
-
-    # a = ((y2 - y3)*(x - x3) + (x3 - x2)*(y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
-    # b = ((y3 - y1)*(x - x3) + (x1 - x3)*(y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
-    # c = 1 - a - b
-
-    # # b = np.array([1, x, y]).T
-    # # A = np.array([[x1*y2-x2*y1, y1-y2, x2-x1],
-    # #               [x2*y0-x0*y2, y2-y0, x0-x2],
-    # #               [x0*y1-x1*y0, y0-y1, x1-x0]])
-    
-    # # l = (1/det1R) * np.matmul(A, b)
-
-    # return a >= 0 and b >= 0 and c >= 0 and a <= 1 and b <= 1 and c <= 1 #np.all(l >= 0).astype(int)
 
 def gaussian_area_within_triangle(asterism):
     import matplotlib.pyplot as plt

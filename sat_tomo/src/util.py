@@ -54,7 +54,8 @@ def circle(dimension, radius=None, location=(0,0)):
     --------
     mask with given parameters
     """
-    return generateZernike(dimension, dimension, 1)
+    if radius is None and location == (0, 0):
+        return generateZernike(dimension, dimension, 1)
 
     if radius is None:
         radius = dimension / 2

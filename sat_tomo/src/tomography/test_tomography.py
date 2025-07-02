@@ -4,10 +4,14 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 import seaborn as sns
 from functools import lru_cache
+import pandas as pd
+import time
+import pickle
 
 from tomography import tomography as tomo
-from tomography import beacon, phase_screen, projection, wavefront, asterisms
+from tomography import beacon, phase_screen, projection, wavefront, asterisms, strehl
 from basis import zernike
+from astronomy.asterisms import load_data, sample
 
 from tqdm import tqdm
 
@@ -18,9 +22,11 @@ import util
 def run_tests():
     # test_layer_shapes()
 
+    # test_strehl()
     # test_beacons()
     # test_atmospheres()
-    test_leastsquares()
+    # test_leastsquares()
+    display_leastsquares_results()
     # test_asterisms()
     # projection.test_projection()
 
@@ -83,285 +89,304 @@ def test_atmospheres():
             print(f"Layer {i} r0: {calculated_r0:.4f}m, intended r0: {atms.layer_r0[i]:.4f}m [var: {var:.4f}]")
 
 def test_leastsquares():
-    # rng = np.random.default_rng(seed=1)
     rng = np.random.default_rng()
 
-    alts = [1000, 5000, 10000] #[1000, 5000, 10000]
-    r0_total = 0.07
+    alts = [1000, 5000, 10000]
+    r0_total = 0.25
 
     D = 1.8
     N = 21
     N_TESTS = 10
     N_GS = 3
 
-    test_variable = True # Test variable or fixed asterisms
-
-    ap = 100
-    angles = np.linspace(1, 121, 31) - 1
-    # angles = [30]
-    # angles = [5, 15, 30, 45, 60]
+    ap_sizes = [64, 128, 256]
+    angles = np.linspace(1, 121, 7) - 1
+    # angles = [1, 5, 15, 30, 50, 75]
     nagle = 30 # asterism angle
 
-    wfs = wavefront.SHWFS(D, N, noise=False)
+    # wfs = wavefront.SHWFS(D, N, noise=False)
+    wfs = None
 
     bss = zernike.Zernike(N)
-    data = {
-        "test_id": [],
-        "mse": [],
-        "type": [],
-        "theta": [],
-        "gamma": [],
-        "guidestar": [],
-        "mode": [],
-        "mode_coeff": []
-    }
 
-    glao = tomo.GLAO(bss, D, N, alts, ap)
-    ao = tomo.AO(bss, D, N, alts, ap)
+    _perturb_str = " (Perturbed)"
 
-    print(f"Building atmospheres for {N_TESTS} tests")
-    atms = phase_screen.Atmosphere(N_TESTS, alts, r0_total, D, ap, rng=rng)
+    tgt_fit = "Fitting"
+    tgt_ol = "Open Loop"
+    tgt_glao = "GLAO"
+    tgt_ao = "Adaptive Optics"
+    tgt_p_glao = tgt_glao + _perturb_str
+    tgt_p_ao = tgt_ao + _perturb_str
+
+    max_perturb = 0.5 # arcseconds
+    n_perturbs = 3 # number of perturbations in each direction
+    x = np.linspace(-max_perturb, max_perturb, n_perturbs)
+    y = np.linspace(-max_perturb, max_perturb, n_perturbs)
+    perturbations = np.stack(np.meshgrid(x, y)).T.reshape(-1, 2)
+    perturbations = [tuple(p) for p in perturbations]
+
+    ap_data = []
+    sv_data = []
+
+    for ap in ap_sizes:
+        glao = tomo.GLAO(bss, D, N, alts, ap)
+        ao = tomo.AO(bss, D, N, alts, ap)
+
+        print(f"Building atmospheres for {N_TESTS} tests, with aperture size: {ap}")
+        atms = phase_screen.Atmosphere(N_TESTS, alts, r0_total, D, ap, rng=rng)
     
-    tests = {
-        # "LSQ [TA⁺]":         tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Ainv",  proj_grid=True, display=False),
-        # "LSQ [TA⁺] Pix":     tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Ainv",  proj_grid=False, display=False),
-        # "LSQ [(AT⁺)⁺]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=True, display=False),
-        "LSQ [(AT⁺)⁺] Pix":  tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=False, display=False),
-        # "LSQ [(AᵀA+εK)⁺Aᵀ]": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=True),
-        "LSQ [(AᵀA+εK)⁺Aᵀ] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=False),
-        # "LSQ [(TᵀT+εK)⁺Tᵀ] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K2",     proj_grid=False),
-        # "LSQ [f(A,T)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAT", proj_grid=True),
-        # "LSQ [f(A,T)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAT", proj_grid=False),
-        # "LSQ [f(A,K)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAK", proj_grid=True),
-        # "LSQ [f(A,K)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAK", proj_grid=False),
-        # "LSQ [f(T,K)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=True),
-        # "LSQ [f(T,K)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=False),
-        # "LSQ [all, mean]":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="ave"),
-        # "LSQ [all, max]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="max"),
-        # "LSQ [all, min]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="min"),
-        # "LSQ [all, median]": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="med"),
-        "LSQ 22\" Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="ave"),
-        "LSQ 45\" Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=45, angle_mix="ave"),
-        # "LSQ [all, max] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="max"),
-        # "LSQ [all, min] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="min"),
-        # "LSQ [all, median] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="med"),
-    }
-
-    tgt_fit = "Target : Fitting"
-    tgt_glao = "Target : GLAO"
-    tgt_ol = "Target : Open Loop"
-    tgt_ao = "Target : Adaptive Optics"
-    tgt_ = "Target : "
-
-    # test0 = "LSQ [TA⁺]"
-
-    errors = {}
-    for nagle in angles:
-        errors[nagle] = {
-            tgt_fit: [],
-            tgt_glao: [],
-            tgt_ol: [],
-            tgt_ao: [],
+        tests = {
+            # "LSQ [TA⁺]":         tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Ainv",  proj_grid=True, display=False),
+            # "LSQ [TA⁺] Pix":     tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Ainv",  proj_grid=False, display=False),
+            # "LSQ [(AT⁺)⁺]":          tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=True, display=False),
+            "LSQ [(AT⁺)⁺] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=False, display=False),
+            # "LSQ [(AᵀA+εK)⁺Aᵀ]":     tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=True),
+            "LSQ [(AᵀA+εK)⁺Aᵀ] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=False),
+            # "LSQ [(TᵀT+εK)⁺Tᵀ] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K2",     proj_grid=False),
+            # "LSQ [f(A,T)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAT", proj_grid=True),
+            # "LSQ [f(A,T)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAT", proj_grid=False),
+            # "LSQ [f(A,K)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAK", proj_grid=True),
+            # "LSQ [f(A,K)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAK", proj_grid=False),
+            # "LSQ [f(T,K)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=True),
+            # "LSQ [f(T,K)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotTK", proj_grid=False),
+            # "LSQ [all, mean]":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="ave"),
+            # "LSQ [all, max]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="max"),
+            # "LSQ [all, min]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="min"),
+            # "LSQ [all, median]": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="med"),
+            # "LSQ 22\" Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="ave"),
+            # "LSQ 45\" Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=45, angle_mix="ave"),
+            # "LSQ [all, max] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="max"),
+            # "LSQ [all, min] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="min"),
+            # "LSQ [all, median] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="med"),
         }
-        for k in tests.keys():
-            errors[nagle][tgt_ + k] = []
 
-    variance = {
-        f"l{i}": [] for i in range(len(alts))
-    }
-    variance["target"] = []
+        variance = {
+            f"l{i}": [] for i in range(len(alts))
+        }
+        variance["target"] = []
 
+        mask = util.circle(ap)
 
-    mask = util.circle(ap)
+        tstart = time.time()
+        t0 = tstart
 
-    from astronomy.asterisms import load_data, sample
-
-    for nagle in tqdm(angles):
-        
-        fixed_asts = asterisms.generate_fixed_asterisms(N_TESTS, nagle, mask=mask)
-        
-        data = load_data(14, limit=nagle, quick_load=True, use_cache=False, asterism_size=5)
-        var_asts = []
-        for guidestars in data:
-            for ast in combinations(guidestars, 3):
-                var_asts.append([beacon.Beacon(t, g, magnitude=m, aperture_mask=mask) for g, t, m in ast])
-        # asts = asterisms.generate_variable_asterisms(N_TESTS, limiting_angle=nagle, zero_rate=0.0, fixed_rate=0.0, mask=mask)
-        if len(var_asts) < N_TESTS:
-            for n in range(N_TESTS - len(var_asts)):
-                theta = rng.uniform(0, np.pi * 2, size=N_GS) # 
-                gamma = rng.uniform(0.3*nagle, nagle, size=N_GS)
-                beacons = [beacon.Beacon(t, g, magnitude=6, aperture_mask=mask) for t, g in zip(theta, gamma)]
-                var_asts.append(beacons)
-        else:
-            var_asts = sample(np.array(var_asts), N_TESTS)
-
-        for j, atm in enumerate(atms):
-            if N_TESTS > 100:
-                update_outputs = (j + 1) % 100 == 0
+        for nagle in angles:
+            
+            fixed_asts = asterisms.generate_fixed_asterisms(N_TESTS, nagle, mask=mask)
+            
+            data = load_data(14, limit=nagle, quick_load=True, use_cache=False, asterism_size=5)
+            var_asts = []
+            for guidestars in data:
+                for ast in combinations(guidestars, 3):
+                    var_asts.append([beacon.Beacon(t, g, magnitude=m, aperture_mask=mask) for g, t, m in ast])
+            # asts = asterisms.generate_variable_asterisms(N_TESTS, limiting_angle=nagle, zero_rate=0.0, fixed_rate=0.0, mask=mask)
+            if len(var_asts) < N_TESTS:
+                for n in range(N_TESTS - len(var_asts)):
+                    theta = rng.uniform(0, np.pi * 2, size=N_GS) # 
+                    gamma = rng.uniform(0.3*nagle, nagle, size=N_GS)
+                    beacons = [beacon.Beacon(t, g, magnitude=6, aperture_mask=mask) for t, g in zip(theta, gamma)]
+                    var_asts.append(beacons)
             else:
-                update_outputs = j % 100 == 0
-
-            beacons = var_asts[j]
-            fixed_beacons = fixed_asts[j]
+                var_asts = sample(np.array(var_asts), N_TESTS)
 
             target = beacon.Beacon(0, 0, magnitude=6, aperture_mask=mask)
 
-            # beacons = asts[0]
-            # theta_o = rng.uniform(0, 2*np.pi / 3)
-            # theta_o = 1
-            # theta = np.linspace(theta_o, theta_o + 2*np.pi, N_GS, endpoint=False)
+            for j, atm in enumerate(atms):
 
-            # gamma = [nagle] * N_GS
+                for p in perturbations:
+                    if N_TESTS > 100:
+                        update_outputs = (j + 1) % 100 == 0
+                    else:
+                        update_outputs = j % 100 == 0
 
+                    beacons = fixed_asts[j]
+                    actual_coeffs = target.cutout_coeffs(bss, D, alts, atm, atms.metapupil_diameters)
+                    target_screen = target.total_cutout(D, alts, atm, atms.metapupil_diameters)
 
-            actual_coeffs = target.cutout_coeffs(bss, D, alts, atm, atms.metapupil_diameters)
-            target_screen = target.total_cutout(D, alts, atm, atms.metapupil_diameters)
-            variance['target'].append(np.var(target_screen))
-            asterism_coeffs = tomo.get_coeffs_for_asterism(beacons, bss, D, atm, alts, atms.metapupil_diameters, wfs=wfs)
+                    # Run target fitting
+                    fitting = bss.compose(ap, actual_coeffs)
+                    target_screen = target_screen * util.circle(ap)
 
-            vars = tomo.get_layer_variance_for_asterism(beacons, D, alts, atm, atms.metapupil_diameters)
-            for i in range(len(alts)):
-                variance[f"l{i}"].append(vars[i])
+                    fitting_rmse = util.rmse(target_screen, fitting)
 
-            glao_coeffs = glao.run(beacons, target, asterism_coeffs)
-            # glao_coeffs[:3] = actual_coeffs[:3]
-            glao_recon = bss.compose(ap, glao_coeffs)
+                    ol_recon_rmse = util.rmse(target_screen, np.zeros_like(target_screen))
+                    ol_coeff_rmse = util.rmse(actual_coeffs, np.zeros_like(actual_coeffs))
 
-            ao_coeffs = ao.run(beacons, target, asterism_coeffs)
-            ao_recon = bss.compose(ap, ao_coeffs)
-            
-            fitting = bss.compose(ap, actual_coeffs)
-            target_screen = target_screen * util.circle(ap)
+                    variance['target'].append(np.var(target_screen))
+                    # beacons = var_asts[j]
+                    dt = time.time() - t0
+                    t0 = time.time()
 
-            mse_glao = util.mse(target_screen, glao_recon)
-            mse_fit = util.mse(target_screen, fitting)
-            mse_ol = util.mse(target_screen, np.zeros_like(target_screen))
-            mse_ao = util.mse(target_screen, ao_recon)
+                    vars = tomo.get_layer_variance_for_asterism(beacons, D, alts, atm, atms.metapupil_diameters)
+                    for i in range(len(alts)):
+                        variance[f"l{i}"].append(vars[i])
 
-            # mse_glao = np.var(target_screen - glao_recon)
-            # mse_fit = np.var(target_screen - fitting)
-            # mse_ol = np.var(target_screen - np.zeros_like(target_screen))
-            # mse_ao = np.var(target_screen - ao_recon)
+                    if update_outputs:
+                        print(f"Running test {j+1}/{N_TESTS}, angle={nagle:6}\", perturbation={p} (t: {t0-tstart:.4} [dt: {dt:.4}])")
 
-            errors[nagle][tgt_fit].append(mse_fit)
-            errors[nagle][tgt_glao].append(mse_glao)
-            errors[nagle][tgt_ol].append(mse_ol)
-            errors[nagle][tgt_ao].append(mse_ao)
+                    perturbed_beacons = asterisms.perturb_asterism(beacons, p)
+                    perturbed_coeffs = tomo.get_coeffs_for_asterism(perturbed_beacons, bss, D, atm, alts, atms.metapupil_diameters, wfs=wfs)
 
-            # print(beacons)
-            # print(actual_coeffs)
-            # print(asterism_coeffs)
+                    for perturbation_adjusted in [False, True]:
+                    
+                        test_beacons = perturbed_beacons if perturbation_adjusted else beacons
 
-            for test, lsq in tests.items():
-                # print(f"{test}: {tests[test]}")
-                coeffs = lsq.run(beacons, target, asterism_coeffs)
+                        # Run GLAO
+                        glao_coeffs = glao.run(test_beacons, target, perturbed_coeffs)
+                        glao_recon = bss.compose(ap, glao_coeffs)
 
-                # print(coeffs)
+                        # Run Adaptive Optics
+                        ao_coeffs = ao.run(test_beacons, target, perturbed_coeffs)
+                        ao_recon = bss.compose(ap, ao_coeffs)
+                    
+                        glao_recon_rmse = util.rmse(target_screen, glao_recon)
+                        glao_coeff_rmse = util.rmse(actual_coeffs, glao_coeffs)
+                    
+                        ao_recon_rmse = util.rmse(target_screen, ao_recon)
+                        ao_coeff_rmse = util.rmse(actual_coeffs, ao_coeffs)
+                    
+                        ap_data.append({
+                            'Aperture Size': ap,
+                            'Angle': nagle,
+                            'Perturbation': p,
+                            'Atmosphere ID': j,
+                            'Perturbation Adjusted': perturbation_adjusted,
+                            'Fitting': fitting_rmse,
+                            'Open Loop Recon RMSE': ol_recon_rmse,
+                            'Open Loop Coeff RMSE': ol_coeff_rmse,
+                            'Type': 'GLAO',
+                            'Recon RMSE': glao_recon_rmse,
+                            'Coeff RMSE': glao_coeff_rmse
+                        })
 
-                coeffs[:3] = actual_coeffs[:3]
-                # coeffs[0] = actual_coeffs[0]
-                recon = bss.compose(ap, coeffs)
-                mse =  util.mse(target_screen, recon)
-                # mse = np.var(target_screen - recon)
-                errors[nagle][tgt_ + test].append(mse)
+                        ap_data.append({
+                            'Aperture Size': ap,
+                            'Angle': nagle,
+                            'Perturbation': p,
+                            'Atmosphere ID': j,
+                            'Perturbation Adjusted': perturbation_adjusted,
+                            'Fitting': fitting_rmse,
+                            'Open Loop Recon RMSE': ol_recon_rmse,
+                            'Open Loop Coeff RMSE': ol_coeff_rmse,
+                            'Type': 'AO',
+                            'Recon RMSE': ao_recon_rmse,
+                            'Coeff RMSE': ao_coeff_rmse,
+                        })
 
+                        for test, lsq in tests.items():
+                                
+                            coeffs = lsq.run(test_beacons, target, perturbed_coeffs)
+                            coeffs[:3] = actual_coeffs[:3]
+                            if lsq.sv is not None and lsq.method != 'all':
+                                sv_data.append({
+                                    'Aperture Size': ap,
+                                    'Angle': nagle,
+                                    'Perturbation': p,
+                                    'Atmosphere ID': j,
+                                    'Type': test,
+                                    'Perturbation Adjusted': perturbation_adjusted,
+                                    'Mean': np.mean(lsq.sv),
+                                    'Min': np.amin(lsq.sv),
+                                    'Max': np.amax(lsq.sv),
+                                    'Median': np.median(lsq.sv),
+                                })
 
-            if update_outputs:
-                print(f"Running test {j+1}/{N_TESTS}, angle={nagle}\"") #, $f(V_A^T V_T^T)$={tests[test0].alignment0:.3f}°, $f(V_A V_T)$={tests[test0].alignment1:.3f}°, $f(V_A^T V_T^T)$={tests[test0].alignment2:.3f}°, $f(V_A^T V_T)$={tests[test0].alignment3:.3f}°")
+                            recon = bss.compose(ap, coeffs)                        
 
-    var = np.mean(variance['target'])
-    calculated_r0 = D / ((var / 1.03) ** (3/5))
-    print(f"Actual r0: {calculated_r0:.4f}m, intended r0: {r0_total}m [var: {var:.4f}]")
+                            recon_rmse = util.rmse(target_screen, recon)
+                            coeff_rmse = util.rmse(actual_coeffs, coeffs)
 
-    for i in range(len(alts)):
-        var = np.mean(variance[f'l{i}'])
+                            ap_data.append({
+                                'Aperture Size': ap,
+                                'Angle': nagle,
+                                'Perturbation': p,
+                                'Atmosphere ID': j,
+                                'Perturbation Adjusted': perturbation_adjusted,
+                                'Fitting': fitting_rmse,
+                                'Open Loop Recon RMSE': ol_recon_rmse,
+                                'Open Loop Coeff RMSE': ol_coeff_rmse,
+                                'Type': test,
+                                'Recon RMSE': recon_rmse,
+                                'Coeff RMSE': coeff_rmse,
+                            })
+
+        var = np.mean(variance['target'])
         calculated_r0 = D / ((var / 1.03) ** (3/5))
-        print(f"Layer {i} r0: {calculated_r0:.4f}m, intended r0: {atms.layer_r0[i]:.4f}m [var: {var:.4f}]")
+        print(f"For ap: {ap:3}: Actual r0: {calculated_r0:.4f}m, intended r0: {r0_total}m [var: {var:.4f}]")
 
-    centiles = {
-        "1st": (1, 'dotted'),
-        "10th": (10, 'dashdot'),
-        "25th": (25, 'dashed'),
-        "50th": (50, 'solid'),
-        "75th": (75, 'dashed'),
-        "90th": (90, 'dashdot'),
-        "99th": (99, 'dotted')
-    }
-    data = {}
-    for c, _ in centiles.items():
-        data[c] = {k: [] for k in errors[angles[0]].keys()}
-    # meds = {k: [] for k in errors[angles[0]].keys()}
+        for i in range(len(alts)):
+            var = np.mean(variance[f'l{i}'])
+            calculated_r0 = D / ((var / 1.03) ** (3/5))
+            print(f"Layer {i} r0: {calculated_r0:.4f}m, intended r0: {atms.layer_r0[i]:.4f}m [var: {var:.4f}]")
 
-    for angle in angles:
-        # plt.figure()
-        # mn = np.amin(errors[angle][tgt_fit])
-        # mx = np.amax(errors[angle][tgt_glao])
-        # nbins = 32
+        for k, v in tests.items():
+            if len(v.epsilons) > 0:
+                print(f"{k} Epsilon: {np.mean(v.epsilons)}")
+            else:
+                print(f"{k} Epsilon: Not used")
 
-        for k in errors[angle].keys():
-            for c, (i, _) in centiles.items():
-                data[c][k].append(np.percentile(errors[angle][k], i))
-            
-            # aves[k].append(np.mean(errors[angle][k]))
-            # meds[k].append(np.median(errors[angle][k]))
-            # plt.hist(errors[angle][k], bins=nbins, density=True, histtype="step", label=k, range=(mn, mx))
+    ap_df = pd.DataFrame(ap_data)
+    ap_df.to_csv('data/tests/tomography_test_data.csv')
 
-        # plt.ylabel("Density")
-        # plt.xlabel("MSE (rad²)")
-        # plt.title(f"Results over {N_TESTS}. Angle = {angle}\"")
-        # plt.legend()
-    
-    
-    # for k, l in errors[angle].items():
-    #     print(f"{k}: ave: {np.mean(l):.1f}; med: {np.median(l):.1f}")
+    sv_df = pd.DataFrame(sv_data)
+    sv_df.to_csv('data/tests/tomography_singular_values.csv')
 
-    colours = colors.TABLEAU_COLORS
-    markers = ['+', 'x', '.', '*']
 
-    style = []
-    for m in markers:
-        for c in colours:
-            style.append((m, c))
+def display_leastsquares_results():
 
-    plt.figure()
-    si = 0 # *s*tyle *i*ndex
+    err_df = pd.read_csv('data/tests/tomography_test_data.csv')
 
-    for k in data['1st'].keys():
-        if k == tgt_fit:
-            pass
-            # plt.plot(angles, aves[k], color="blue", linestyle='dashed', label=f"{k} - Mean")
-            # for c, (i, ls) in centiles.items():
-            plt.plot(angles, data["50th"][k], color="blue", linestyle='solid', label=f"{k} - {c}")    
-        elif k == tgt_glao:
-            pass
-            # plt.plot(angles, aves[k], color="red", linestyle='dashed', label=f"{k} - Mean")
-            # for c, (i, ls) in centiles.items():
-            plt.plot(angles, data["50th"][k], color="red", linestyle='solid', label=f"{k} - {c}")    
-        elif k == tgt_ol:
-            # plt.plot(angles, aves[k], color="black", linestyle='dashed', label=f"{k} - Mean")
-            # plt.plot(angles, meds[k], color="black", linestyle='solid', label=f"{k} - Median")
-            pass
-        elif k == tgt_ao:
-            pass
-            # plt.plot(angles, aves[k], color="black", linestyle='dashed', label=f"{k} - Mean")
-            # for c, (i, ls) in centiles.items():
-            plt.plot(angles, data["50th"][k], color="green", linestyle='solid', label=f"{k} - {c}")
-        else:
-            m, cl = style[si]
-            # plt.plot(angles, aves[k], color=c, marker=m, linestyle='dashed', alpha=0.6, label=f"{k} - Mean")
-            for c, (i, ls) in centiles.items():
-                plt.plot(angles, data[c][k], color=cl, marker=m, linestyle=ls, alpha=0.4, label=f"{k} - {c}")
-            si += 1
-    plt.xlabel("Radius (\")")
-    plt.ylabel("MSE (rad²)")
-    plt.legend()
+    # err_df['Recon Delta RMSE'] = err_df['Recon RMSE'] / err_df['Open Loop Recon RMSE'] 
+    # err_df['Coeff Delta RMSE'] = err_df['Coeff RMSE'] / err_df['Open Loop Coeff RMSE']
 
-    for k, v in tests.items():
-        print(f"{k} Epsilon: {np.mean(v.epsilons)}")
+    factors = ['Angle', 'Perturbation', 'Perturbation Adjusted', 'Atmosphere ID', 'Type']
+    # Compute the reference value in each group where Aperture Size == 64
+    err_df['Recon Relative RMSE'] = err_df['Recon RMSE'] / (
+        err_df[err_df['Aperture Size'] == 64]
+        .set_index(factors)['Open Loop Recon RMSE']
+        .reindex(err_df.set_index(factors).index)
+        .values
+    )
 
-    plt.show()
+    err_df['Coeff Relative RMSE'] = err_df['Coeff RMSE'] / (
+        err_df[err_df['Aperture Size'] == 64]
+        .set_index(factors)['Open Loop Coeff RMSE']
+        .reindex(err_df.set_index(factors).index)
+        .values
+    )
 
-    
+    # # columns by aperture size
+    # for tomo in err_df['Type'].unique():
+
+    #     fig, axs = plt.subplots(1, len(err_df['Aperture Size'].unique()), sharey=True)
+    #     f2, axs2 = plt.subplots(1, len(err_df['Aperture Size'].unique()), sharey=True)
+    #     fig.suptitle(f'{tomo}: Reconstruction Error')
+    #     f2.suptitle(f'{tomo}: Coefficient Error')
+    #     for i, ap_size in enumerate(err_df['Aperture Size'].unique()):
+    #         df = err_df[(err_df['Aperture Size'] == ap_size) & (err_df['Perturbation'] == '(0.5, 0.5)') & (err_df['Type'] == tomo)]
+    #         sns.boxplot(ax=axs[i], data=df, x='Angle', y='Recon Relative RMSE', hue='Perturbation Adjusted')
+    #         sns.boxplot(ax=axs2[i], data=df, x='Angle', y='Coeff Relative RMSE', hue='Perturbation Adjusted')
+    #         axs[i].set_title(f'Aperture Size: {ap_size}')
+    #         axs[i].set_yscale('log')
+    #         axs2[i].set_title(f'Aperture Size: {ap_size}')
+    #         axs2[i].set_yscale('log')
+
+    # columns by perturbation adjusted
+    for tomo in err_df['Type'].unique():
+
+        fig, axs = plt.subplots(1, len(err_df['Perturbation Adjusted'].unique()), sharey=True)
+        f2, axs2 = plt.subplots(1, len(err_df['Perturbation Adjusted'].unique()), sharey=True)
+        fig.suptitle(f'{tomo}: Reconstruction Error')
+        f2.suptitle(f'{tomo}: Coefficient Error')
+        for i, p_adj in enumerate(err_df['Perturbation Adjusted'].unique()):
+            df = err_df[(err_df['Perturbation Adjusted'] == p_adj) & (err_df['Perturbation'] == '(0.5, 0.5)') & (err_df['Type'] == tomo)]
+            sns.boxplot(ax=axs[i], data=df, x='Angle', y='Recon Relative RMSE', hue='Aperture Size')
+            sns.boxplot(ax=axs2[i], data=df, x='Angle', y='Coeff Relative RMSE', hue='Aperture Size')
+            axs[i].set_title(f'Perturbation Adjusted: {p_adj}')
+            axs[i].set_yscale('log')
+            axs2[i].set_title(f'Perturbation Adjusted: {p_adj}')
+            axs2[i].set_yscale('log')
+
 
 def test_beacons():
     # check positions are valid
@@ -457,3 +482,36 @@ def test_layer_shapes():
             plotcirc(axs[2, i], (x0, y0), d/sz, "r:", label=lbl)
             axs[2, i].set_aspect('equal')
         fig.legend()
+
+def test_strehl():
+    dim = 256
+    sz = (dim, dim)
+    nothing = np.zeros(sz)
+    strehl_none, psf_none = strehl.ratio(nothing, psf_output=True)
+
+    Z = zernike.Zernike(64)
+
+    ps = phase_screen.kolmogorov(sz, 1.8, 0.25) * util.circle(dim)
+    coeffs = Z.decompose(ps)
+    recon_screen = Z.compose(sz, coeffs)
+
+    strehl_phase, phase_psf = strehl.ratio(ps, psf_output=True)
+    strehl_recon, recon_psf = strehl.ratio(recon_screen, psf_output=True)
+    strehl_diff, diff_psf = strehl.ratio(ps-recon_screen, psf_output=True)
+    print(strehl_phase)
+    print(strehl_recon)
+    print(strehl_diff)
+    print(strehl.ratio_quick(ps-recon_screen))
+
+    eps = 1e-12
+    vm = -7
+    # eps = 0.0
+    fig, axs = plt.subplots(2, 4)
+    axs[0, 0].imshow(nothing, cmap='inferno')
+    axs[1, 0].imshow(np.log10(psf_none+eps), cmap='inferno', vmin=vm, vmax=0)
+    axs[0, 1].imshow(ps, cmap='inferno')
+    axs[1, 1].imshow(np.log10(phase_psf+eps), cmap='inferno', vmin=vm, vmax=0)
+    axs[0, 2].imshow(recon_screen, cmap='inferno')
+    axs[1, 2].imshow(np.log10(recon_psf+eps), cmap='inferno', vmin=vm, vmax=0)
+    axs[0, 3].imshow(ps-recon_screen, cmap='inferno')
+    axs[1, 3].imshow(np.log10(diff_psf+eps), cmap='inferno', vmin=vm, vmax=0)

@@ -154,6 +154,8 @@ class LeastSquares(Tomography):
 
         self.epsilons    = []
 
+        self.sv = None
+
     def run(self, beacons, target, beacon_coeffs):
         """
         Runs least squares tomography algorithm
@@ -179,31 +181,7 @@ class LeastSquares(Tomography):
 
         A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
         T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
-
-        # fig, axs = plt.subplots(2, 3)
-
-        # svd_A = np.linalg.svd(A)
-        # svd_T = np.linalg.svd(T)
-
-        # axs[0, 0].set_title("$V_A^T$")
-        # axs[0, 0].imshow(svd_A.Vh)
-        # axs[1, 0].set_title("$V_T^T$")
-        # axs[1, 0].imshow(svd_T.Vh)
-
-        # axs[0, 1].set_title("$V_A^T V_T$")
-        # axs[0, 1].imshow(np.matmul(svd_A.Vh, svd_T.Vh.T))
-        # axs[1, 1].set_title("$V_T^T V_A$")
-        # axs[1, 1].imshow(np.matmul(svd_T.Vh, svd_A.Vh.T))
-
-        # axs[0, 2].set_title("$(V_A^T V_T)^T$")
-        # axs[0, 2].imshow(np.matmul(svd_A.Vh, svd_T.Vh.T).T)
-        # axs[1, 2].set_title("$V_T^T V_A - (V_A^T V_T)^T$")
-        # axs[1, 2].imshow(np.matmul(svd_T.Vh, svd_A.Vh.T) - np.matmul(svd_A.Vh, svd_T.Vh.T).T)
-
-        # self.alignment0 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh.T for cT in svd_T.Vh.T])
-        # self.alignment1 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh for cT in svd_T.Vh])
-        # self.alignment2 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh for cT in svd_T.Vh.T])
-        # self.alignment3 = min([np.rad2deg(util.angle_between(cA, cT)) for cA in svd_A.Vh.T for cT in svd_T.Vh])
+        self.sv = None
 
         if self.method in ["Ainv", "dotAT", "dotAK"]:
             A_inv = np.linalg.pinv(A, rcond=self.eps)
@@ -216,7 +194,9 @@ class LeastSquares(Tomography):
 
         if self.method in ["Tinv", "dotAT", "dotTK", "all"]:
             T_inv = np.linalg.pinv(T, rcond=self.eps)
-            M1 = np.linalg.pinv(np.matmul(A, T_inv), rcond=self.eps)
+            M0 = np.matmul(A, T_inv)
+            self.sv = np.linalg.svd(M0, compute_uv=False)
+            M1 = np.linalg.pinv(M0, rcond=self.eps)
             C_T = np.matmul(M1, L)
             if self.method == "Tinv":
                 return C_T
@@ -236,7 +216,9 @@ class LeastSquares(Tomography):
             epsilon = alpha # 0.0 # 0.001
             self.epsilons.append(epsilon)
             
-            W = np.matmul(np.matmul(np.linalg.pinv(np.matmul(A.T, A) + epsilon * K, rcond=self.eps), A.T), L)
+            M = np.matmul(A.T, A) + epsilon * K
+            self.sv = np.linalg.svd(M, compute_uv=False)
+            W = np.matmul(np.matmul(np.linalg.pinv(M, rcond=self.eps), A.T), L)
 
             C_K = np.matmul(T, W)
 

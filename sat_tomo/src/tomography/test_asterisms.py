@@ -47,7 +47,7 @@ def run_tests():
     # test_phase_variance()
     
     f = Filter()
-    # f.run_asterism_comparison()
+    f.run_asterism_comparison()
     f.filter_asterisms()
     # load_angle_data_test()
 
@@ -189,8 +189,10 @@ class Filter():
                                         coeffs = self.ao.run(p_ast, self.target, ast_coeffs)
                                     case 'lsq':
                                         coeffs = self.lsq.run(p_ast, self.target, ast_coeffs)
+                                        coeffs[:3] = target_coeffs[:3]
                                     case 'lsq_p': # Use baseline projection matrices, but measurements from perturbation
                                         coeffs = self.lsq.run(asterism, self.target, ast_coeffs)
+                                        coeffs[:3] = target_coeffs[:3]
                                     case 'ideal':
                                         coeffs = target_coeffs
                                     case _:
@@ -420,7 +422,7 @@ class Filter():
         df0['max_interior_angle'] = norm([asterisms.max_angle(a) for _, _, a in asterism_list])
         df0['gaussian_area'] =      norm([asterisms.gaussian_area_within_triangle(a) for _, _, a in asterism_list])
         df0['aperture_overlap'] =   norm([asterisms.overlap(a, [1000, 5000, 10000]) for _, _, a in asterism_list])
-        df0['target_in_triangle'] = norm([np.array(asterisms.is_target_in_triangle(a), dtype=np.float32) for _, _, a in asterism_list])
+        df0['target_in_triangle'] = norm([asterisms.is_target_in_triangle(a) for _, _, a in asterism_list])
 
         # if frac < 1.0 and frac > 0.0:
         #     df0 = df0.sample(frac=frac)
