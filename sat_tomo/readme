@@ -20,3 +20,8 @@ Data visualisation
  - Show statistics and graphs
 
 
+TODO:
+- Look at recon relative RMSE for the latest results.
+- Drop aperture size, it has very little bearing on results, or at least not enough to explore further
+- Add lsq_all into the mix
+- Store asterism data separately, as we're currently computing multiple instances of the same asterism when displaying results.

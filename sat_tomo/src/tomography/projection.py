@@ -43,7 +43,7 @@ def scaleGrid(grid, scale):
 #               diameter     - relative diameter of circular portion (1 = same size as metapupil)
 #               nModes       - number of Zernike modes
 @lru_cache(maxsize=256)
-def projectionMatrix(location, diameter, nModes, display=False, angles=None):
+def projectionMatrix(location, diameter, nModes, display=False, angles=None, mode_skip=3):
     # try:
     #     global _cache_PROJ_MATRICES
     #     return _cache_PROJ_MATRICES[(location, diameter, nModes)]
@@ -75,10 +75,10 @@ def projectionMatrix(location, diameter, nModes, display=False, angles=None):
     # try:
     #     Ginv = g_matrices[nModes]
     # except KeyError:
-    G = np.zeros((nModes, gridSize))
-    for j in range(nModes):
+    G = np.zeros((nModes - mode_skip, gridSize))
+    for j in range(nModes - mode_skip):
         for i, (x, y) in enumerate(unitGrid):
-            G[j, i] = z.zerni(x, y, j + 1)
+            G[j, i] = z.zerni(x, y, j + 1 + mode_skip)
     Ginv = np.linalg.pinv(G, rcond=eps)
         # g_matrices[nModes] = Ginv   # cache for later
     portGrid = scaleGrid(unitGrid, diameter)
@@ -96,10 +96,10 @@ def projectionMatrix(location, diameter, nModes, display=False, angles=None):
         axs[0, 1].legend()
 
         
-    Y = np.zeros((nModes, gridSize))
-    for j in range(nModes):
+    Y = np.zeros((nModes - mode_skip, gridSize))
+    for j in range(nModes - mode_skip):
         for i, (x,y) in enumerate(portGrid):
-            Y[j, i] = z.zerni(x, y, j + 1)
+            Y[j, i] = z.zerni(x, y, j + 1 + mode_skip)
 
     P = np.matmul(Y, Ginv).T
 

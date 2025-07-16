@@ -31,7 +31,7 @@ class Tomography():
     run:
         runs tomographic algorithm using beacon coefficients, and positions of guide beacons and target
     """
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3):
         """
         Parameters
         ---------
@@ -50,6 +50,7 @@ class Tomography():
         """
         self.basis = basis
         self.n_modes = n_modes
+        self.mode_skip = mode_skip
         self.D = diameter
         self.aperture_size = aperture_size
         self.altitudes = altitudes
@@ -80,22 +81,22 @@ class Tomography():
             location = (location[0] / (layer_size / 2), location[1] / (layer_size / 2))
             # print(location)
             diameter = self.D / layer_size
-            P = projection.projectionMatrix(location, diameter, self.n_modes, display, angles=(theta, gamma))
+            P = projection.projectionMatrix(location, diameter, self.n_modes, display, angles=(theta, gamma), mode_skip=self.mode_skip)
         else:
             def get_single(n, i):
                 A = np.zeros(n)
                 A[i] = 1.0
                 return A
-            coeffs = [get_single(self.n_modes, i) for i in range(self.n_modes)]
+            coeffs = [get_single(self.n_modes, i) for i in range(self.mode_skip, self.n_modes)]
 
             cutout_coeffs = []
 
             for i, cos in enumerate(coeffs):
                 scr = self.basis.compose(p, cos)
                 co = b.cutout(self.D, altitude, scr, layer_size, interp=True)
-                cutout_coeffs.append(self.basis.decompose(co))
-                
-            coeffs = np.array(coeffs).T
+                cutout_coeffs.append(self.basis.decompose(co)[self.mode_skip:])
+            
+            coeffs = np.array(coeffs)[:, self.mode_skip:].T
             cutout_coeffs = np.array(cutout_coeffs).T
             cutout_coeffs = np.triu(cutout_coeffs)
 
@@ -118,8 +119,8 @@ class Tomography():
         return P
 
 class LeastSquares(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=False, method="all", start_angle=18, end_angle=22, angle_mix="ave", display=False):
-        super().__init__(basis, diameter, n_modes, altitudes, aperture_size)
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=False, method="all", start_angle=18, end_angle=22, angle_mix="ave", display=False, mode_skip=3):
+        super().__init__(basis, diameter, n_modes, altitudes, aperture_size, mode_skip=mode_skip)
         """
         proj_grid:
             use Tokovonin grid to generate projection matrices, else use phase screen pixel-based approach.
@@ -140,10 +141,12 @@ class LeastSquares(Tomography):
             "med":      use median of beacon angles
         display:
             will output internal values and matrices
+            
         """
 
         self.eps = eps
-        self.C = zernike.covar(n_modes) * ((diameter/r0) ** (5/3))
+        self.C = zernike.covar(n_modes)[self.mode_skip:, self.mode_skip:] * ((diameter/r0) ** (5/3))
+        self.C_diag = np.diag(self.C)
 
         self.proj_grid   = proj_grid
         self.method      = method
@@ -156,7 +159,7 @@ class LeastSquares(Tomography):
 
         self.sv = None
 
-    def run(self, beacons, target, beacon_coeffs):
+    def run(self, beacons, target, beacon_coeffs, ptt=[]):
         """
         Runs least squares tomography algorithm
 
@@ -168,29 +171,32 @@ class LeastSquares(Tomography):
             an object that provides target position
         beacon_coeffs:
             list of coefficient arrays for each beacon that are used for calculating the target basis function coefficients
+        ptt:        
+            Lower order Zernike modes to concatenate onto output. (The length of this must be equal to mode_skip value)
 
         Returns
         -------
         target_coeffs:
             array of coefficients for target/science object
         """
+        if self.mode_skip != len(ptt):
+            raise ValueError(f"Length of provided replacement lower order modes ({len(ptt)}) is not equal to mode_skip ({self.mode_skip})")
 
         layers_sizes, layer_pixels = self.get_layer_shapes(beacons)
 
-        L = np.array(beacon_coeffs.flatten())
+        L = np.array(beacon_coeffs[:, self.mode_skip:].flatten())
 
         A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
         T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
         self.sv = None
 
         if self.method in ["Ainv", "dotAT", "dotAK"]:
+            self.sv = np.linalg.svd(A, compute_uv=False)
             A_inv = np.linalg.pinv(A, rcond=self.eps)
-            # M0 = np.matmul(T, A_inv)
-            # C_A = np.matmul(M0, L)
             M0 = np.matmul(A_inv, L)
             C_A = np.matmul(T, M0)
             if self.method == "Ainv":
-                return C_A
+                return np.concatenate([ptt, C_A])
 
         if self.method in ["Tinv", "dotAT", "dotTK", "all"]:
             T_inv = np.linalg.pinv(T, rcond=self.eps)
@@ -199,16 +205,15 @@ class LeastSquares(Tomography):
             M1 = np.linalg.pinv(M0, rcond=self.eps)
             C_T = np.matmul(M1, L)
             if self.method == "Tinv":
-                return C_T
+                return np.concatenate([ptt, C_T])
         
         if self.method in ["K", "dotAK", "dotTK", "all"]:
             alphas = np.logspace(-20, 0, 50)
-            # alphas = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
             clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
             alpha = clf.alpha_
         
             K = np.zeros((A.shape[1], A.shape[1]))
-            N = self.n_modes
+            N = self.n_modes - self.mode_skip
 
             for i, _ in enumerate(layers_sizes):
                 K[i*N:(i+1)*N, i*N:(i+1)*N] = self.C
@@ -223,41 +228,22 @@ class LeastSquares(Tomography):
             C_K = np.matmul(T, W)
 
             if self.method == "K":
-                return C_K
-            
-        if self.method == "K2":
-            # alphas = np.logspace(-10, 0, 20)
-            # clf = RidgeCV(alphas=alphas, store_cv_results=True).fit(A, L)
-            # alpha = clf.alpha_
-            alpha = 0.23
-        
-            K = np.zeros((T.shape[1], T.shape[1]))
-            N = self.n_modes
-
-            for i, _ in enumerate(layers_sizes):
-                K[i*N:(i+1)*N, i*N:(i+1)*N] = self.C
-            
-            epsilon = alpha # 0.001
-            W = np.matmul(np.linalg.pinv(np.matmul(T.T, T) + epsilon * K, rcond=self.eps), T.T)
-            M1 = np.linalg.pinv(np.matmul(A, W), rcond=self.eps)
-
-            C_K = np.matmul(M1, L)
-            return C_K
+                return np.concatenate([ptt, C_K])
 
         if self.method == "dotAT":
             r = util.cos_theta(C_A, C_T)
             C_AT = r * C_A + (1 - r) * C_T
-            return C_AT
+            return np.concatenate([ptt, C_AT])
 
         if self.method == "dotAK":
             r = util.cos_theta(C_A, C_K)
             C_AK = r * C_A + (1 - r) * C_K
-            return C_AK
+            return np.concatenate([ptt, C_AK])
         
         if self.method == "dotTK":
             r = util.cos_theta(C_T, C_K)
             C_TK = r * C_T + (1 - r) * C_K
-            return C_TK
+            return np.concatenate([ptt, C_TK])
 
         if self.method == "all":
             angles = []
@@ -282,7 +268,7 @@ class LeastSquares(Tomography):
 
             C_ALL = r * C_T + (1 - r) * C_K
 
-            return C_ALL
+            return np.concatenate([ptt, C_ALL])
         
         raise NotImplementedError
         

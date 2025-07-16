@@ -2,7 +2,8 @@ import numpy as np
 
 from tomography import beacon
 from astronomy import asterisms
-from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle, lerp
+from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle, lerp, rmse
+from itertools import combinations
 
 import log
 
@@ -16,6 +17,22 @@ DEFAULT_M = 8   # default magnitude
 def perturb_asterism(asterism, perturbation):
     x, y = perturbation
     return [b.offset(x=x, y=y) for b in asterism]
+
+def perturb_asterism_single_star(asterism, perturbation):
+    x, y = perturbation
+    asts = []
+    if x == 0.0 and y == 0.0:
+        asts.append((None, [star.copy() for star in asterism]))
+    else:
+        for i in range(len(asterism)):
+            ast = []
+            for j, star in enumerate(asterism):
+                if j == i:
+                    ast.append(star.offset(x=x, y=y))
+                else:
+                    ast.append(star.copy())
+            asts.append((i, ast))
+    return asts
 
 def generate_fixed_asterisms(n, angle, mask=None, theta_0_random=False):
     logger.info(f"Generating fixed asterisms with {ASTERISM_SIZE} stars. Fixed angle of {angle}\"")
@@ -64,11 +81,11 @@ def generate_variable_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, 
     
     return asterism_list
 
-def get_test_asterisms_a_choose_b(n, limiting_angle=LIMITING_ANGLE, asterism_size=3, group_size=5, rng=None, mask=None):
+def get_base_asterisms(n, limiting_angle=LIMITING_ANGLE, asterism_size=5, rng=None, mask=None):
     if rng is None:
         rng = np.random.default_rng()
 
-    asterism_data = asterisms.load_data(14, n=n, limit=limiting_angle, rng=rng, quick_load=True, asterism_size=group_size)
+    asterism_data = asterisms.load_data(14, n=n, limit=limiting_angle, rng=rng, quick_load=True, asterism_size=asterism_size)
     groups = [[beacon.Beacon(t, g, m, aperture_mask=mask) for g, t, m in stars] for stars in asterism_data]
 
     # groups = [combinations(stars, asterism_size) for stars in real]
@@ -154,6 +171,45 @@ def get_test_asterisms(n, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.2, lim
     asterism_list = np.concatenate([arr for arr in (fixed, uniform, offset, real) if arr is not None])
     rng.shuffle(asterism_list, axis=0)
     return asterism_list
+
+def get_asterisms_from_group(group, asterism_size=3):
+    asterisms = {}
+    # Circular asterisms based on each star in group
+    for i, s in enumerate(group):
+        ast = [s.copy()]
+        for _ in range(asterism_size - 1):
+            s = s.copy()
+            s.theta += (2 * np.pi) / asterism_size
+            ast.append(s)
+        asterisms[f'star_{i}_circular'] = ast
+    
+    # Asterisms from subgroups
+    subgroups = combinations(group, asterism_size)
+    for j, subgroup in enumerate(subgroups):
+        mean_dist = np.mean([s._gamma_arcsec for s in subgroup])
+
+        raw = [s.copy() for s in subgroup]
+        asterisms[f'sg{j}_raw'] = raw
+
+        equal_angle = [s.copy() for s in subgroup]
+        for i, s in enumerate(equal_angle[1:]):
+            s.theta = equal_angle[i].theta + (2 * np.pi / asterism_size)
+        asterisms[f'sg{j}_equal_angle'] = equal_angle
+
+        equal_distance = [s.copy() for s in subgroup]
+        for s in equal_distance:
+            s.set_gamma(mean_dist)
+        asterisms[f'sg{j}_mean_dist'] = equal_distance
+
+        mean_circular = [s.copy() for s in subgroup]
+        for i, s in enumerate(mean_circular):
+            s.set_gamma(mean_dist)
+            if i > 0:
+                s.theta = mean_circular[i - 1].theta + (2 * np.pi / asterism_size)
+        asterisms[f'sg{j}_mean_circular'] = mean_circular
+
+    return asterisms
+        
 
 def lengths(asterism):
     """
@@ -457,6 +513,10 @@ def is_target_in_triangle(asterism):
         return np.linalg.norm(P - closest)
 
     def signed_distance_triangle(P, A, B, C):
+        P = np.array(P)
+        A = np.array(A)
+        B = np.array(B)
+        C = np.array(C)
 
         inside = point_in_triangle(P, A, B, C)
 
@@ -513,3 +573,18 @@ def get_asterism_coords(asterism, theta_offset=False):
         ast0 = asterism
     coords = np.array([b.position_arcsec() for b in ast0])
     return coords[:, 0], coords[:, 1] # x, y
+
+def circular_similarity(asterism, baseline_asterism):
+    # pr_x, pr_y = get_asterism_coords(asterism)
+    # pr = np.concatenate((pr_x, pr_y))
+    t0 = baseline_asterism[0].theta
+    g0 = asterism[0].theta
+    pr = [(g._gamma_arcsec/120, (g.theta-g0)/(2*np.pi)) for g in asterism]
+    pr = np.ravel(pr)
+
+    # tr_x, tr_y = get_asterism_coords(baseline_asterism)
+    # tr = np.concatenate((tr_x, tr_y))
+    tr = [(g._gamma_arcsec/120, (g.theta-t0)/(2*np.pi)) for g in baseline_asterism]
+    tr = np.ravel(tr)
+
+    return rmse(tr, pr)

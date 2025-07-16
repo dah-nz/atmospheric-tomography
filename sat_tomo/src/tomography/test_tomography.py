@@ -14,6 +14,7 @@ from basis import zernike
 from astronomy.asterisms import load_data, sample
 
 from tqdm import tqdm
+from scipy.stats import gmean
 
 from itertools import combinations
 
@@ -99,7 +100,7 @@ def test_leastsquares():
     N_TESTS = 10
     N_GS = 3
 
-    ap_sizes = [64, 128, 256]
+    ap_sizes = [100]
     angles = np.linspace(1, 121, 7) - 1
     # angles = [1, 5, 15, 30, 50, 75]
     nagle = 30 # asterism angle
@@ -118,12 +119,15 @@ def test_leastsquares():
     tgt_p_glao = tgt_glao + _perturb_str
     tgt_p_ao = tgt_ao + _perturb_str
 
-    max_perturb = 0.5 # arcseconds
-    n_perturbs = 3 # number of perturbations in each direction
-    x = np.linspace(-max_perturb, max_perturb, n_perturbs)
-    y = np.linspace(-max_perturb, max_perturb, n_perturbs)
-    perturbations = np.stack(np.meshgrid(x, y)).T.reshape(-1, 2)
-    perturbations = [tuple(p) for p in perturbations]
+    if False:
+        max_perturb = 0.5 # arcseconds
+        n_perturbs = 3 # number of perturbations in each direction
+        x = np.linspace(-max_perturb, max_perturb, n_perturbs)
+        y = np.linspace(-max_perturb, max_perturb, n_perturbs)
+        perturbations = np.stack(np.meshgrid(x, y)).T.reshape(-1, 2)
+        perturbations = [tuple(p) for p in perturbations]
+    else:
+        perturbations = [(0.0, 0.0)]
 
     ap_data = []
     sv_data = []
@@ -136,12 +140,19 @@ def test_leastsquares():
         atms = phase_screen.Atmosphere(N_TESTS, alts, r0_total, D, ap, rng=rng)
     
         tests = {
+            "LSQ [(AT⁺)⁺] (Piston Tip/Tilt Passthrough)":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=False, display=False),
+            "LSQ [(AT⁺)⁺] (Piston passthrough)":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=False, display=False, mode_skip=1),
+            "LSQ [(AT⁺)⁺] (No mode passthrough)":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=False, display=False, mode_skip=0),
+            "LSQ [(AᵀA+εK)⁺Aᵀ] (Piston Tip/Tilt passthrough)": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=False),
+            "LSQ [(AᵀA+εK)⁺Aᵀ] (Piston passthrough)": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=False, mode_skip=1),
+            "LSQ [(AᵀA+εK)⁺Aᵀ] (No mode passthrough)": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=False, mode_skip=0),
+            "LSQ 18-45\" (Piston Tip/Tilt passthrough)":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=45, angle_mix="ave"),
+            "LSQ 18-45\" (Piston passthrough)":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=45, angle_mix="ave", mode_skip=1),
+            "LSQ 18-45\" (No mode passthrough)":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=45, angle_mix="ave", mode_skip=0),
             # "LSQ [TA⁺]":         tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Ainv",  proj_grid=True, display=False),
             # "LSQ [TA⁺] Pix":     tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Ainv",  proj_grid=False, display=False),
             # "LSQ [(AT⁺)⁺]":          tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=True, display=False),
-            "LSQ [(AT⁺)⁺] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="Tinv",  proj_grid=False, display=False),
             # "LSQ [(AᵀA+εK)⁺Aᵀ]":     tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=True),
-            "LSQ [(AᵀA+εK)⁺Aᵀ] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K",     proj_grid=False),
             # "LSQ [(TᵀT+εK)⁺Tᵀ] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="K2",     proj_grid=False),
             # "LSQ [f(A,T)]":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAT", proj_grid=True),
             # "LSQ [f(A,T)] Pix":      tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="dotAT", proj_grid=False),
@@ -154,7 +165,6 @@ def test_leastsquares():
             # "LSQ [all, min]":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="min"),
             # "LSQ [all, median]": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=True, start_angle=30, end_angle=45, angle_mix="med"),
             # "LSQ 22\" Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="ave"),
-            # "LSQ 45\" Pix":   tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=45, angle_mix="ave"),
             # "LSQ [all, max] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="max"),
             # "LSQ [all, min] Pix":    tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="min"),
             # "LSQ [all, median] Pix": tomo.LeastSquares(bss, D, N, alts, ap, r0=r0_total, method="all",   proj_grid=False, start_angle=18, end_angle=22, angle_mix="med"),
@@ -235,16 +245,9 @@ def test_leastsquares():
                         glao_coeffs = glao.run(test_beacons, target, perturbed_coeffs)
                         glao_recon = bss.compose(ap, glao_coeffs)
 
-                        # Run Adaptive Optics
-                        ao_coeffs = ao.run(test_beacons, target, perturbed_coeffs)
-                        ao_recon = bss.compose(ap, ao_coeffs)
-                    
                         glao_recon_rmse = util.rmse(target_screen, glao_recon)
                         glao_coeff_rmse = util.rmse(actual_coeffs, glao_coeffs)
-                    
-                        ao_recon_rmse = util.rmse(target_screen, ao_recon)
-                        ao_coeff_rmse = util.rmse(actual_coeffs, ao_coeffs)
-                    
+
                         ap_data.append({
                             'Aperture Size': ap,
                             'Angle': nagle,
@@ -259,6 +262,13 @@ def test_leastsquares():
                             'Coeff RMSE': glao_coeff_rmse
                         })
 
+                        # Run Adaptive Optics
+                        ao_coeffs = ao.run(test_beacons, target, perturbed_coeffs)
+                        ao_recon = bss.compose(ap, ao_coeffs)
+                    
+                        ao_recon_rmse = util.rmse(target_screen, ao_recon)
+                        ao_coeff_rmse = util.rmse(actual_coeffs, ao_coeffs)
+                    
                         ap_data.append({
                             'Aperture Size': ap,
                             'Angle': nagle,
@@ -274,29 +284,17 @@ def test_leastsquares():
                         })
 
                         for test, lsq in tests.items():
-                                
-                            coeffs = lsq.run(test_beacons, target, perturbed_coeffs)
-                            coeffs[:3] = actual_coeffs[:3]
-                            if lsq.sv is not None and lsq.method != 'all':
-                                sv_data.append({
-                                    'Aperture Size': ap,
-                                    'Angle': nagle,
-                                    'Perturbation': p,
-                                    'Atmosphere ID': j,
-                                    'Type': test,
-                                    'Perturbation Adjusted': perturbation_adjusted,
-                                    'Mean': np.mean(lsq.sv),
-                                    'Min': np.amin(lsq.sv),
-                                    'Max': np.amax(lsq.sv),
-                                    'Median': np.median(lsq.sv),
-                                })
-
-                            recon = bss.compose(ap, coeffs)                        
-
+                            
+                            if lsq.mode_skip > 0:
+                                coeffs = lsq.run(test_beacons, target, perturbed_coeffs, ptt=actual_coeffs[:lsq.mode_skip])
+                            else:
+                                coeffs = lsq.run(test_beacons, target, perturbed_coeffs)
+                            
+                            recon = bss.compose(ap, coeffs)
                             recon_rmse = util.rmse(target_screen, recon)
                             coeff_rmse = util.rmse(actual_coeffs, coeffs)
 
-                            ap_data.append({
+                            data_point = {
                                 'Aperture Size': ap,
                                 'Angle': nagle,
                                 'Perturbation': p,
@@ -308,7 +306,23 @@ def test_leastsquares():
                                 'Type': test,
                                 'Recon RMSE': recon_rmse,
                                 'Coeff RMSE': coeff_rmse,
-                            })
+
+                            }
+
+                            if lsq.sv is not None and lsq.method != 'all':
+                                sv = lsq.sv
+                                C_diag = lsq.C_diag
+                                while len(C_diag) < len(sv):
+                                    C_diag = np.append(C_diag, C_diag)
+                                C_diag = sorted(C_diag, reverse=True)
+                                if len(C_diag) > len(sv):
+                                    C_diag = C_diag[:len(sv)]
+                                data_point['singular_values_ce'] = util.cross_entropy(C_diag / np.amax(C_diag), sv / np.amax(sv))
+                                data_point['singular_values_geomean'] = gmean(sv)
+                                data_point['singular_values_ratio'] = np.abs(np.amax(sv) / np.amin(sv))
+                                data_point['singular_values_min'] = np.amin(sv)
+                            ap_data.append(data_point)
+
 
         var = np.mean(variance['target'])
         calculated_r0 = D / ((var / 1.03) ** (3/5))
@@ -328,10 +342,6 @@ def test_leastsquares():
     ap_df = pd.DataFrame(ap_data)
     ap_df.to_csv('data/tests/tomography_test_data.csv')
 
-    sv_df = pd.DataFrame(sv_data)
-    sv_df.to_csv('data/tests/tomography_singular_values.csv')
-
-
 def display_leastsquares_results():
 
     err_df = pd.read_csv('data/tests/tomography_test_data.csv')
@@ -339,53 +349,75 @@ def display_leastsquares_results():
     # err_df['Recon Delta RMSE'] = err_df['Recon RMSE'] / err_df['Open Loop Recon RMSE'] 
     # err_df['Coeff Delta RMSE'] = err_df['Coeff RMSE'] / err_df['Open Loop Coeff RMSE']
 
-    factors = ['Angle', 'Perturbation', 'Perturbation Adjusted', 'Atmosphere ID', 'Type']
+    # err_df = err_df[(err_df['Perturbation'].apply(lambda x: np.array_equal(x, np.array([0.0, 0.0]))))]
+    err_df = err_df[(err_df['Perturbation'] == '(0.0, 0.0)')
+                    & (err_df['Perturbation Adjusted'] == True)
+                    & (err_df['Angle'] != 0.0)
+                    & (~err_df['Type'].str.contains('18-45'))
+                    & (err_df['Type'] != 'AO')]
+    err_df = err_df.drop(columns=['Perturbation', 'Perturbation Adjusted'])
+    
+    factors = ['Angle', 'Atmosphere ID', 'Type']
     # Compute the reference value in each group where Aperture Size == 64
     err_df['Recon Relative RMSE'] = err_df['Recon RMSE'] / (
-        err_df[err_df['Aperture Size'] == 64]
+        err_df[err_df['Aperture Size'] == 100]
         .set_index(factors)['Open Loop Recon RMSE']
         .reindex(err_df.set_index(factors).index)
         .values
     )
 
     err_df['Coeff Relative RMSE'] = err_df['Coeff RMSE'] / (
-        err_df[err_df['Aperture Size'] == 64]
+        err_df[err_df['Aperture Size'] == 100]
         .set_index(factors)['Open Loop Coeff RMSE']
         .reindex(err_df.set_index(factors).index)
         .values
     )
 
-    # # columns by aperture size
+    result_columns = ['Coeff RMSE', 'Recon RMSE']
+    baseline = err_df[err_df['Type'] == 'GLAO'].copy()
+    baseline = baseline.rename(columns={col: f"{col}_baseline" for col in result_columns})
+    baseline = baseline.drop(columns=['Type', 'Fitting',
+                                    'Open Loop Recon RMSE',
+                                    'Open Loop Coeff RMSE',
+                                    'Recon Relative RMSE',
+                                    'Coeff Relative RMSE']) # to allow joining on all ID columns
+
     # for tomo in err_df['Type'].unique():
 
-    #     fig, axs = plt.subplots(1, len(err_df['Aperture Size'].unique()), sharey=True)
-    #     f2, axs2 = plt.subplots(1, len(err_df['Aperture Size'].unique()), sharey=True)
+    #     fig, axs = plt.subplots(1, len(err_df['Perturbation Adjusted'].unique()), sharey=True)
+    #     f2, axs2 = plt.subplots(1, len(err_df['Perturbation Adjusted'].unique()), sharey=True)
     #     fig.suptitle(f'{tomo}: Reconstruction Error')
     #     f2.suptitle(f'{tomo}: Coefficient Error')
-    #     for i, ap_size in enumerate(err_df['Aperture Size'].unique()):
-    #         df = err_df[(err_df['Aperture Size'] == ap_size) & (err_df['Perturbation'] == '(0.5, 0.5)') & (err_df['Type'] == tomo)]
-    #         sns.boxplot(ax=axs[i], data=df, x='Angle', y='Recon Relative RMSE', hue='Perturbation Adjusted')
-    #         sns.boxplot(ax=axs2[i], data=df, x='Angle', y='Coeff Relative RMSE', hue='Perturbation Adjusted')
-    #         axs[i].set_title(f'Aperture Size: {ap_size}')
-    #         axs[i].set_yscale('log')
-    #         axs2[i].set_title(f'Aperture Size: {ap_size}')
-    #         axs2[i].set_yscale('log')
+    #     for i, p_adj in enumerate(err_df['Perturbation Adjusted'].unique()):
+            # df = err_df[(err_df['Perturbation Adjusted'] == p_adj) & (err_df['Perturbation'] == '(0.5, 0.5)') & (err_df['Type'] == tomo)]
+    fig, axs = plt.subplots(1, 2)
+    sns.boxplot(ax=axs[0], data=err_df, x='Angle', y='Recon Relative RMSE', hue='Type')
+    sns.boxplot(ax=axs[1], data=err_df, x='Angle', y='Coeff Relative RMSE', hue='Type')
+    axs[0].set_title(f'Reconstruction')
+    axs[0].set_yscale('log')
+    axs[1].set_title(f'Coefficient')
+    axs[1].set_yscale('log')
 
-    # columns by perturbation adjusted
-    for tomo in err_df['Type'].unique():
+    fig, axs = plt.subplots(1, 2)
+    sns.boxplot(ax=axs[0], data=err_df, x='Angle', y='Recon RMSE', hue='Type')
+    sns.boxplot(ax=axs[1], data=err_df, x='Angle', y='Coeff RMSE', hue='Type')
+    axs[0].set_title(f'Reconstruction')
+    axs[0].set_yscale('log')
+    axs[1].set_title(f'Coefficient')
+    axs[1].set_yscale('log')
 
-        fig, axs = plt.subplots(1, len(err_df['Perturbation Adjusted'].unique()), sharey=True)
-        f2, axs2 = plt.subplots(1, len(err_df['Perturbation Adjusted'].unique()), sharey=True)
-        fig.suptitle(f'{tomo}: Reconstruction Error')
-        f2.suptitle(f'{tomo}: Coefficient Error')
-        for i, p_adj in enumerate(err_df['Perturbation Adjusted'].unique()):
-            df = err_df[(err_df['Perturbation Adjusted'] == p_adj) & (err_df['Perturbation'] == '(0.5, 0.5)') & (err_df['Type'] == tomo)]
-            sns.boxplot(ax=axs[i], data=df, x='Angle', y='Recon Relative RMSE', hue='Aperture Size')
-            sns.boxplot(ax=axs2[i], data=df, x='Angle', y='Coeff Relative RMSE', hue='Aperture Size')
-            axs[i].set_title(f'Perturbation Adjusted: {p_adj}')
-            axs[i].set_yscale('log')
-            axs2[i].set_title(f'Perturbation Adjusted: {p_adj}')
-            axs2[i].set_yscale('log')
+    err_df = err_df.merge(baseline, on=['Aperture Size', 'Angle', 'Atmosphere ID'])
+    for col in result_columns:
+        err_df[f'{col} - GLAO RMSE Delta'] = err_df[col] - err_df[f'{col}_baseline']
+
+    err_df = err_df[err_df['Type'] != 'GLAO']
+    fig, axs = plt.subplots(1, 2)
+    for i, col in enumerate(result_columns):
+        sns.boxplot(ax=axs[i], data=err_df, x='Angle', y=f'{col} - GLAO RMSE Delta', hue="Type")
+    axs[0].set_title(f'Reconstruction')
+    axs[1].set_title(f'Coefficient')
+    # axs[0].tick_params("x", rotation=90)
+    # axs[1].tick_params("x", rotation=90)
 
 
 def test_beacons():

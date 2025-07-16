@@ -24,16 +24,19 @@ class Beacon():
 
         # Gamma needs to be in radians, but is more human readable in arcseconds for this use case
         self.arcseconds = arcseconds
+        self.set_gamma(gamma, arcseconds=arcseconds)
+
+        self.theta = theta
+        self.aperture_mask = aperture_mask
+        self.magnitude = magnitude
+
+    def set_gamma(self, gamma, arcseconds=True):
         if arcseconds:
             self._gamma_arcsec = gamma
             self.gamma = util.arcsec2rad(gamma)
         else:
             self._gamma_arcsec = util.rad2arcsec(gamma)
             self.gamma = gamma
-
-        self.theta = theta
-        self.aperture_mask = aperture_mask
-        self.magnitude = magnitude
 
     def __repr__(self):
         try:
@@ -44,10 +47,16 @@ class Beacon():
     def to_simple_str(self):
         return f"{float(self.theta)},{float(self._gamma_arcsec)},{float(self.magnitude)}"
     
+    def to_tuple(self):
+        return (float(self.theta), float(self._gamma_arcsec), float(self.magnitude))
+    
     def from_simple_str(string_repr):
         # print(string_repr)
         theta, gamma_a, mag = string_repr.split(',')
         return Beacon(float(theta), float(gamma_a), float(mag), arcseconds=True)
+    
+    def from_tuple(tuple_repr):
+        return Beacon(float(tuple_repr[0]), float(tuple_repr[1]), float(tuple_repr[2]), arcseconds=True)
     
     def copy(self):
         return Beacon(self.theta, self.gamma, self.magnitude, aperture_mask=self.aperture_mask, arcseconds=False)

@@ -64,3 +64,4 @@ gp.php
 *.torch
 *.mat
 *.out
+*.parquet
