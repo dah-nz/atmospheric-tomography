@@ -14,6 +14,9 @@ ASTERISM_SIZE = 3
 LIMITING_ANGLE = 120
 DEFAULT_M = 8   # default magnitude
 
+def rotate_asterism(asterism, rotation):
+    return [b.offset(theta=rotation) for b in asterism]
+
 def perturb_asterism(asterism, perturbation):
     x, y = perturbation
     return [b.offset(x=x, y=y) for b in asterism]
@@ -22,7 +25,7 @@ def perturb_asterism_single_star(asterism, perturbation):
     x, y = perturbation
     asts = []
     if x == 0.0 and y == 0.0:
-        asts.append((None, [star.copy() for star in asterism]))
+        asts.append((0, [star.copy() for star in asterism]))
     else:
         for i in range(len(asterism)):
             ast = []
@@ -134,7 +137,7 @@ def get_test_asterisms(n, fixed_rate=0.2, uniform_rate=0.2, offset_rate=0.2, lim
         offsets_per_ast = rng.choice(list(range(1, asterism_size+1)), size=offset_n)
         offset_i_per_ast = rng.choice(list(range(asterism_size)), size=(offset_n, asterism_size))
         theta_offset = rng.normal(scale=np.pi/(asterism_size*3), size=(offset_n, asterism_size))
-        gamma_offset = rng.normal(scale=0.2, size=(offset_n, asterism_size))
+        gamma_offset = rng.normal(scale=0.2, size=(offset_n, asterism_size)) 
         fixed_theta0 = rng.uniform(0, 2*np.pi, size=offset_n)
         fixed_gamma = rng.beta(2.0, 3.0, size=offset_n) * limiting_angle
 
@@ -530,7 +533,7 @@ def is_target_in_triangle(asterism):
     p2 = asterism[1].position_arcsec()
     p3 = asterism[2].position_arcsec()
 
-    return signed_distance_triangle((0.0, 0.0), p1, p2, p3)
+    return np.abs(signed_distance_triangle((0.0, 0.0), p1, p2, p3))
 
 
 def gaussian_area_within_triangle(asterism):
