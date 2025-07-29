@@ -52,16 +52,24 @@ asterism_result_queue = None
 asterism_data_queue = None
 
 def run_tests():
-    # test_asterism_generation()
+    mp.set_start_method('spawn')
+    test_asterism_generation()
     # test_phase_variance()
 
     # test_asterism_cross_entropy()
     
-    cfg = AsterismConfig()
+    # cfg = AsterismConfig()
+    # cfg.n_asterisms = 512
+    # cfg.n_atm = 512
+    # cfg.augmented_asterisms = True
     # run_asterism_comparison(cfg)
-    # bulk_compile_asterism_data()
+    # bulk_compile_asterism_data('testing_data')
+
+    # cfg.augmented_asterisms = False
+    # run_asterism_comparison(cfg)
+    # bulk_compile_asterism_data('validation_data')
     # transform_data(cfg)
-    display_results()
+    # display_results()
     # load_angle_data_test()
 
     plt.show()
@@ -120,7 +128,7 @@ class AsterismConfig():
     """
     def __init__(self):
         # Size of test set
-        self.n_asterisms = 256
+        self.n_asterisms = 512
         self.n_atm = 512
 
         # Atmospheric and tomography simulation paramters
@@ -133,6 +141,16 @@ class AsterismConfig():
 
         # Different data points to compute while running each asterism
         self.tomo_methods = ['glao', 'lsq_T', 'lsq_K', 'open_loop', 'fitting'] # 'tiptilt', 'ao', 'lsq'
+
+        # Include augmented asterisms at asterism generation
+        self.augmented_asterisms = True
+
+        # Add noise to position/WFS measurements
+        self.position_n = 1
+        self.position_uncertainty = 0.5 # arcseconds
+        self.single_uncertainty = 0.2 # arcseconds
+        self.measurement_n = 1
+        self.measurement_uncertainty = 0.1 # 10% of Zernike covariance
 
         self.perturbation_analysis = False
         # Perturbations for all the guide stars
@@ -200,6 +218,9 @@ def asterism_test_worker(cfg, atm_gens):
             tomo_cfg['lsq_T'][ap] = LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='Tinv')
             tomo_cfg['lsq_K'][ap] = LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='K')
 
+        # Covariance matrix for adding measurement noise
+        C_mat = tomo_cfg['lsq_T'][ap].C_diag * cfg.measurement_uncertainty
+
         while not asterism_data_queue.empty(): # Asterism Queue
             group_id, asterism_id, asterism_type, asterism = asterism_data_queue.get()
             t0 = time.time()
@@ -212,13 +233,15 @@ def asterism_test_worker(cfg, atm_gens):
                     "perturbation_y": 0.0,
                     "star_perturbed": 0,
                     'rotation': 0,
-                    "asterism": asterism
+                    "asterism": asterism,
+                    'noise': 'none',
                 }]
 
             for check_asterism_type in cfg.perturbed_asterism_types:
                 if check_asterism_type in asterism_type:
                     for p_x in cfg.full_perturb_x:
                         for p_y in cfg.full_perturb_y:
+                            a = asterisms.perturb_asterism(asterism, (p_x, p_y))
                             asterism_specs.append(
                                 {
                                     "perturbation_type": 'full',
@@ -226,7 +249,8 @@ def asterism_test_worker(cfg, atm_gens):
                                     "perturbation_y": p_y,
                                     "star_perturbed": 0,
                                     'rotation': 0,
-                                    "asterism": asterisms.perturb_asterism(asterism, (p_x, p_y))
+                                    "asterism": a,
+                                    'noise': 'none',
                                 }
                             )
 
@@ -242,21 +266,50 @@ def asterism_test_worker(cfg, atm_gens):
                                     "perturbation_y": p_y,
                                     "star_perturbed": star,
                                     'rotation': 0,
-                                    "asterism": s_ast
+                                    "asterism": s_ast,
+                                    'noise': 'none',
                                     }
                                 )
 
             for check_asterism_type in cfg.rotated_asterism_types:
                 if check_asterism_type in asterism_type:
                     for rotation in cfg.rotations:
+                        a = asterisms.rotate_asterism(asterism, rotation)
                         asterism_specs.append({
                             'perturbation_type': 'rotate',
                             "perturbation_x": 0,
                             "perturbation_y": 0,
                             "star_perturbed": 0,
                             'rotation': rotation,
-                            "asterism": asterisms.rotate_asterism(asterism, rotation)
+                            "asterism": a,
+                            'noise': 'none',
                         })
+
+            
+            if cfg.position_n > 0:
+                for _ in range(cfg.position_n):
+                    asterism_specs.append({
+                        "perturbation_type": 'none',
+                        "perturbation_x": 0.0,
+                        "perturbation_y": 0.0,
+                        "star_perturbed": 0,
+                        'rotation': 0,
+                        "asterism": asterism,
+                        'noise': 'position',
+                        "asterism_w_position_uncertainty": asterisms.jitter_asterism(asterism, cfg.position_uncertainty, cfg.single_uncertainty),
+                    })
+
+            if cfg.measurement_n > 0:
+                for _ in range(cfg.measurement_n):
+                    asterism_specs.append({
+                        "perturbation_type": 'none',
+                        "perturbation_x": 0.0,
+                        "perturbation_y": 0.0,
+                        "star_perturbed": 0,
+                        'rotation': 0,
+                        "asterism": asterism,
+                        'noise': 'measurement',
+                    })
 
             for ast_spec in asterism_specs:
                 for atm in atm_gens:
@@ -266,10 +319,18 @@ def asterism_test_worker(cfg, atm_gens):
                     
                     for atm_id, screens in enumerate(atm):
                         ast = ast_spec['asterism']
+                        if ast_spec['noise'] == 'position':
+                            ast_pu = ast_spec['asterism_w_position_uncertainty']
+                        else:
+                            ast_pu = ast
 
                         target_coeffs = target.cutout_coeffs(cfg.Z, cfg.D, cfg.alts, screens, atm.metapupil_diameters)
                         target_screen = target.total_cutout(cfg.D, cfg.alts, screens, atm.metapupil_diameters)
-                        ast_coeffs = get_coeffs_for_asterism(ast, cfg.Z, cfg.D, screens, cfg.alts, atm.metapupil_diameters)
+                        ast_coeffs = get_coeffs_for_asterism(ast_pu, cfg.Z, cfg.D, screens, cfg.alts, atm.metapupil_diameters)
+
+                        if ast_spec['noise'] == 'measurement':
+                            for i in range(len(ast_coeffs)):
+                                ast_coeffs[i, 3:] = ast_coeffs[i, 3:] + np.random.normal(scale=C_mat)
 
                         for tomo in cfg.tomo_methods:
 
@@ -283,8 +344,10 @@ def asterism_test_worker(cfg, atm_gens):
                                 "perturbation_y": ast_spec["perturbation_y"],
                                 "perturbation_star": ast_spec["star_perturbed"],
                                 'perturbation_rotation': ast_spec['rotation'],
+                                'noise': ast_spec['noise'],
                                 'aperture_pixels': ap,
-                                'tomo_method': tomo
+                                'tomo_method': tomo,
+                                'noise': ast_spec['noise']
                             }
 
                             for sid, star in enumerate(ast):
@@ -363,7 +426,6 @@ def run_asterism_comparison(cfg):
 
     Run a set of asterisms on a set of static phase screens.
     """
-    mp.set_start_method('spawn')
     manager = mp.Manager()
     asterism_queue = manager.Queue()
     result_queue = manager.Queue()
@@ -374,19 +436,9 @@ def run_asterism_comparison(cfg):
     for i, asterism_group in tqdm(enumerate(groups)):
         asts = asterisms.get_asterisms_from_group(asterism_group)
         for j, (ast_type, ast) in enumerate(asts.items()):
-            asterism_queue.put((i, j, ast_type, ast))
-            # ast_data = {
-            #     'group_id': i,
-            #     'asterism_id': j,
-            #     'asterism_type': ast_type
-            # }
-            # for k, star in enumerate(ast):
-            #     ast_data[f'star_{k}'] = star.to_tuple()
-            # all_asterisms.append(ast_data)
-
-    # ast_df = pd.DataFrame(all_asterisms)
-    # ast_df.to_parquet(os.path.join(DATA_FOLDER, 'asterism_geometry_data.parquet'))
-
+            if (cfg.augmented_asterisms) or ("raw" in ast_type):
+                asterism_queue.put((i, j, ast_type, ast))
+            
     print(f"Generated {cfg.n_asterisms} asterisms")
 
     print(f"Generating {cfg.n_atm} simulated atmospheres")
@@ -419,13 +471,27 @@ def run_asterism_comparison(cfg):
 
     print("Multi-processing completed")
 
-def bulk_compile_asterism_data():
+def bulk_compile_asterism_data(dest_filename):
     files = glob.glob(os.path.join(DATA_FOLDER, 'batch', '*.parquet'))
     if len(files) > 0:
-        df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
-        file_path = os.path.join(DATA_FOLDER, 'asterism_quality_data.parquet')
-        df.to_parquet(file_path, index=False)
+        for noise_type in ['measurement', 'position', 'none']:
+            df = pd.DataFrame()
+            for f in files:
+                df0 = pd.read_parquet(f)
+                df1 = df0[df0['noise'] == noise_type]
+                df = pd.concat([df, df1], ignore_index=True)
+
+            file_path = os.path.join(DATA_FOLDER, dest_filename + f'_{noise_type}_noise.parquet')
+            df.to_parquet(file_path, index=False)
+        
         print(f"Merged data in {os.path.join(DATA_FOLDER, 'batch')} into {file_path}")
+
+        # Save csv for checking values
+        if False:
+            file_path = os.path.join(DATA_FOLDER, dest_filename + '.csv')
+            df.to_csv(file_path, index=False)
+            print(f"Created csv file for checking in {file_path}")
+
         for f in files:
             os.remove(f)
         print(f"Deleted {len(files)} parquet files in {os.path.join(DATA_FOLDER, '/batch')}")
@@ -571,28 +637,28 @@ def display_results():
             'f_centroid_distance', 
             'f_circumcentre_distance',
             'f_circumcircle_radius', 
-            'f_length_ratio', 
-            'f_average_side_length',
-            'f_minimum_side_length', 
-            'f_maximum_side_length', 
+            # 'f_length_ratio', 
+            # 'f_average_side_length',
+            # 'f_minimum_side_length', 
+            # 'f_maximum_side_length', 
             'f_incentre_distance',
             'f_incircle_radius', 
-            'f_perimeter_area_ratio', 
-            'f_closest_furthest_side_length',
+            # 'f_perimeter_area_ratio', 
+            # 'f_closest_furthest_side_length',
             'f_distance_to_closest_edge', 
-            'f_perimeter', 
-            'f_min_interior_angle',
-            'f_maximum_interior_angle', 
-            'f_gaussian_area_within_triangle', 
+            # 'f_perimeter', 
+            # 'f_min_interior_angle',
+            # 'f_maximum_interior_angle', 
+            # 'f_gaussian_area_within_triangle', 
             'f_overlap',
             'f_target_in_triangle', 
-            'f_circular_similarity'
+            # 'f_circular_similarity'
             ]
     n_features = len(feature_columns)
 
     # plot_features(df, feature_columns)
     # comparison(df, feature_columns)
-    test_column = 'coeff_rmse_rel_log_mean'
+    test_column = 'recon_rmse_rel_log_mean'
     ast_type_list = ['_', 'raw']
 
     df = df[(df['tomo_method'] == 'lsq_T')] # & df['asterism_type'].str.contains('raw')]
@@ -602,8 +668,25 @@ def display_results():
 
     # data_correlation(df)
 
-    run_regression_models(df, feature_columns, y_col=test_column)
-    run_ML_regression_models(df, feature_columns, y_col=test_column)
+    regression_results = []
+
+    # for n in range(n_features - 1, n_features + 1):
+    #     print(f"Running combinations of size {n}")
+    #     for combination in combinations(feature_columns, n):
+    regression_results += run_regression_models(df, feature_columns, y_col=test_column)
+    regression_results.append(run_ML_regression_models(df, feature_columns, y_col=test_column))
+
+    dfr = pd.DataFrame(regression_results)
+
+    print("R² Results")
+    r2_results = dfr.nlargest(3, 'R²')
+    for _, row in r2_results.iterrows():
+        print(f"R²: {row['R²']}; MSE: {row['MSE']}; Features: {row['Features']}")
+
+    # print("MSE Results")
+    # mse_results = dfr.nsmallest(10, 'MSE')
+    # for _, row in mse_results.iterrows():
+    #     print(f"MSE: {row['MSE']}; R²: {row['R²']}; Features: {row['Features']}")
 
     return # END Filter.filter_asterisms
 
@@ -973,36 +1056,37 @@ def data_correlation(df):
     return # END Filter.data_correlation
 
 def run_regression_models(df, feature_columns, y_col, split_size=0.2):
+    data = []
     # Data for regession testing
-    X = df[list(feature_columns)]
+    X = df[feature_columns]
     y = df[y_col]
     X_trn, X_tst, y_trn, y_tst = train_test_split(X, y, test_size=split_size)
 
     # Partial Least Squares Regression (PLS)
     model = PLSRegression(n_components=2)
-    regression(X_trn, X_tst, y_trn, y_tst, model, f"Partial Least Squares Regression")
+    data.append(regression_data(X_trn, X_tst, y_trn, y_tst, model, f"Partial Least Squares Regression"))
 
     # Principal Component Regression (PCR)
     pcr = make_pipeline(PCA(n_components=2), LinearRegression())
-    regression(X_trn, X_tst, y_trn, y_tst, pcr, "Principal Component Regression")
+    data.append(regression_data(X_trn, X_tst, y_trn, y_tst, pcr, "Principal Component Regression"))
 
     # Ridge Regression
     rdg = Ridge(alpha=0.1)
-    regression(X_trn, X_tst, y_trn, y_tst, rdg, f"Ridge Regression")
+    data.append(regression_data(X_trn, X_tst, y_trn, y_tst, rdg, f"Ridge Regression"))
     
     # Lasso Regression
     lso = Lasso(alpha=0.1)
-    regression(X_trn, X_tst, y_trn, y_tst, lso, "Lasso Regression")
+    data.append(regression_data(X_trn, X_tst, y_trn, y_tst, lso, "Lasso Regression"))
 
-    # for kernel in ['linear', 'poly', 'rbf']: #, 'sigmoid']:
-    #     svr = SVR(kernel=kernel, C=1.0, epsilon=0.1)
-    #     regression(X_trn, X_tst, y_trn, y_tst, svr, f"Support Vector Regression [{kernel}]")
+    for kernel in ['linear', 'poly', 'rbf']: #, 'sigmoid']:
+        svr = SVR(kernel=kernel, C=1.0, epsilon=0.1)
+        regression(X_trn, X_tst, y_trn, y_tst, svr, f"Support Vector Regression [{kernel}]")
 
-    return # END Filter.run_regression_models
+    return data # END Filter.run_regression_models
 
 def run_ML_regression_models(df, feature_columns, y_col, split_size=0.2):
     # Data for regession testing
-    X = df[list(feature_columns)]
+    X = df[feature_columns]
     y = df[y_col]
     X_trn, X_tst, y_trn, y_tst = train_test_split(X, y, test_size=split_size)
 
@@ -1024,7 +1108,8 @@ def run_ML_regression_models(df, feature_columns, y_col, split_size=0.2):
             return self.network(x)
 
     reg_model = ML_Model(RegressionModel, nn.MSELoss)
-    regression(X_trn, X_tst, y_trn, y_tst, reg_model, f"ML Regression")
+    return regression_data(X_trn, X_tst, y_trn, y_tst, reg_model, f"ML Regression")
+    # regression(X_trn, X_tst, y_trn, y_tst, reg_model, f"ML Regression")
 
     # reg_model.fit(X_trn, y_trn)
 
@@ -1280,6 +1365,20 @@ def znorm(a):
     
     return (a - a.mean()) / stdev
     # END znorm
+
+def regression_data(X_train, X_test, y_train, y_test, model, name):
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test).flatten()
+
+    reg_data = {
+        'model': name,
+        'R²': r2_score(y_test, y_pred),
+        'MSE': mean_squared_error(y_test, y_pred),
+        'Features': X_train.columns
+    }
+
+    return reg_data
 
 def regression(X_train, X_test, y_train, y_test, model, name):
     model.fit(X_train, y_train)

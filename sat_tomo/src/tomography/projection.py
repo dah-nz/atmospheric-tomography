@@ -168,7 +168,7 @@ def test_projection():
     modes = test_modes[0]
     errors = []
     for loc in locs:
-        P = projectionMatrix(tuple(loc), scale, len(modes))
+        P = projectionMatrix(tuple(loc), scale, len(modes), mode_skip=0)
         P = np.transpose(P)
         mode_screen = basis.compose(size, modes)
         sub_modes = np.matmul(P, modes)
@@ -188,7 +188,7 @@ def test_projection():
 
     location = locs[2]
     modes = test_modes[0]
-    P = projectionMatrix(tuple(location), scale, len(modes))
+    P = projectionMatrix(tuple(location), scale, len(modes), mode_skip=0)
     P = np.transpose(P)
     # Calculate subpupils
     mode_screen = basis.compose(size, modes)

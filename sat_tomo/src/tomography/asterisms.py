@@ -17,6 +17,11 @@ DEFAULT_M = 8   # default magnitude
 def rotate_asterism(asterism, rotation):
     return [b.offset(theta=rotation) for b in asterism]
 
+def jitter_asterism(asterism, amount_full, amount_single):
+    x, y = np.random.normal(scale=amount_full, size=2)
+    s = np.random.normal(scale=amount_single, size=(2, len(asterism)))
+    return [star.offset(x=x+a, y=y+b) for star, a, b in zip(asterism, s[0, :], s[1, :])]
+
 def perturb_asterism(asterism, perturbation):
     x, y = perturbation
     return [b.offset(x=x, y=y) for b in asterism]

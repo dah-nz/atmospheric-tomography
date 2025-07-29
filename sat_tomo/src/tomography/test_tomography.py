@@ -15,6 +15,7 @@ from astronomy.asterisms import load_data, sample
 
 from tqdm import tqdm
 from scipy.stats import gmean
+from skimage.metrics import structural_similarity as ssim
 
 from itertools import combinations
 
@@ -27,9 +28,11 @@ def run_tests():
     # test_beacons()
     # test_atmospheres()
     # test_leastsquares()
-    display_leastsquares_results()
+    # display_leastsquares_results()
     # test_asterisms()
     # projection.test_projection()
+
+    test_intra_phase_screen()
 
     # C = zernike.covar(21)
     # D = 1.8
@@ -37,6 +40,57 @@ def run_tests():
     # C = C * (D / r0) ** (5/3)
     # plt.figure()
     # plt.imshow(C)
+
+    plt.show()
+
+def test_intra_phase_screen():
+    altitudes = [1000, 5000, 10000]
+    D = 1.8
+    atm = phase_screen.Atmosphere(1, altitudes, r0=0.07, D=D, aperture_size=256)
+    screens = atm[0]
+    mask = util.circle(256)
+
+    fig, axs = plt.subplots(ncols=len(screens))
+    for i, screen in enumerate(screens):
+        screen = screen * atm.generators[i].mask
+        dim = atm.metapupil_diameters[i]
+        mx = max(np.abs(np.amax(screen)), np.abs(np.amin(screen)))
+        axs[i].imshow(screen, vmin=-mx, vmax=mx, extent=[-dim/2, dim/2, -dim/2, dim/2])
+        axs[i].set_xlabel("Length (m)")
+        axs[i].set_ylabel("Length (m)")
+        axs[i].set_title(f"Phase screen at {altitudes[i]}")
+
+    fig.tight_layout()
+
+
+    asterism = asterisms.generate_fixed_asterisms(1, 30)[0]
+    fig, axs = plt.subplots(3, ncols=len(asterism))
+    for i, b in enumerate(asterism):
+        cutout = b.total_cutout(D, altitudes, screens, atm.metapupil_diameters) * mask
+        b0 = b.offset(theta=util.rad2arcsec(np.pi/3))
+        c0 = b0.total_cutout(D, altitudes, screens, atm.metapupil_diameters) * mask
+        axs[0, i].imshow(cutout, extent=[-D/2, D/2, -D/2, D/2])
+        axs[1, i].imshow(c0, extent=[-D/2, D/2, -D/2, D/2])
+
+    atm = phase_screen.Atmosphere(128, altitudes, r0=0.07, D=D, aperture_size=256)
+    angles = np.linspace(0, np.pi*2, 100, endpoint=True)
+    ssim_rot = {angle: [] for angle in angles}
+    for screens in tqdm(atm):
+        for theta in angles:
+            ssims = []
+            for b in asterism:
+                cutout = b.total_cutout(D, altitudes, screens, atm.metapupil_diameters) * mask
+                for b0 in asterism:
+                    b0 = b0.offset(theta=util.rad2arcsec(theta))
+                    compare = b0.total_cutout(D, altitudes, screens, atm.metapupil_diameters) * mask
+                    ssims.append(ssim(cutout, compare, data_range=np.amax(compare)-np.amin(compare)))
+            ssim_rot[theta].append(max(ssims))
+
+    ssim_rot = [np.mean(ssim_rot[key]) for key in ssim_rot.keys()]
+
+    plt.figure()
+    plt.plot(angles, ssim_rot)
+    
 
     plt.show()
 
