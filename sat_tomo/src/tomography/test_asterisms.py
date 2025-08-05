@@ -53,7 +53,10 @@ asterism_data_queue = None
 
 def run_tests():
     mp.set_start_method('spawn')
-    test_asterism_generation()
+
+    test_asterism_features()
+
+    # test_asterism_generation()
     # test_phase_variance()
 
     # test_asterism_cross_entropy()
@@ -75,6 +78,138 @@ def run_tests():
     plt.show()
 
     return # END run_tests
+
+def test_asterism_features():
+    # Print features for Latex document
+    stars = [(1.15, 65), (1.25, 280), (1.7, 195)]
+    asterism = [beacon.Beacon(t * np.pi/180, g) for g, t in stars]
+
+    for i, s in enumerate(asterism):
+        c = (bytes([ord('a') + i])).decode('ascii')[0]
+        g = s._gamma_arcsec
+        t = s.theta * 180/np.pi
+        print(f"\\newcommand{{\\GS{c}g}}{{{g}}}")
+        print(f"\\newcommand{{\\GS{c}t}}{{{t}}}")
+        
+        x, y = s.position_arcsec()
+        print(f"\\newcommand{{\\GS{c}x}}{{{x}}}")
+        print(f"\\newcommand{{\\GS{c}y}}{{{y}}}")
+
+    incentre = asterisms.incentre(asterism)
+    theta = incentre.theta * 180/np.pi
+    gamma = incentre._gamma_arcsec
+
+    print(f"\\newcommand{{\\IncentreTheta}}{{{theta}}}")
+    print(f"\\newcommand{{\\IncentreGamma}}{{{gamma}}}")
+
+    x, y = incentre.position_arcsec()
+    print(f"\\newcommand{{\\IncentreX}}{{{x}}}")
+    print(f"\\newcommand{{\\IncentreY}}{{{y}}}")
+
+    radius = asterisms.incircle_radius(asterism)
+    print(f"\\newcommand{{\\IncircleRadius}}{{{radius}}}")
+
+    x, y = util.closest_point_to_line(incentre.position_arcsec(), asterism[0].position_arcsec(), asterism[2].position_arcsec())
+    print(f"\\newcommand{{\\IncircleInterceptX}}{{{x}}}")
+    print(f"\\newcommand{{\\IncircleInterceptY}}{{{y}}}")
+
+    circumcentre = asterisms.circumcentre(asterism)
+    theta = circumcentre.theta * 180/np.pi
+    gamma = circumcentre._gamma_arcsec
+    print(f"\\newcommand{{\\CircumcentreTheta}}{{{theta}}}")
+    print(f"\\newcommand{{\\CircumcentreGamma}}{{{gamma}}}")
+
+    radius = asterisms.circumcircle_radius(asterism)
+    print(f"\\newcommand{{\\CircumcircleRadius}}{{{radius}}}")
+
+    b = asterisms.centroid(asterism)
+    x, y = b.position_arcsec()
+    print(f"\\newcommand{{\\CentroidX}}{{{x}}}")
+    print(f"\\newcommand{{\\CentroidY}}{{{y}}}")
+
+    xa, ya = asterism[0].position_arcsec()
+    xb, yb = asterism[1].position_arcsec()
+    xc, yc = asterism[2].position_arcsec()
+
+    print(f"\\newcommand{{\\MidABX}}{{{(xa + xb) / 2}}}")
+    print(f"\\newcommand{{\\MidABY}}{{{(ya + yb) / 2}}}")
+
+    print(f"\\newcommand{{\\MidACX}}{{{(xa + xc) / 2}}}")
+    print(f"\\newcommand{{\\MidACY}}{{{(ya + yc) / 2}}}")
+
+    print(f"\\newcommand{{\\MidBCX}}{{{(xb + xc) / 2}}}")
+    print(f"\\newcommand{{\\MidBCY}}{{{(yb + yc) / 2}}}")
+
+    xab, yab = util.closest_point_to_line((0, 0), asterism[0].position_arcsec(), asterism[1].position_arcsec())
+    xac, yac = util.closest_point_to_line((0, 0), asterism[0].position_arcsec(), asterism[2].position_arcsec())
+    xbc, ybc = util.closest_point_to_line((0, 0), asterism[1].position_arcsec(), asterism[2].position_arcsec())
+    dab = xab**2+yab**2
+    dac = xac**2+yac**2
+    dbc = xbc**2+ybc**2
+    if dab <= min(dab, dac, dbc):
+        ab_text = "Closest"
+        ac_text = "NotClosestA"
+        bc_text = "NotClosestB"
+    elif dac <= min(dab, dac, dbc):
+        ab_text = "NotClosestA"
+        ac_text = "Closest"
+        bc_text = "NotClosestB"
+    else:
+        ab_text = "NotClosestA"
+        ac_text = "NotClosestB"
+        bc_text = "Closest"
+
+    print(f"\\newcommand{{\\{ab_text}X}}{{{xab}}}")
+    print(f"\\newcommand{{\\{ab_text}Y}}{{{yab}}}")
+
+    print(f"\\newcommand{{\\{ac_text}X}}{{{xac}}}")
+    print(f"\\newcommand{{\\{ac_text}Y}}{{{yac}}}")
+
+    print(f"\\newcommand{{\\{bc_text}X}}{{{xbc}}}")
+    print(f"\\newcommand{{\\{bc_text}Y}}{{{ybc}}}")
+
+    resolution = 256
+    dim = 2
+    x = np.linspace(-dim, dim, resolution)
+    y = np.linspace(-dim, dim, resolution)
+
+    X, Y = np.meshgrid(x, y)
+    A = asterism[0].position_arcsec()
+    B = asterism[1].position_arcsec()
+    C = asterism[2].position_arcsec()
+    triangle = np.array([A, B, C])
+
+    def sdf(X, Y):
+        field = np.zeros((resolution, resolution))
+        for i in range(resolution):
+            for j in range(resolution):
+                p = np.array([X[i, j], Y[i, j]])
+                field[i, j] = util.signed_distance_triangle(p, A, B, C)
+        return field * util.circle(resolution)
+    
+    def point_in_tri(X, Y):
+        field = np.zeros((resolution, resolution))
+        for i in range(resolution):
+            for j in range(resolution):
+                p = np.array([X[i, j], Y[i, j]])
+                field[i, j] = util.point_in_triangle(A, B, C, p)
+        return field * util.circle(resolution)
+    
+    df = sdf(X, Y)
+    vlim=max(np.abs(np.amax(df)), np.abs(np.amin(df)))
+
+    from matplotlib.colors import LinearSegmentedColormap
+    colors = ['#33BDF2', "#ACE8FF", '#FFFFFF', '#FFBF7F', "#FF9429"]
+    ccmap = LinearSegmentedColormap.from_list('Custom', colors)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    im = ax.imshow(df, extent=(-dim, dim, -dim, dim), origin='lower', cmap=ccmap, vmax=vlim, vmin=-vlim)
+    ax.axis('off')
+    plt.colorbar(im, ax=ax, label='Signed Distance')
+
+    plt.show()
+
+
 
 def test_asterism_cross_entropy():
     asts = asterisms.get_base_asterisms(1)
@@ -1235,20 +1370,80 @@ def dimensionality_reduction_ML(df, feature_columns, y_col, split_size=0.2):
 
 
 def test_asterism_generation():
+    N = 10
+    A = 3
 
-    all_asts = []
-    t0 = time.time()
-    groups = asterisms.get_base_asterisms(2)
-    t1 = time.time()
-    for group in groups:
-        asts = asterisms.get_asterisms_from_group(group)
-        all_asts = all_asts + asts
-    t1 = time.time()
+    def plot_circ():
+        theta = np.linspace(0, 2*np.pi, 100, endpoint=True)
+        rho = np.ones_like(theta) * 120
+        x, y = util.pol2cart(rho, theta)
+        plt.plot(x, y, "k:", alpha=0.2)
     
-    print(f"Time: {t1-t0}")
-    print(f"Groups: {len(groups)}; Asterisms: {len(all_asts)}")
-    for ast in all_asts:
-        print(ast)
+    # Line Through Target
+    def get_asterism_line_through_target():
+        theta = np.random.uniform(0, 2*np.pi)
+        return [beacon.Beacon(theta + ((i % 2) * np.pi), gamma=np.random.uniform(0, 120)) for i in range(A)]
+    
+    def get_asterism_line_off_target():
+        x_start = np.random.uniform(-120, 120)
+        y_start = np.random.uniform(-np.sqrt(120**2-x_start**2), np.sqrt(120**2-x_start**2))
+        y_end = np.random.uniform(-120, 120)
+        x_end = np.random.uniform(-np.sqrt(120**2-y_end**2), np.sqrt(120**2-y_end**2))
+        scale = np.random.uniform(0.1, 0.9)
+        x_mid = scale * (x_end - x_start) + x_start
+        y_mid = scale * (y_end - y_start) + y_start
+        b_start = beacon.Beacon(0, 0).offset(x_start, y_start)
+        b_mid = beacon.Beacon(0, 0).offset(x_mid, y_mid)
+        b_end = beacon.Beacon(0, 0).offset(x_end, y_end)
+
+        return [b_start, b_mid, b_end]
+
+
+    def get_asterism_circular():
+        theta0 = np.random.uniform(0, 2*np.pi/3)
+        gamma = np.random.uniform(5, 120)
+        return [beacon.Beacon(theta0 + (i * 2 * np.pi / 3), gamma) for i in range(A)]
+
+    def get_asterism_tight_cluster_far_off_target():
+        max_g = 100
+        gamma = np.random.uniform(45, max_g)
+        theta = np.random.uniform(0, 2*np.pi)
+        lim = np.sqrt(((120-max_g)**2)/2)
+        offset_x = np.random.uniform(-lim, lim, size=3)
+        offset_y = np.random.uniform(-lim, lim, size=3)
+        base = beacon.Beacon(theta, gamma)
+
+        return [base.offset(x=offset_x[i], y=offset_y[i]) for i in range(3)]
+
+    def get_asterism_arc():
+        t0 = np.random.uniform(0, 2*np.pi)
+        gamma = np.random.uniform(5, 120)
+        angle = np.random.uniform(np.pi/3, 3*np.pi/2)
+        return [beacon.Beacon(t0+(angle*i/3), gamma) for i in range(3)]
+    
+    ast_funcs = {
+        "Line Through Target": get_asterism_line_through_target,
+        "Line Off Target": get_asterism_line_off_target,
+        "Circular Asterism": get_asterism_circular,
+        "Tight Cluster Far Off-Target": get_asterism_tight_cluster_far_off_target,
+        "Arc": get_asterism_arc,
+    }
+    
+    for name, func in ast_funcs.items():
+        plt.figure()
+        for _ in range(N):
+            asterism = func()
+            x = [b.position_arcsec()[0] for b in asterism]
+            y = [b.position_arcsec()[1] for b in asterism]
+
+            plt.plot(x, y, "+:")
+        plt.suptitle(f"Asterism Type: {name}")
+        plt.plot([0], [0], 'ko')
+        plot_circ()
+        ax = plt.gca()
+        ax.set_aspect('equal')
+
+    plt.show()
 
     return # END test_asterism_generation
 

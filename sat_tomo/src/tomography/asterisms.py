@@ -2,7 +2,8 @@ import numpy as np
 
 from tomography import beacon
 from astronomy import asterisms
-from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle, lerp, rmse
+from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle, lerp, rmse, signed_distance_triangle
+import util
 from itertools import combinations
 
 import log
@@ -221,16 +222,18 @@ def get_asterisms_from_group(group, asterism_size=3):
 
 def lengths(asterism):
     """
-    Return the lenghs of the triangle defined by an asterism of three guide stars
+    Return the lengths of the triangle defined by an asterism of three guide stars
     """
-    def cos_rule_length(b, c, A):
-        return np.sqrt(b*b+c*c-2*b*c*np.cos(A))
+    # def cos_rule_length(b, c, A):
+    #     return np.sqrt(b*b+c*c-2*b*c*np.cos(A))
     
-    l12 = cos_rule_length(asterism[0]._gamma_arcsec, asterism[1]._gamma_arcsec, asterism[1].theta - asterism[0].theta)
-    l13 = cos_rule_length(asterism[0]._gamma_arcsec, asterism[2]._gamma_arcsec, asterism[2].theta - asterism[0].theta)
-    l23 = cos_rule_length(asterism[1]._gamma_arcsec, asterism[2]._gamma_arcsec, asterism[2].theta - asterism[1].theta)
+    # l12 = cos_rule_length(asterism[0]._gamma_arcsec, asterism[1]._gamma_arcsec, asterism[1].theta - asterism[0].theta)
+    # l13 = cos_rule_length(asterism[0]._gamma_arcsec, asterism[2]._gamma_arcsec, asterism[2].theta - asterism[0].theta)
+    # l23 = cos_rule_length(asterism[1]._gamma_arcsec, asterism[2]._gamma_arcsec, asterism[2].theta - asterism[1].theta)
+    
+    lengths = [util.distance(asterism[a].position_arcsec(), asterism[b].position_arcsec()) for a, b in [(0, 1), (0, 2), (1, 2)]]
 
-    return (l12, l13, l23)
+    return lengths
 
 def angles(asterism):
     """
@@ -286,9 +289,9 @@ def circumcentre(asterism):
     """
     Return the centre of the circumcircle of a triangle defined by an asterism of three guide stars
     """
-    Ax, Ay = asterism[0].position(1)
-    Bx, By = asterism[1].position(1)
-    Cx, Cy = asterism[2].position(1)
+    Ax, Ay = asterism[0].position_arcsec()
+    Bx, By = asterism[1].position_arcsec()
+    Cx, Cy = asterism[2].position_arcsec()
     
     D = 2*(Ax*(By-Cy) + Bx*(Cy-Ay) + Cx*(Ay-By))
 
@@ -297,14 +300,14 @@ def circumcentre(asterism):
 
     r, t = cart2pol(Ux, Uy)
     
-    return beacon.Beacon(t, r , arcseconds=False)
+    return beacon.Beacon(t, r)
 
 def circumcircle_radius(asterism):
     """
     Return the radius of the asterism circumcircle
     """
-    xc, yc = circumcentre(asterism).position(1)
-    x0, y0 = asterism[0].position(1)
+    xc, yc = circumcentre(asterism).position_arcsec()
+    x0, y0 = asterism[0].position_arcsec()
 
     return np.sqrt((xc-x0)**2 + (yc-y0)**2)
 
@@ -437,17 +440,20 @@ def incentre(asterism):
     """
     Return the centre of the incircle (the incircle is a circle inscribed within the triangle)
     """
-    Ax, Ay = asterism[0].position(1)
-    Bx, By = asterism[1].position(1)
-    Cx, Cy = asterism[2].position(1)
+    Ax, Ay = asterism[0].position_arcsec()
+    Bx, By = asterism[1].position_arcsec()
+    Cx, Cy = asterism[2].position_arcsec()
 
-    a, b, c = lengths(asterism)
+    a = np.sqrt((Bx - Cx) ** 2 + (By - Cy) ** 2)
+    b = np.sqrt((Cx - Ax) ** 2 + (Cy - Ay) ** 2)
+    c = np.sqrt((Bx - Ax) ** 2 + (By - Ay) ** 2)
 
     X = (a*Ax+b*Bx+c*Cx) / (a+b+c)
     Y = (a*Ay+b*By+c*Cy) / (a+b+c)
 
     r, t = cart2pol(X, Y)
-    return beacon.Beacon(t, r , arcseconds=False)
+
+    return beacon.Beacon(t, r)
 
 def incentre_distance(asterism):
     """
@@ -460,13 +466,37 @@ def incircle_radius(asterism):
     Return the radius of the incircle (the incircle is a circle inscribed within the triangle)
     """
     # l12, _, _ = lengths(asterism)
-    x0, y0 = incentre(asterism).position(1)
-    P1 = asterism[0].position(1)
-    P2 = asterism[1].position(1)
+    x0, y0 = incentre(asterism).position_arcsec()
+    P1 = asterism[0].position_arcsec()
+    P2 = asterism[1].position_arcsec()
 
     d = distance_of_point_from_line((x0, y0), P1, P2)
 
-    return rad2arcsec(np.arctan(d))
+    # Ax, Ay = asterism[0].position_arcsec()
+    # Bx, By = asterism[1].position_arcsec()
+    # Cx, Cy = asterism[2].position_arcsec()
+    
+    # import matplotlib.pyplot as plt
+    # plt.figure()
+    # plt.plot([Ax, Bx, Cx, Ax], [Ay, By, Cy, Ay], 'k:')
+    # plt.plot([0], [0], 'k+')
+    # plt.plot([x0, x0+d], [y0, y0], 'bo')
+
+    # def plot_circ(x0, y0, d):
+    #     theta = np.linspace(0, 2*np.pi, 100, endpoint=True)
+    #     rho = np.ones_like(theta) * d
+    #     x, y = util.pol2cart(rho, theta)
+    #     x = [xi + x0 for xi in x]
+    #     y = [yi + y0 for yi in y]
+    #     plt.plot(x, y, "b:", alpha=0.2)
+
+    # plot_circ(x0, y0, d)
+    # ax = plt.gca()
+    # ax.set_aspect('equal')
+
+    # plt.show()
+
+    return d # rad2arcsec(np.arctan(d))
 
 def distance_to_closest_line(asterism):
     """
@@ -480,7 +510,7 @@ def distance_to_closest_line(asterism):
     d12 = distance_of_point_from_line((0, 0), P1, P2)
     d02 = distance_of_point_from_line((0, 0), P0, P2)
 
-    return rad2arcsec(min(d01, d02, d12))
+    return min(d01, d02, d12) # rad2arcsec(min(d01, d02, d12))
 
 
 def polar_to_cartesian(r, theta):
@@ -513,32 +543,11 @@ def is_target_in_triangle(asterism):
 
         return (u >= 0) and (v >= 0) and (u + v <= 1)
 
-    def point_segment_distance(P, A, B):
-        AB = B - A
-        t = np.dot(P - A, AB) / np.dot(AB, AB)
-        t = np.clip(t, 0, 1)
-        closest = A + t * AB
-        return np.linalg.norm(P - closest)
-
-    def signed_distance_triangle(P, A, B, C):
-        P = np.array(P)
-        A = np.array(A)
-        B = np.array(B)
-        C = np.array(C)
-
-        inside = point_in_triangle(P, A, B, C)
-
-        d1 = point_segment_distance(P, A, B)
-        d2 = point_segment_distance(P, B, C)
-        d3 = point_segment_distance(P, C, A)
-
-        d = min(d1, d2, d3)
-        return d if inside else -d
     p1 = asterism[0].position_arcsec()
     p2 = asterism[1].position_arcsec()
     p3 = asterism[2].position_arcsec()
 
-    return np.abs(signed_distance_triangle((0.0, 0.0), p1, p2, p3))
+    return signed_distance_triangle((0.0, 0.0), p1, p2, p3)
 
 
 def gaussian_area_within_triangle(asterism):

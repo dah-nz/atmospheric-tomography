@@ -24,6 +24,10 @@ def arcsec2rad(t):
 def rad2arcsec(t):
     return np.degrees(t) * 60 * 60
 
+def distance(a, b):
+    d = np.array(a) - np.array(b)
+    return np.sqrt(d[0]**2 + d[1]**2)
+
 # Shift data in 2D array in x and y directions
 def shift2darray(arr, x, y, fill_value=np.nan):
     arr = np.roll(arr, x, 0)
@@ -182,6 +186,20 @@ def distance_of_point_from_line(P0, P1, P2):
 
     return A/B
 
+def closest_point_to_line(P0, P1, P2):
+    """
+    Return the closest point of a line through P1 and P2 from P0
+    """
+    A = np.array(P1)
+    B = np.array(P2)
+    P = np.array(P0)
+
+    AB = B - A
+    AP = P - A
+
+    t = np.dot(AP, AB) / np.dot(AB, AB)
+    return A + t * AB
+
 def point_in_triangle(p1, p2, p3, p):
     x1, y1 = p1
     x2, y2 = p2
@@ -251,3 +269,25 @@ def is_outlier(points, thresh=3.5):
     modified_z_score = 0.6745 * diff / med_abs_deviation
 
     return modified_z_score > thresh
+
+def point_segment_distance(P, A, B):
+    AB = B - A
+    t = np.dot(P - A, AB) / np.dot(AB, AB)
+    t = np.clip(t, 0, 1)
+    closest = A + t * AB
+    return np.linalg.norm(P - closest)
+
+def signed_distance_triangle(P, A, B, C):
+    P = np.array(P)
+    A = np.array(A)
+    B = np.array(B)
+    C = np.array(C)
+
+    inside = point_in_triangle(A, B, C, P)
+
+    d1 = point_segment_distance(P, A, B)
+    d2 = point_segment_distance(P, B, C)
+    d3 = point_segment_distance(P, C, A)
+
+    d = min(d1, d2, d3)
+    return d if inside else -d
