@@ -1,5 +1,8 @@
 import numpy as np
 
+from shapely.geometry import Point
+from shapely.ops import unary_union
+
 from tomography import beacon
 from astronomy import asterisms
 from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle, lerp, rmse, signed_distance_triangle
@@ -370,9 +373,6 @@ def overlap(asterism, altitudes, D=1.8):
     """
     Return the ratio of overlap for the telescope projections of the guidestars with the target projection onto multiple layers
     """
-    from  shapely.geometry import Point
-    from shapely.ops import unary_union
-
     resolution = 256
 
     circle = lambda center, radius, resolution: Point(center).buffer(radius, resolution)

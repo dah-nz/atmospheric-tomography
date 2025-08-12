@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,7 +10,7 @@ import time
 import pickle
 
 from tomography import tomography as tomo
-from tomography import beacon, phase_screen, projection, wavefront, asterisms, strehl
+from tomography import beacon, phase_screen, projection, wavefront, asterisms, strehl, psf
 from basis import zernike
 from astronomy.asterisms import load_data, sample
 
@@ -24,6 +25,8 @@ import util
 def run_tests():
     # test_layer_shapes()
 
+    test_psfs()
+
     # test_strehl()
     # test_beacons()
     # test_atmospheres()
@@ -32,7 +35,7 @@ def run_tests():
     # test_asterisms()
     # projection.test_projection()
 
-    test_intra_phase_screen()
+    # test_intra_phase_screen()
 
     # C = zernike.covar(21)
     # D = 1.8
@@ -42,6 +45,55 @@ def run_tests():
     # plt.imshow(C)
 
     plt.show()
+
+def test_psfs():
+    D = 1.8
+    A = [1000, 5000, 10000]
+    ap = 256
+    atm = phase_screen.Atmosphere(1, A, r0=0.25, D=D, aperture_size=ap)
+
+    target = beacon.Beacon(0, 0, 10)
+    screen = target.total_cutout(D, A, atm[0], atm.metapupil_diameters)
+    screen = screen * util.circle(ap)
+
+    plt.imshow(screen, extent=(-D/2, D/2, -D/2, D/2))
+
+    a_psf = psf.psf(screen)
+    a_psf = np.log10(a_psf / a_psf.max())
+
+    plt.figure()
+    plt.imshow(a_psf, vmin=-6)
+
+    z = zernike.Zernike(21)
+    zcoeffs = z.decompose(screen)
+    zscreen = z.compose(ap, zcoeffs)
+    zresid = screen - zscreen
+
+    plt.figure()
+    plt.imshow(zresid, extent=(-D/2, D/2, -D/2, D/2))
+
+    z_psf = psf.psf(zresid)
+    z_psf = np.log10(z_psf / z_psf.max())
+
+    plt.figure()
+    plt.imshow(z_psf, vmin=-6)
+
+
+    plt.figure()
+    flat = util.circle(ap)
+    plt.imshow(flat, extent=(-D/2, D/2, -D/2, D/2))
+
+    f_psf = psf.psf(flat)
+    f_psf = np.log10(f_psf / f_psf.max())
+
+    plt.figure()
+    plt.imshow(f_psf, vmin=-6)
+
+    DATA_FOLDER = 'C:/Code/PhD/Data'
+
+    df = pd.read_parquet(os.path.join(DATA_FOLDER, 'testing_data_none_prediction_results.parquet'))
+    print(df.head(10))
+    pass
 
 def test_intra_phase_screen():
     altitudes = [1000, 5000, 10000]

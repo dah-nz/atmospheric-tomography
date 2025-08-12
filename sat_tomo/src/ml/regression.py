@@ -43,21 +43,29 @@ class ML_Regressor():
         return # END ML_Model.__init__
 
     def fit(self, X, y):
-        X_nn = torch.tensor(X.to_numpy(), dtype=torch.float32)
-        y_nn = torch.tensor(y.to_numpy(), dtype=torch.float32)
+        try:
+            X_nn = torch.tensor(X.to_numpy(), dtype=torch.float32)
+            input_dim = len(X.columns)
+        except AttributeError:
+            X_nn = torch.tensor(X, dtype=torch.float32)
+            input_dim = X.shape[1]
+        try:
+            y_nn = torch.tensor(y.to_numpy(), dtype=torch.float32)
+        except AttributeError:
+            y_nn = torch.tensor(y, dtype=torch.float32)
 
         if self.classifier:
             self.unique_vals, indices = y_nn.unique(sorted=True, return_inverse=True)
             y_nn = nn.functional.one_hot(indices, num_classes=len(self.unique_vals)).float()
-            self.model = RegressionModel(len(X.columns), self.layer_dims, len(self.unique_vals), activation_function=self.activation_func)
+            self.model = RegressionModel(input_dim, self.layer_dims, len(self.unique_vals), activation_function=self.activation_func)
         else:
-            self.model = RegressionModel(len(X.columns), self.layer_dims, output_dim=1, activation_function=self.activation_func)
+            self.model = RegressionModel(input_dim, self.layer_dims, output_dim=1, activation_function=self.activation_func)
 
         # self.optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.wd)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.wd)
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.wd)
 
         dataset = TensorDataset(X_nn, y_nn)
-        batch_size = 100
+        batch_size = 512
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         self.model.to(self.device)
 
@@ -81,7 +89,11 @@ class ML_Regressor():
         if self.model is not None:
             self.model.eval()
             with torch.no_grad():
-                X_nn = torch.tensor(X_test.to_numpy(), dtype=torch.float32)
+                try:
+                    X_nn = torch.tensor(X_test.to_numpy(), dtype=torch.float32)
+                except AttributeError:
+                    X_nn = torch.tensor(X_test, dtype=torch.float32)
+                
                 y_pred = self.model(X_nn.to(self.device)).detach()
             if self.classifier:
                 y_pred = self.unique_vals[torch.argmax(y_pred.to('cpu'), dim=1)]

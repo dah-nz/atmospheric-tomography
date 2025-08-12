@@ -54,23 +54,27 @@ asterism_data_queue = None
 def run_tests():
     mp.set_start_method('spawn')
 
-    test_asterism_features()
+    # test_asterism_features()
 
     # test_asterism_generation()
     # test_phase_variance()
 
     # test_asterism_cross_entropy()
     
-    # cfg = AsterismConfig()
-    # cfg.n_asterisms = 512
-    # cfg.n_atm = 512
-    # cfg.augmented_asterisms = True
-    # run_asterism_comparison(cfg)
-    # bulk_compile_asterism_data('testing_data')
+    cfg = AsterismConfig()
+    cfg.N = 66 # First 11 radial orders
+    cfg.n_asterisms = 100
+    cfg.n_atm = 100
+    cfg.augmented_asterisms = False
+    run_asterism_comparison(cfg)
+    bulk_compile_asterism_data('testing_data_66')
 
-    # cfg.augmented_asterisms = False
-    # run_asterism_comparison(cfg)
-    # bulk_compile_asterism_data('validation_data')
+    cfg.augmented_asterisms = False
+    cfg.n_asterisms = 50
+    cfg.n_atm = 50
+    run_asterism_comparison(cfg)
+    bulk_compile_asterism_data('validation_data_66')
+
     # transform_data(cfg)
     # display_results()
     # load_angle_data_test()
@@ -270,7 +274,7 @@ class AsterismConfig():
         self.N = 21
         self.Z = zernike.Zernike(self.N)
         self.D = 1.8
-        self.r0 = 0.25
+        self.r0 = 0.15
         self.alts = [1000, 5000, 10000]
         self.ap_pixels = [100]
 
@@ -281,10 +285,10 @@ class AsterismConfig():
         self.augmented_asterisms = True
 
         # Add noise to position/WFS measurements
-        self.position_n = 1
+        self.position_n = 0
         self.position_uncertainty = 0.5 # arcseconds
         self.single_uncertainty = 0.2 # arcseconds
-        self.measurement_n = 1
+        self.measurement_n = 0
         self.measurement_uncertainty = 0.1 # 10% of Zernike covariance
 
         self.perturbation_analysis = False
