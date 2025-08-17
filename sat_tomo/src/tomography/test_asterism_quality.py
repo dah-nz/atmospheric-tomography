@@ -26,13 +26,14 @@ DATA_FOLDER = 'C:/Code/PhD/Data'
 METHODS = ['lsq_T'] # ['glao', 'lsq_T', 'lsq_K']
 
 ALTITUDES = [1000, 5000, 10000]
-ATM_SAMPLE_SIZES = [32, 64, 128, 256, 512]
+# ATM_SAMPLE_SIZES = [32, 64, 128, 256, 512]
+ATM_SAMPLE_SIZES = [100]
 
 def run_tests():
     # test_overlap_percentage()
     # return
 
-    files = ['testing_data_11', 'validation_data_11']
+    files = ['testing_data_21r015', 'validation_data_21r015']
     noise_types = ['none'] #, 'measurement', 'position']
     for file in files:
         for noise_type in noise_types:
@@ -108,22 +109,22 @@ def clean_data(file, noise_type):
     df = df.drop(columns=['aperture_pixels'])
 
 
-    ###
-    print("Strehl ratio for different asterism and atmospheres for sanity checking")
-    ###
-    df = df[df['tomo_method'].isin(['fitting', 'open_loop', 'lsq_T', 'glao'])]
-    df = df[df['asterism_type'].str.contains('raw')]
-    id_factors = ['group_id', 'asterism_id', 'atmosphere_id', 'tomo_method']
-    agg_dict = {
-        'strehl_ratio': 'mean'
-    }
+    # ###
+    # print("Strehl ratio for different asterism and atmospheres for sanity checking")
+    # ###
+    # df = df[df['tomo_method'].isin(['fitting', 'open_loop', 'lsq_T', 'glao'])]
+    # df = df[df['asterism_type'].str.contains('raw')]
+    # id_factors = ['group_id', 'asterism_id', 'atmosphere_id', 'tomo_method']
+    # agg_dict = {
+    #     'strehl_ratio': 'mean'
+    # }
 
-    df = df.groupby(id_factors)[['strehl_ratio']].agg(agg_dict).reset_index()
-    df.columns = ['_'.join(col).rstrip('_') if isinstance(col, tuple) else col for col in df.columns]
-    df = df.pivot(index=['atmosphere_id', 'group_id', 'asterism_id'], columns='tomo_method', values='strehl_ratio').reset_index()
-    df = df.sample(100000)
-    df.to_csv(os.path.join(DATA_FOLDER, file + f'_fitting_data.csv'), index=False)
-    quit()
+    # df = df.groupby(id_factors)[['strehl_ratio']].agg(agg_dict).reset_index()
+    # df.columns = ['_'.join(col).rstrip('_') if isinstance(col, tuple) else col for col in df.columns]
+    # df = df.pivot(index=['atmosphere_id', 'group_id', 'asterism_id'], columns='tomo_method', values='strehl_ratio').reset_index()
+    # df = df.sample(100000)
+    # df.to_csv(os.path.join(DATA_FOLDER, file + f'_fitting_data.csv'), index=False)
+    # quit()
 
     ###
     print("Drop unused results")
@@ -170,7 +171,10 @@ def clean_data(file, noise_type):
     for n in ATM_SAMPLE_SIZES:
         print(f"Sampling for an atmosphere sample size of {n}")
         # Step 1: Sample from unique values in 'atmosphere_id' column
-        samples = np.random.choice(sample_ids, size=n, replace=False)
+        try:
+            samples = np.random.choice(sample_ids, size=n, replace=False)
+        except ValueError:
+            samples = df['atmosphere_id'].unique()
 
         # Step 2: Filter DataFrame based on sampled groups
         df0 = df[df['atmosphere_id'].isin(samples)]
@@ -282,6 +286,8 @@ def run_reg(data, model, name, scale=False):
     return reg_data
 
 def analyse_asterisms(file, validation_file):
+
+
     noise_type = 'none'
     df_r = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_prediction_results.parquet'))
     # df = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_noise_CLEAN.parquet'))
@@ -314,36 +320,45 @@ def analyse_asterisms(file, validation_file):
 
     for augmented in ['No']: # 'All', 
         if augmented != 'All':
-            df_r1 = df_r[(df_r['Augmented'] == augmented) & (df_r['Method'] == 'lsq_T') & (df_r['Atmosphere Sample Size'] == 512)]
+            df_r1 = df_r[(df_r['Augmented'] == augmented) & (df_r['Method'] == 'lsq_T') & (df_r['Atmosphere Sample Size'] == ATM_SAMPLE_SIZES[-1])]
             # df1 = df[(df['asterism_augmented'] == augmented) & (df['tomo_method'] == 'lsq_T') & (df['atmosphere_sample_size'] == 512)]
-            v_df1 = v_df[(v_df['asterism_augmented'] == augmented) & (v_df['tomo_method'] == 'lsq_T') & (v_df['atmosphere_sample_size'] == 512)]
+            v_df1 = v_df[(v_df['asterism_augmented'] == augmented) & (v_df['tomo_method'] == 'lsq_T') & (v_df['atmosphere_sample_size'] == ATM_SAMPLE_SIZES[-1])]
         else:
-            df_r1 = df_r[(df_r['Method'] == 'lsq_T') & (df_r['Atmosphere Sample Size'] == 512)]
+            df_r1 = df_r[(df_r['Method'] == 'lsq_T') & (df_r['Atmosphere Sample Size'] == ATM_SAMPLE_SIZES[-1])]
             # df1 = df[(df['tomo_method'] == 'lsq_T') & (df['atmosphere_sample_size'] == 512)]
-            v_df1 = v_df[(v_df['tomo_method'] == 'lsq_T') & (v_df['atmosphere_sample_size'] == 512)]
+            v_df1 = v_df[(v_df['tomo_method'] == 'lsq_T') & (v_df['atmosphere_sample_size'] == ATM_SAMPLE_SIZES[-1])]
 
+        min_distance = 0
+        v_df1 = v_df1[(v_df1['f_distance_0'] >= min_distance) & (v_df1['f_distance_1'] >= min_distance) & (v_df1['f_distance_2'] >= min_distance)]
         v_df1 = v_df1[['group_id', 'asterism_id', 'star_0', 'star_1', 'star_2']]
 
-        df_r1 = df_r1.sample(n_samples)
+        try:
+            df_r1 = df_r1.sample(n_samples)
+        except ValueError:
+            pass
 
         # df0 = pd.concat([df1, v_df1])
 
         for test_var, ascending in test_variables.items():
 
-            top_test_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Test', ascending=ascending).drop_duplicates(subset='Test Group ID', keep='first').head(TOP_N)
-            top_test_asterisms = top_test_asterisms.merge(v_df1, left_on=['Test Group ID', 'Test Asterism ID'], right_on=['group_id', 'asterism_id'], how='left')
+            top_test_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Test', ascending=ascending).drop_duplicates(subset='Test Group ID', keep='first')
+            top_test_asterisms = top_test_asterisms.merge(v_df1, left_on=['Test Group ID', 'Test Asterism ID'], right_on=['group_id', 'asterism_id'], how='inner')
+            top_test_asterisms = top_test_asterisms.head(TOP_N)
             top_test_asterisms = top_test_asterisms.drop(columns=['group_id', 'asterism_id'])
 
-            bottom_test_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Test', ascending=(not ascending)).drop_duplicates(subset='Test Group ID', keep='first').head(TOP_N)
-            bottom_test_asterisms = bottom_test_asterisms.merge(v_df1, left_on=['Test Group ID', 'Test Asterism ID'], right_on=['group_id', 'asterism_id'], how='left')
+            bottom_test_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Test', ascending=(not ascending)).drop_duplicates(subset='Test Group ID', keep='first')
+            bottom_test_asterisms = bottom_test_asterisms.merge(v_df1, left_on=['Test Group ID', 'Test Asterism ID'], right_on=['group_id', 'asterism_id'], how='inner')
+            bottom_test_asterisms = bottom_test_asterisms.head(TOP_N)
             bottom_test_asterisms = bottom_test_asterisms.drop(columns=['group_id', 'asterism_id'])
 
-            top_pred_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Predictions', ascending=ascending).drop_duplicates(subset='Test Group ID', keep='first').head(TOP_N)
-            top_pred_asterisms = top_pred_asterisms.merge(v_df1, left_on=['Test Group ID', 'Test Asterism ID'], right_on=['group_id', 'asterism_id'], how='left')
+            top_pred_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Predictions', ascending=ascending).drop_duplicates(subset='Test Group ID', keep='first')
+            top_pred_asterisms = top_pred_asterisms.merge(v_df1, left_on=['Test Group ID', 'Test Asterism ID'], right_on=['group_id', 'asterism_id'], how='inner')
+            top_pred_asterisms = top_pred_asterisms.head(TOP_N)
             top_pred_asterisms = top_pred_asterisms.drop(columns=['group_id', 'asterism_id'])
 
-            bottom_pred_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Predictions', ascending=(not ascending)).drop_duplicates(subset='Test Group ID', keep='first').head(TOP_N)
-            bottom_pred_asterisms = bottom_pred_asterisms.merge(v_df1, left_on=['Test Group ID', 'Test Asterism ID'], right_on=['group_id', 'asterism_id'], how='left')
+            bottom_pred_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Predictions', ascending=(not ascending)).drop_duplicates(subset='Test Group ID', keep='first')
+            bottom_pred_asterisms = bottom_pred_asterisms.merge(v_df1, left_on=['Test Group ID', 'Test Asterism ID'], right_on=['group_id', 'asterism_id'], how='inner')
+            bottom_pred_asterisms = bottom_pred_asterisms.head(TOP_N)
             bottom_pred_asterisms = bottom_pred_asterisms.drop(columns=['group_id', 'asterism_id'])
 
 
@@ -389,13 +404,16 @@ def analyse_asterisms(file, validation_file):
                 ax.set_aspect('equal')
                 ax.axis('off')
                 fig.tight_layout()
-                fig.savefig(f"./img/asterism_performance_{test_var}_{label}.pgf", bbox_inches='tight')
-                fig.savefig(f"./img/asterism_performance_{test_var}_{label}.pdf", bbox_inches='tight')
+                fig.savefig(f"./img/asterism_performance_{test_var}_{label}_min{min_distance}.pgf", bbox_inches='tight')
+                fig.savefig(f"./img/asterism_performance_{test_var}_{label}_min{min_distance}.pdf", bbox_inches='tight')
                 plt.close(fig)
 
     return
 
 def test_psfs(asterism, label):
+
+    os.makedirs('psf', exist_ok=True)
+
     from tomography import phase_screen, psf, tomography
     from basis import zernike
     D = 1.8
@@ -422,16 +440,16 @@ def test_psfs(asterism, label):
     fig.savefig(f"./img/psf/{label}_target_phase_screen.pdf", bbox_inches='tight')
     plt.close(fig)
 
-    a_psf = psf.psf(screen)
-    a_psf = np.log10(a_psf / a_psf.max())
+    # a_psf = psf.psf(screen)
+    # a_psf = np.log10(a_psf / a_psf.max())
 
-    fig, ax = plt.subplots()
-    ax.imshow(a_psf, vmin=-6, extent=extent_l)
-    ax.set_xlabel('Position (m)')
-    ax.set_ylabel('Position (m)')
-    fig.savefig(f"./img/psf/{label}_target_psf.pgf", bbox_inches='tight')
-    fig.savefig(f"./img/psf/{label}_target_psf.pdf", bbox_inches='tight')
-    plt.close(fig)
+    # fig, ax = plt.subplots()
+    # ax.imshow(a_psf, vmin=-6, extent=extent_l)
+    # ax.set_xlabel('Position (m)')
+    # ax.set_ylabel('Position (m)')
+    # fig.savefig(f"./img/psf/{label}_target_psf.pgf", bbox_inches='tight')
+    # fig.savefig(f"./img/psf/{label}_target_psf.pdf", bbox_inches='tight')
+    # plt.close(fig)
 
     z = zernike.Zernike(N)
     zcoeffs = z.decompose(screen)
@@ -456,7 +474,6 @@ def test_psfs(asterism, label):
     fig.savefig(f"./img/psf/{label}_fitting_psf.pgf", bbox_inches='tight')
     fig.savefig(f"./img/psf/{label}_fitting_psf.pdf", bbox_inches='tight')
     plt.close(fig)
-
 
     # plt.figure()
     flat = util.circle(ap)
@@ -579,6 +596,8 @@ def analyse_results(file, validation_file):
     }
 
     from torch import nn
+    C = 10.0
+    eps = 0.01
 
     models = {
         "Partial Least Squares": (PLSRegression(n_components=2), False),
@@ -586,10 +605,10 @@ def analyse_results(file, validation_file):
         "Ridge": (Ridge(alpha=0.1), False),
         "Lasso": (Lasso(alpha=0.1), False),
         # "SVR (Linear)": (SVR(kernel='linear', C=1.0, epsilon=0.1), False),
-        "SVR (Poly)": (SVR(kernel='poly', C=1.0, epsilon=0.1), False),
-        "SVR (RBF)": (SVR(kernel='rbf', C=1.0, epsilon=0.1), False),
-        "SVR (Poly) [Scaled Inputs]": (SVR(kernel='poly', C=1.0, epsilon=0.1), True),
-        "SVR (RBF) [Scaled Inputs]": (SVR(kernel='rbf', C=1.0, epsilon=0.1), True),
+        "SVR (Poly)": (SVR(kernel='poly', C=C, epsilon=eps), False),
+        "SVR (RBF)": (SVR(kernel='rbf', C=C, epsilon=eps), False),
+        "SVR (Poly) [Scaled Inputs]": (SVR(kernel='poly', C=C, epsilon=eps), True),
+        "SVR (RBF) [Scaled Inputs]": (SVR(kernel='rbf', C=C, epsilon=eps), True),
         # "sklearn Neural Network": (MLPRegressor(hidden_layer_sizes=[32,64,32], learning_rate_init=0.01, activation="relu"), True),
         "My Neural Network": (ml.regression.ML_Regressor(layer_dims=[32,64,32], learning_rate=0.01, weight_decay=1e-4, activation_func=nn.LeakyReLU), True),
     }
@@ -608,7 +627,7 @@ def analyse_results(file, validation_file):
         for method in ['lsq_T']:
             df0 = df2[df2['tomo_method'] == method]
             v_df0 = v_df[v_df['tomo_method'] == method]
-            for atmosphere_sample_size in [512]:
+            for atmosphere_sample_size in [ATM_SAMPLE_SIZES[-1]]:
                 df1 = df0[df0['atmosphere_sample_size'] == atmosphere_sample_size]
                 v_df1 = v_df0[v_df0['atmosphere_sample_size'] == atmosphere_sample_size]
                 for test_column in test_variables:
@@ -670,7 +689,7 @@ def plot_results(file):
         "figure.figsize": (3, 3),
     })
 
-    strehl = ["Strehl Ratio, $\\bar{S}$", "$\\ln(\\textrm{Strehl Ratio})$, $\\ln(\\bar{S})$", "$\\frac{\\textrm{Strehl Ratio}}{\\textrm{Open Loop Strehl Ratio}}$, $\\bar{\\Xi}$", "$\\ln(\\frac{\\textrm{Strehl Ratio}}{\\textrm{Open Loop Strehl Ratio}})$, $\\overline{\\ln{\\Xi}}$"]
+    strehl = ["Strehl Ratio, $\\bar{S}$", "$\\ln(\\textrm{Strehl Ratio})$, $\\ln(\\bar{S})$", "$\\frac{\\textrm{Strehl Ratio}}{\\textrm{Open Loop Strehl Ratio}}$, $\\bar{\\xi}$", "$\\ln(\\frac{\\textrm{Strehl Ratio}}{\\textrm{Open Loop Strehl Ratio}})$, $\\overline{\\ln{\\xi}}$"]
     rmse = ["Reconstruction RMSE", "Log (Reconstruction RMSE)", "Reconstruction RMSE / Open Loop RMSE", "Log(Reconstruction RMSE / Open Loop RMSE)"]
 
     metric_labels = {

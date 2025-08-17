@@ -62,18 +62,18 @@ def run_tests():
     # test_asterism_cross_entropy()
     
     cfg = AsterismConfig()
-    cfg.N = 66 # First 11 radial orders
+    cfg.N = 21
     cfg.n_asterisms = 100
     cfg.n_atm = 100
     cfg.augmented_asterisms = False
     run_asterism_comparison(cfg)
-    bulk_compile_asterism_data('testing_data_66')
+    bulk_compile_asterism_data('testing_data_21r015')
 
     cfg.augmented_asterisms = False
     cfg.n_asterisms = 50
     cfg.n_atm = 50
     run_asterism_comparison(cfg)
-    bulk_compile_asterism_data('validation_data_66')
+    bulk_compile_asterism_data('validation_data_21r015')
 
     # transform_data(cfg)
     # display_results()
