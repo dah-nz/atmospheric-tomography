@@ -63,17 +63,17 @@ def run_tests():
     
     cfg = AsterismConfig()
     cfg.N = 21
-    cfg.n_asterisms = 100
-    cfg.n_atm = 100
+    cfg.n_asterisms = 512
+    cfg.n_atm = 512
     cfg.augmented_asterisms = False
     run_asterism_comparison(cfg)
-    bulk_compile_asterism_data('testing_data_21r015')
+    bulk_compile_asterism_data('testing_data_21r015b')
 
     cfg.augmented_asterisms = False
-    cfg.n_asterisms = 50
-    cfg.n_atm = 50
+    cfg.n_asterisms = 256
+    cfg.n_atm = 256
     run_asterism_comparison(cfg)
-    bulk_compile_asterism_data('validation_data_21r015')
+    bulk_compile_asterism_data('validation_data_21r015b')
 
     # transform_data(cfg)
     # display_results()
