@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import pickle
 
 from tomography import asterisms, beacon
 import ml.regression
@@ -22,13 +23,14 @@ from sklearn.svm import SVR
 import util
 
 DATA_FOLDER = 'C:/Code/PhD/Data'
+MODEL_FOLDER = 'C:/Code/PhD/Data/Models'
 
 METHODS = ['lsq_T'] # ['glao', 'lsq_T', 'lsq_K']
 
 ALTITUDES = [1000, 5000, 10000]
 
 def run_tests():
-    test_overlap_percentage()
+    # test_overlap_percentage()
     # return
 
     # dfa = pd.read_parquet(os.path.join(DATA_FOLDER, f'testing_data_21r015a_none_noise.parquet'))
@@ -61,10 +63,10 @@ def run_tests():
     #         clean_data(file, noise_type)
     
     print("Analysing results")
-    # analyse_results(files[0], files[1])
-    plot_results(files[0])
+    analyse_results(files[0], files[1])
+    # plot_results(files[0])
 
-    analyse_asterisms(files[0], files[1])
+    # analyse_asterisms(files[0], files[1])
 
     # data_correlations(files[1])
 
@@ -293,7 +295,7 @@ def run_reg(data, model, name, scale=False):
         } for i in range(len(predictions))]
     print(f"Regression results: R²={r2}; RMSE={rmse}")
 
-    return reg_data
+    return reg_data, model
 
 def analyse_asterisms(file, validation_file):
 
@@ -624,7 +626,7 @@ def analyse_results(file, validation_file):
         # "SVR (Poly) [Scaled Inputs]": (SVR(kernel='poly', C=C, epsilon=eps), True),
         # "SVR (RBF) [Scaled Inputs]": (SVR(kernel='rbf', C=C, epsilon=eps), True),
         # "sklearn Neural Network": (MLPRegressor(hidden_layer_sizes=[32,64,32], learning_rate_init=0.01, activation="relu"), True),
-        "My Neural Network": (ml.regression.ML_Regressor(layer_dims=[32,64,32], learning_rate=0.02, weight_decay=1e-4, activation_func=nn.LeakyReLU), True),
+        "Neural Network": (ml.regression.ML_Regressor(layer_dims=[32,64,32], learning_rate=0.02, weight_decay=1e-4, activation_func=nn.LeakyReLU), True),
     }
 
     star_columns = ["file_id", "group_id", "asterism_id"]
@@ -658,13 +660,18 @@ def analyse_results(file, validation_file):
                     for name, (model, scale) in models.items():
                         label = f"{name}, {method}, {test_column}, {feature_group}"
                         print(label)
-                        test_results = run_reg(data, model, name, scale)
+                        test_results, trained_model = run_reg(data, model, name, scale)
                         for tr in test_results:
                             tr['Method'] = method
                             tr['Metric'] = test_column
                             tr["Feature Group"] = feature_group
                             tr["Augmented"] = augmented
                         results += test_results
+
+                        name = name.replace('(', '').replace(')', '').replace(' ', '_')
+                        filename = os.path.join(MODEL_FOLDER, f'{name}_{method}_{test_column}_{feature_group}.pkl')
+                        with open(filename, 'wb') as f:
+                            pickle.dump(trained_model, f)
 
     print("Finishing analysis, displaying plots")
     df_r = pd.DataFrame(results)
@@ -720,7 +727,7 @@ def plot_results(file):
         "Lasso": "Linear Regression (Lasso)",
         "SVR (Poly)": "SVR (Polynomial)",
         # "sklearn Neural Network": "Neural Network A (Adam, ReLU)",
-        "My Neural Network": "Neural Network",
+        # "My Neural Network": "Neural Network",
     })
 
     metrics = [m for m in df_r['Metric'].unique() if 'strehl' in m]
