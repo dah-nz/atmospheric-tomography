@@ -12,6 +12,7 @@ class Network(nn.Module):
 
         self.LRELU_grad = config.LReLU_grad
         self.do = config.dropout_rate
-        self.n_coeffs = config.num_modes
+        self.mode_skip = config.mode_skip
+        self.n_features = config.num_modes - config.mode_skip
 
-        logger.info(f"Initiating model {self.name}; n_modes={self.n_coeffs}")
+        logger.info(f"Initiating model {self.name}; n_features={self.n_features}")

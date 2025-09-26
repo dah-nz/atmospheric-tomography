@@ -42,15 +42,16 @@ if __name__ == "__main__":
 
     if cfg.satellites:
         log.info(" > Loading satellite information <")
-        astronomy.satellite.load_sun_moon_emphemeris()
-        sats = astronomy.satellite.SatelliteMap(tele, 
-                                                n_sats=cfg.num_sats,
-                                                star_magnitude=cfg.magnitude,
-                                                time_period=cfg.period,
-                                                time_delta=cfg.sat_del_t,
-                                                asterism_size=cfg.asterism_size,
-                                                max_magnitude=cfg.max_magnitude)
-        sats.build()
+        if astronomy.satellite.check_update_time(14):
+            astronomy.satellite.load_sun_moon_emphemeris()
+            sats = astronomy.satellite.SatelliteMap(tele, 
+                                                    n_sats=cfg.num_sats,
+                                                    star_magnitude=cfg.magnitude,
+                                                    time_period=cfg.period,
+                                                    time_delta=cfg.sat_del_t,
+                                                    asterism_size=cfg.asterism_size,
+                                                    max_magnitude=cfg.max_magnitude)
+            sats.build()
 
     if cfg.display_asterisms:
         # print("Cleaning old data")
@@ -80,11 +81,24 @@ if __name__ == "__main__":
         df_v = df.drop(df[df.Stage != "Verification"].index)
         df = df.drop(df[df.Stage == "Verification"].index)
 
-        df = df.sort_values(by="Stage")
+        df = df.sort_values(by=["Stage", "Epoch"])
+
+        df['Moving Average'] = (
+            df.groupby(['Type', 'Stage', 'Model'])['Loss']
+            .transform(lambda x: x.rolling(window=32, min_periods=1).mean())
+        )
+
+        print(df[(df["Type"]=="Coefficients") & (df["Stage"]=="Train")&(df['Model']=='MLNN_baseline')].tail(12))
+
 
         sns.relplot(data=df, kind='line', 
                     x='Epoch', y='Loss', row="Type",
-                    col="Asterism", style="Stage", hue="Model",
+                    style="Stage", hue="Model",
+                    facet_kws={'sharey': "row", 'sharex': True})
+
+        sns.relplot(data=df, kind='line', 
+                    x='Epoch', y='Moving Average', row="Type",
+                    style="Stage", hue="Model",
                     facet_kws={'sharey': "row", 'sharex': True})
         
         # Remove all but last verification results

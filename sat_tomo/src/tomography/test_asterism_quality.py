@@ -266,7 +266,9 @@ def run_reg(data, model, name, scale=False):
     if scale == True:
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
-        X_test = scaler.fit_transform(X_test)
+        X_test = scaler.transform(X_test)
+    else:
+        scaler = None
 
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test).flatten()
@@ -295,7 +297,7 @@ def run_reg(data, model, name, scale=False):
         } for i in range(len(predictions))]
     print(f"Regression results: R²={r2}; RMSE={rmse}")
 
-    return reg_data, model
+    return reg_data, model, scaler
 
 def analyse_asterisms(file, validation_file):
 
@@ -660,7 +662,7 @@ def analyse_results(file, validation_file):
                     for name, (model, scale) in models.items():
                         label = f"{name}, {method}, {test_column}, {feature_group}"
                         print(label)
-                        test_results, trained_model = run_reg(data, model, name, scale)
+                        test_results, trained_model, scaler = run_reg(data, model, name, scale)
                         for tr in test_results:
                             tr['Method'] = method
                             tr['Metric'] = test_column
@@ -671,7 +673,7 @@ def analyse_results(file, validation_file):
                         name = name.replace('(', '').replace(')', '').replace(' ', '_')
                         filename = os.path.join(MODEL_FOLDER, f'{name}_{method}_{test_column}_{feature_group}.pkl')
                         with open(filename, 'wb') as f:
-                            pickle.dump(trained_model, f)
+                            pickle.dump((trained_model, scaler), f)
 
     print("Finishing analysis, displaying plots")
     df_r = pd.DataFrame(results)

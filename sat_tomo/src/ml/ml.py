@@ -53,13 +53,13 @@ class Trainer():
             opti = self.optimisers[k]
             try:
                 if model.model_type == "wfs_image":
-                    self.trainers.append(runner.ImageModelRunner(model, self.loss_fn, opti, cfg.basis, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
+                    self.trainers.append(runner.ImageModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
                 elif model.model_type == "glao_offset":
-                    self.trainers.append(runner.DeltaModelRunner(model, self.loss_fn, opti, cfg.basis, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
+                    self.trainers.append(runner.DeltaModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
                 else:
-                    self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
+                    self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
             except AttributeError:
-                self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
+                self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
             
 
         if len(cfg.tomo_methods) > 0:
@@ -67,11 +67,11 @@ class Trainer():
             self.tomo = {}
             for t, opts in cfg.tomo_methods.items():
                 if opts['run']:
-                    self.tomo[t] = (eval(f"tomography.{t}(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size)"), opts['fixed'])
-            for k, (algo, fixed_asterisms_only) in self.tomo.items():
-                self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, fixed_asterisms_only)) #, tip_tilt_passthrough=cfg.tip_tilt_passthrough))
+                    self.tomo[t] = eval(f"tomography.{t}(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size, mode_skip=cfg.mode_skip)")
+            for k, algo in self.tomo.items():
+                self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis))
 
-        self.runners.append(runner.TipTiltRunner(self.loss_fn, cfg.basis))
+        # self.runners.append(runner.TipTiltRunner(self.loss_fn, cfg.basis))
         self.runners.append(runner.OpenLoopRunner(self.loss_fn, cfg.basis))
         self.runners.append(runner.FittingErrorRunner(self.loss_fn, cfg.basis))
     

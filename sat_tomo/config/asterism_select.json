@@ -1,0 +1,37 @@
+[
+    {
+      "num_modes": 21,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": 0.15,
+      "per_layer_r0": false,
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+
+      "train_models": ["MLNN_baseline", "MLNN_glao_offset", "ResNet", "ResNet_glao_offset"],
+      "lsq_off": false,
+      "glao_off": true,
+      "ao_off": true,
+      
+      "epochs": 512,
+      "training_size": 32,
+      "testing_size": 16,
+      "save_frequency": 32,
+      "display_training": true,
+      
+      "shwfs": false,
+      "noise": false,
+      
+      "asterism_size": 3,
+      "asterism_quality": 0.0,
+      
+      "satellites": true,
+      "period": 72,
+
+      "wavefront_tip_tilt_removal": false,
+
+      "load_previous": false,
+      "continue_training": false
+    }
+]

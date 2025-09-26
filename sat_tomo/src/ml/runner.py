@@ -24,11 +24,10 @@ class Runner(object):
         raise NotImplementedError
     
 class TomoRunner(Runner):
-    def __init__(self, tomo_algorithm, loss_fn, target, basis, fixed_only=False, tip_tilt_passthrough=False) -> None:
+    def __init__(self, tomo_algorithm, loss_fn, target, basis, fixed_only=False) -> None:
         super().__init__(type(tomo_algorithm).__name__, loss_fn, basis)
         self.tomography = tomo_algorithm
         self.fixed_only = fixed_only
-        self.tip_tilt_passthrough = tip_tilt_passthrough
         self.target = target
     def train(self, data):
         return self._run(data)
@@ -60,9 +59,11 @@ class TomoRunner(Runner):
                 logger.debug(f"Calculating tomography ({self.name}) test data, index {i}/{data.n}")
                 target_coeffs, beacon_coeffs, beacons = data.unpack(X, y, i)
 
-                tomo_coeffs = self.tomography.run(beacons, self.target, beacon_coeffs)
-                if type(self.tomography).__name__ == "LeastSquares" or self.tip_tilt_passthrough:
-                    tomo_coeffs[:3] = target_coeffs[:3]       # Assume piston, tip and tilt are known a priori (a la Ragazzoni)
+                tomo_coeffs = self.tomography.run(beacons, self.target, beacon_coeffs, ptt=target_coeffs[:self.tomography.mode_skip])
+
+                # MODE SKIP IS DONE IN THE TOMOGRAPHY ALGORITHMS DIRECTLY
+                # if self.mode_skip > 0:
+                #     tomo_coeffs[:self.mode_skip] = target_coeffs[:self.mode_skip]       # Assume piston, tip and tilt are known a priori (a la Ragazzoni)
 
                 loss_data.append(
                     self.loss_fn(torch.from_numpy(tomo_coeffs), torch.from_numpy(target_coeffs)).item()
@@ -191,11 +192,11 @@ class FittingErrorRunner(Runner):
         return None, np.sqrt(np.mean(recon_data)), None, np.mean(recon_bias)
 
 class DeltaModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, tip_tilt_passthrough=False):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser
-        self.tip_tilt_passthrough = tip_tilt_passthrough
+        self.mode_skip = mode_skip
 
     def train(self, data):
         self.model.train()
@@ -213,12 +214,14 @@ class DeltaModelRunner(Runner):
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
+            if self.mode_skip > 0:
+                ptt_y = delta_y[:, :self.mode_skip]
+                delta_y = delta_y[:, self.mode_skip:]
+                X = X[:, :, self.mode_skip:, :]
+
             X, delta_y = X.to(ml.device), delta_y.to(ml.device)
 
             pred = self.model(X)
-
-            if self.tip_tilt_passthrough:
-                pred[:, :3] = delta_y[:, :3]    # For each item in batch, replace the first three coefficients
 
             # prediction = pred + glao_y.to(ml.device)
             # actual = delta_y + glao_y.to(ml.device)
@@ -232,16 +235,19 @@ class DeltaModelRunner(Runner):
             self.optimiser.step()
             self.optimiser.zero_grad()
 
-            prediction = pred.to("cpu").detach() + glao_y
+            prediction = pred.to("cpu").detach() # + glao_y
             del_y = delta_y.to("cpu").detach()
-            loss_bias.append(glao_y+del_y-prediction)
+            loss_bias.append(del_y-prediction)
 
-            for p0, s0 in zip(prediction, scr):
-                s0 = s0.numpy() * mask
-                p0 = p0.numpy()
-                recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
-                recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
-                recon_bias.append(s0-recon.numpy())
+            for pred, ptt, glao, screen in zip(prediction, ptt_y, glao_y, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.zeros_like(glao)
+                np.concatenate((ptt, pred), out=res)
+                res = res + glao.numpy()
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                recon_bias.append(screen-recon.numpy())
 
         logger.info(f" -> {self.name} training loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
@@ -263,40 +269,56 @@ class DeltaModelRunner(Runner):
                 if mask is None:
                     mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
+                if self.mode_skip > 0:
+                    ptt_y = delta_y[:, :self.mode_skip]
+                    delta_y = delta_y[:, self.mode_skip:]
+                    X = X[:, :, self.mode_skip:, :]
+
                 X, delta_y = X.to(ml.device), delta_y.to(ml.device)
 
                 pred = self.model(X)
-                pred_tot = pred + glao_y.to(ml.device)
-                tot = glao_y.to(ml.device) + delta_y
+                # pred_tot = pred + glao_y.to(ml.device)
+                # tot = glao_y.to(ml.device) + delta_y
                 # loss = self.loss_fn(pred, delta_y).item()
-                if self.tip_tilt_passthrough:
-                    pred_tot[:, :3] = tot[:, :3]     # For each item in batch, replace the first three coefficients
+                # if self.mode_skip > 0:
+                #     pred_tot[:, :self.mode_skip] = tot[:, :self.mode_skip]     # For each item in batch, replace the first three coefficients
 
-                loss = self.loss_fn(pred_tot, tot).item()
+                loss = self.loss_fn(pred, delta_y).item()
 
                 loss_data.append(loss)
 
-                prediction = pred.to("cpu") + glao_y
+                prediction = pred.to("cpu").detach()
                 del_y = delta_y.to("cpu").detach()
-                loss_bias.append(glao_y+del_y-prediction)
+                loss_bias.append(del_y-prediction)
 
-                for p0, s0 in zip(prediction, scr):
-                    s0 = s0.numpy() * mask
-                    p0 = p0.numpy()
-                    recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
-                    recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
-                    recon_bias.append(s0-recon.numpy())
+                for pred, ptt, glao, screen in zip(prediction, ptt_y, glao_y, scr):
+                    screen = screen.numpy() * mask
+                    pred = pred.numpy()
+                    res = np.zeros_like(glao)
+                    np.concatenate((ptt, pred), out=res)
+                    res = res + glao.numpy()
+                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                    recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                    recon_bias.append(screen-recon.numpy())
+
+
+                # for p0, s0 in zip(prediction, scr):
+                #     s0 = s0.numpy() * mask
+                #     p0 = p0.numpy()
+                    # recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
+                    # recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
+                    # recon_bias.append(s0-recon.numpy())
 
         logger.info(f" -> {self.name} testing loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
         return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
     
 class ImageModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, tip_tilt_passthrough=False):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser
-        self.tip_tilt_passthrough = tip_tilt_passthrough
+        self.mode_skip = mode_skip
 
     def train(self, data):
         self.model.train()
@@ -314,12 +336,19 @@ class ImageModelRunner(Runner):
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
+            sz = np.zeros_like(y[0])
+
+            if self.mode_skip > 0:
+                ptt_y = y[:, :self.mode_skip]
+                y = y[:, self.mode_skip:]
+                X = X[:, :, self.mode_skip:, :]
+
             X, y = X.to(ml.device), y.to(ml.device)
 
             pred = self.model(X)
 
-            if self.tip_tilt_passthrough:
-                pred[:, :3] = y[:, :3]    # For each item in batch, replace the first three coefficients
+            # if self.mode_skip > 0:
+            #     pred[:, :self.mode_skip] = y[:, :self.mode_skip]    # For each item in batch, replace the first three coefficients
             
             loss = self.loss_fn(pred, y)
 
@@ -333,12 +362,14 @@ class ImageModelRunner(Runner):
             y = y.to("cpu").detach()
             loss_bias.append(y-prediction)
 
-            for p0, s0 in zip(prediction, scr):
-                s0 = s0.numpy() * mask
-                p0 = p0.numpy()
-                recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
-                recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
-                recon_bias.append(s0-recon.numpy())
+            for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.zeros_like(sz)
+                np.concatenate((ptt, pred), out=res)
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                recon_bias.append(screen-recon.numpy())
 
         logger.info(f" -> {self.name} training loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
@@ -360,11 +391,18 @@ class ImageModelRunner(Runner):
                 if mask is None:
                     mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
 
+                sz = np.zeros_like(y[0])
+
+                if self.mode_skip > 0:
+                    ptt_y = y[:, :self.mode_skip]
+                    y = y[:, self.mode_skip:]
+                    X = X[:, :, self.mode_skip:, :]
+
                 X, y = X.to(ml.device), y.to(ml.device)
                 pred = self.model(X)
 
-                if self.tip_tilt_passthrough:
-                    pred[:, :3] = y[:, :3]     # For each item in batch, replace the first three coefficients
+                if self.mode_skip:
+                    pred[:, :self.mode_skip] = y[:, :self.mode_skip]     # For each item in batch, replace the first three coefficients
 
                 loss = self.loss_fn(pred, y).item()
 
@@ -374,23 +412,25 @@ class ImageModelRunner(Runner):
                 y = y.to("cpu").detach()
                 loss_bias.append(y-prediction)
 
-                for p0, s0 in zip(prediction, scr):
-                    s0 = s0.numpy() * mask
-                    p0 = p0.numpy()
-                    recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
-                    recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
-                    recon_bias.append(s0-recon.numpy())
+                for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                    screen = screen.numpy() * mask
+                    pred = pred.numpy()
+                    res = np.zeros_like(sz)
+                    np.concatenate((ptt, pred), out=res)
+                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                    recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                    recon_bias.append(screen-recon.numpy())
 
         logger.info(f" -> {self.name} testing loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
         return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
     
 class ModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, tip_tilt_passthrough=False):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser
-        self.tip_tilt_passthrough = tip_tilt_passthrough
+        self.mode_skip = mode_skip
 
     def train(self, data):
         self.model.train()
@@ -407,13 +447,20 @@ class ModelRunner(Runner):
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+                
+            sz = np.zeros_like(y[0])
+
+            if self.mode_skip > 0:
+                ptt_y = y[:, :self.mode_skip]
+                y = y[:, self.mode_skip:]
+                X = X[:, :, self.mode_skip:, :]
 
             X, y = X.to(ml.device), y.to(ml.device)
 
             pred = self.model(X)
 
-            if self.tip_tilt_passthrough:
-                pred[:, :3] = y[:, :3]    # For each item in batch, replace the first three coefficients
+            # if self.mode_skip:
+            #     pred[:, :self.mode_skip] = y[:, :self.mode_skip]    # For each item in batch, replace the first three coefficients
             
             loss = self.loss_fn(pred, y)
 
@@ -427,12 +474,14 @@ class ModelRunner(Runner):
             y = y.to("cpu").detach()
             loss_bias.append(y-prediction)
 
-            for p0, s0 in zip(prediction, scr):
-                s0 = s0.numpy() * mask
-                p0 = p0.numpy()
-                recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
-                recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
-                recon_bias.append(s0-recon.numpy())
+            for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.zeros_like(sz)
+                np.concatenate((ptt, pred), out=res)
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                recon_bias.append(screen-recon.numpy())
 
         logger.info(f" -> {self.name} training loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
@@ -453,12 +502,19 @@ class ModelRunner(Runner):
 
                 if mask is None:
                     mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+                
+                sz = np.zeros_like(y[0])
+
+                if self.mode_skip > 0:
+                    ptt_y = y[:, :self.mode_skip]
+                    y = y[:, self.mode_skip:]
+                    X = X[:, :, self.mode_skip:, :]
 
                 X, y = X.to(ml.device), y.to(ml.device)
                 pred = self.model(X)
 
-                if self.tip_tilt_passthrough:
-                    pred[:, :3] = y[:, :3]    # For each item in batch, replace the first three coefficients
+                # if self.mode_skip:
+                #     pred[:, :self.mode_skip] = y[:, :self.mode_skip]    # For each item in batch, replace the first three coefficients
 
                 loss = self.loss_fn(pred, y).item()
 
@@ -468,12 +524,14 @@ class ModelRunner(Runner):
                 y = y.to("cpu").detach()
                 loss_bias.append(y-prediction)
 
-                for p0, s0 in zip(prediction, scr):
-                    s0 = s0.numpy() * mask
-                    p0 = p0.numpy()
-                    recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
-                    recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
-                    recon_bias.append(s0-recon.numpy())
+                for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                    screen = screen.numpy() * mask
+                    pred = pred.numpy()
+                    res = np.zeros_like(sz)
+                    np.concatenate((ptt, pred), out=res)
+                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                    recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                    recon_bias.append(screen-recon.numpy())
 
         logger.info(f" -> {self.name} testing loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 

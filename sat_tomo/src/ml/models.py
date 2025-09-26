@@ -24,7 +24,7 @@ class MLNN_baseline(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*4, 512),
+            nn.Linear(self.n_features*3*4, 512),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -33,7 +33,7 @@ class MLNN_baseline(Network):
             nn.Linear(2048, 512),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_coeffs)
+            nn.Linear(512, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -45,7 +45,7 @@ class MLNN_glao_offset(Network):
         self.model_type="glao_offset"
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*4, 512),
+            nn.Linear(self.n_features*3*4, 512),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -54,7 +54,7 @@ class MLNN_glao_offset(Network):
             nn.Linear(2048, 512),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_coeffs)
+            nn.Linear(512, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -66,7 +66,7 @@ class MLNN_deep(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*4, 512),
+            nn.Linear(self.n_features*3*4, 512),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -81,7 +81,7 @@ class MLNN_deep(Network):
             nn.Linear(2048, 512),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_coeffs)
+            nn.Linear(512, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -92,7 +92,7 @@ class MLNN_sine(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.linear_sine_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*4, 512),
+            nn.Linear(self.n_features*3*4, 512),
             Sine(),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -101,7 +101,7 @@ class MLNN_sine(Network):
             nn.Linear(2048, 512),
             Sine(),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_coeffs)
+            nn.Linear(512, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -112,7 +112,7 @@ class MLNN_snake(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.linear_snake_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.Linear(self.n_features*3*3, 512),
             Snake(),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -121,7 +121,7 @@ class MLNN_snake(Network):
             nn.Linear(2048, 512),
             Snake(),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_coeffs)
+            nn.Linear(512, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -132,7 +132,7 @@ class MLNN_swish(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.linear_swish_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.Linear(self.n_features*3*3, 512),
             nn.SiLU(),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -141,7 +141,7 @@ class MLNN_swish(Network):
             nn.Linear(2048, 512),
             nn.SiLU(),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_coeffs)
+            nn.Linear(512, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -152,7 +152,7 @@ class MLNN_swish_deep(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.linear_swish_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.Linear(self.n_features*3*3, 512),
             nn.SiLU(),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -167,7 +167,7 @@ class MLNN_swish_deep(Network):
             nn.Linear(2048, 512),
             nn.SiLU(),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_coeffs)
+            nn.Linear(512, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -178,7 +178,7 @@ class MLNN_GELU(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.linear_swish_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.Linear(self.n_features*3*3, 512),
             nn.GELU(),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -187,7 +187,7 @@ class MLNN_GELU(Network):
             nn.Linear(2048, 512),
             nn.GELU(),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_coeffs)
+            nn.Linear(512, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -198,7 +198,7 @@ class MLNN_SquarePlus(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.linear_swish_stack = nn.Sequential(
-            nn.Linear(self.n_coeffs*3*3, 512),
+            nn.Linear(self.n_features*3*3, 512),
             SquarePlus(),
             nn.Dropout(self.do),
             nn.Linear(512, 2048),
@@ -207,7 +207,7 @@ class MLNN_SquarePlus(Network):
             nn.Linear(2048, 512),
             SquarePlus(),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_coeffs)
+            nn.Linear(512, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -304,7 +304,7 @@ class ResNet(Network):
         self.layer2 = self._make_layer(block, 255, layers[2], stride = 2)
         self.layer3 = self._make_layer(block, 513, layers[3], stride = 2)
         self.avgpool = nn.AvgPool2d(kernel_size=(2, 1), stride=1)
-        self.fc = nn.Linear(513, self.n_coeffs)
+        self.fc = nn.Linear(513, self.n_features)
         
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -740,6 +740,58 @@ class ResNet_WFS(Network):
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.layer5(x)
+
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+
+        return x
+    
+class ResNet_glao_offset(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.model_type="glao_offset"
+        
+        block = ResidualBlock
+        layers = [3, 4, 6, 3]
+        self.inplanes = 63
+        self.conv1 = nn.Sequential(
+                        nn.Conv2d(3, self.inplanes, kernel_size = 3, stride = 1, padding = 1, groups=3),
+                        nn.BatchNorm2d(self.inplanes),
+                        nn.ReLU())
+        self.maxpool = nn.MaxPool2d(kernel_size = 2, stride = 1, padding = 1)
+        self.layer0 = self._make_layer(block, self.inplanes, layers[0], stride = 2)
+        self.layer1 = self._make_layer(block, 126, layers[1], stride = 2)
+        self.layer2 = self._make_layer(block, 255, layers[2], stride = 2)
+        self.layer3 = self._make_layer(block, 513, layers[3], stride = 2)
+        self.avgpool = nn.AvgPool2d(kernel_size=(2, 1), stride=1)
+        self.fc = nn.Linear(513, self.n_features)
+        
+    def _make_layer(self, block, planes, blocks, stride=1):
+        downsample = None
+        if stride != 1 or self.inplanes != planes:
+            
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride, groups=3),
+                nn.BatchNorm2d(planes),
+            )
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample))
+        self.inplanes = planes
+        for i in range(1, blocks):
+            layers.append(block(self.inplanes, planes))
+
+        return nn.Sequential(*layers)
+    
+    
+    def forward(self, x):
+        # x = x.transpose(2, -1).contiguous()
+        x = self.conv1(x)
+        # x = self.maxpool(x)
+        x = self.layer0(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)

@@ -29,20 +29,26 @@ DEFAULT_CATALOG_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&
 def load_sun_moon_emphemeris():
     load('de421.bsp')
 
-def get_satellite_catalog(url=None, k=200):
-    """ Retrieve catalog of skyfield satellite objects from url """
-    if url == None:
-        url = DEFAULT_CATALOG_URL
-
+def check_update_time(delta_days=14):
+    """ Check if an update is necessary for satellite data """
     now = dt.datetime.now()
     try:
         with open("./data/satellites/time.updated", 'rb') as f:
             t = pickle.load(f)
             log.info(f" > Satellite TLEs last updated at {t}")
         
-        reload = (now - t) > dt.timedelta(days=14)
+        reload = (now - t) > dt.timedelta(days=delta_days)
     except FileNotFoundError:
         reload = True
+    return reload
+
+def get_satellite_catalog(url=None, k=200):
+    """ Retrieve catalog of skyfield satellite objects from url """
+    if url == None:
+        url = DEFAULT_CATALOG_URL
+
+    reload = check_update_time(14)
+    now = dt.datetime.now()
     
     if reload:
         log.info(f" > Downloading new satellite TLEs for {now}")

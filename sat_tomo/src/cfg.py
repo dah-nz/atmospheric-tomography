@@ -61,6 +61,7 @@ class Config():
         parser.add_argument('--num_sats', action='store', default=500, type=int, help="Number of satellites to calculate asterisms from")
         parser.add_argument('--sat_del_t', action='store', default=30, type=int, help="Time delta between satellite location checks (s)")
         parser.add_argument('--asterism_size', action='store', default=3, type=int, help="Number of stars in asterisms")
+        parser.add_argument('--asterism_quality', action='store', default=0.0, type=float, help='Lower limit for selecting asterisms based on their predicted quality (Predicted Log of Relative Strehl)')
         
         parser.add_argument('--shwfs', action='store_true', help="Use Shack-Hartmann WFS for estimating guide-star wavefront modes")
         parser.add_argument('--noise', action='store_true', help='Turn on noise in the SHWFS')
@@ -68,8 +69,6 @@ class Config():
         parser.add_argument('--display_asterisms', action='store_true', help="Display data about asterisms")
         parser.add_argument('--display_training', action='store_true', help="Display results of training")
 
-        parser.add_argument('--fixed_off', action='store_true', help='Turn off fixed asterism training')
-        parser.add_argument('--variable_off', action='store_true', help='Turn off variable asterism training')
         parser.add_argument('--lsq_off', action='store_true', help='Turn off Least Squares tomography comparison')
         parser.add_argument('--glao_off', action='store_true', help='Turn off GLAO tomography comparison')
         parser.add_argument('--ao_off', action='store_true', help="Turn off adaptive optics comparison")
@@ -78,9 +77,8 @@ class Config():
         parser.add_argument('--fixed_theta_0_randomised', action="store_true", help="Randomise the starting angle for fixed asterisms (rotating the equally spaced guide-stars about the centre)")
         parser.add_argument('-l', '--load_previous', action='store_true', help="Load models from previous training run")
         parser.add_argument('-c', '--continue_training', action='store_true', help="Save results appended to previous training run")
-        parser.add_argument("--tip_tilt_passthrough", action='store_true', help="Allow tip/tilt to pass through for training (assume first three modes are known and correct)")
+        parser.add_argument("--mode_skip", action='store', default=3, help="Skip modes from the beginning. Default=3, skipping piston, tip/tilt.")
         parser.add_argument("--wavefront_tip_tilt_removal", action='store_true', help="Remove tip/tilt component from wavefronts prior to wavefront sensing, based on target tip/tilt value, approximating a tip/tilt mirror in the optical path")
-        parser.add_argument("--train_combined", action='store_true', help="Train fixed and variable as a single combined ML model")
 
         try:
             args = parser.parse_args()
@@ -97,6 +95,9 @@ class Config():
         if type(args.diameter) is str:
             args.diameter = float(args.diameter)
 
+        if type(args.asterism_quality) is str:
+            args.asterism_quality = float(args.asterism_quality)
+
         if type(args.r0) is str:
             args.r0 = float(args.r0)
 
@@ -105,6 +106,9 @@ class Config():
 
         if type(args.asterism_size) is str:
             args.asterism_size = int(args.asterism_size)
+
+        if type(args.mode_skip) is str:
+            args.mode_skip = int(args.mode_skip)
 
         if args.altitudes is None or len(args.altitudes) == 0:
             args.altitudes = [1000, 5000, 10000]
@@ -119,9 +123,9 @@ class Config():
 
         #   Name                Run in parallel? , Fixed asterisms only?
         self.tomo_methods = {
-            "LeastSquares":     {'run': True, 'fixed': False},
-            "GLAO":             {'run': True, 'fixed': False},
-            "AO":               {'run': True, 'fixed': False}
+            "LeastSquares":     {'run': True },
+            "GLAO":             {'run': True },
+            "AO":               {'run': True }
             }
 
         if self.lsq_off:
@@ -132,13 +136,6 @@ class Config():
             self.tomo_methods["AO"]['run'] = False
         
         self.basis = basis.select(self.basis_function, self.num_modes)
-
-        self.asterism_types = ['fixed', 'variable']
-
-        if self.fixed_off:
-            self.asterism_types.remove('fixed')
-        if self.variable_off:
-            self.asterism_types.remove('variable')
         
         max_screens = min(self.testing_size, self.training_size)
 

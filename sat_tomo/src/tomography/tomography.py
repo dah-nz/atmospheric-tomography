@@ -119,7 +119,7 @@ class Tomography():
         return P
 
 class LeastSquares(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=False, method="all", start_angle=18, end_angle=22, angle_mix="ave", display=False, mode_skip=3):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=False, method="Tinv", start_angle=18, end_angle=22, angle_mix="ave", display=False, mode_skip=3):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size, mode_skip=mode_skip)
         """
         proj_grid:
@@ -289,8 +289,8 @@ class LeastSquares(Tomography):
     
   
 class AO(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256):
-        super().__init__(basis, diameter, n_modes, altitudes, aperture_size)
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3):
+        super().__init__(basis, diameter, n_modes, altitudes, aperture_size, mode_skip=mode_skip)
 
     def run(self, beacons, target, beacon_coeffs):
         """
@@ -324,8 +324,8 @@ class AO(Tomography):
         return target_coeffs
     
 class GLAO(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256):
-        super().__init__(basis, diameter, n_modes, altitudes, aperture_size)
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3):
+        super().__init__(basis, diameter, n_modes, altitudes, aperture_size, mode_skip=mode_skip)
 
     def run(self, beacons, target, beacon_coeffs):
         """
