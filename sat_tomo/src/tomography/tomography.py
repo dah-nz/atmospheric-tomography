@@ -292,7 +292,7 @@ class AO(Tomography):
     def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size, mode_skip=mode_skip)
 
-    def run(self, beacons, target, beacon_coeffs):
+    def run(self, beacons, target, beacon_coeffs, ptt=[]):
         """
         Runs adaptive optics, where the target coefficients are set to one of the beacon coefficients
         This is assumed to be the closest of the beacons provided, as this is most likely to be in the isoplanatic patch.
@@ -320,6 +320,7 @@ class AO(Tomography):
         closest = min(angles, key=lambda x: x[0])[1]
         
         target_coeffs = closest
+        target_coeffs[:self.mode_skip] = ptt
 
         return target_coeffs
     
@@ -327,7 +328,7 @@ class GLAO(Tomography):
     def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size, mode_skip=mode_skip)
 
-    def run(self, beacons, target, beacon_coeffs):
+    def run(self, beacons, target, beacon_coeffs, ptt=[]):
         """
         Runs a trivial version of tomography, where the target coefficients are the average of all the beacon coefficients
 
@@ -346,6 +347,7 @@ class GLAO(Tomography):
             array of coefficients for target/science object
         """
         target_coeffs = np.sum(beacon_coeffs, 0) / np.shape(beacon_coeffs)[0]
+        target_coeffs[:self.mode_skip] = ptt
 
         return target_coeffs
         

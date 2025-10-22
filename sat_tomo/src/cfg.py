@@ -62,6 +62,7 @@ class Config():
         parser.add_argument('--sat_del_t', action='store', default=30, type=int, help="Time delta between satellite location checks (s)")
         parser.add_argument('--asterism_size', action='store', default=3, type=int, help="Number of stars in asterisms")
         parser.add_argument('--asterism_quality', action='store', default=0.0, type=float, help='Lower limit for selecting asterisms based on their predicted quality (Predicted Log of Relative Strehl)')
+        parser.add_argument("--minimum_asterism_angle", action="store", default=0.0, type=float, help='Minimum distance for guide stars from the target')
         
         parser.add_argument('--shwfs', action='store_true', help="Use Shack-Hartmann WFS for estimating guide-star wavefront modes")
         parser.add_argument('--noise', action='store_true', help='Turn on noise in the SHWFS')
@@ -95,8 +96,11 @@ class Config():
         if type(args.diameter) is str:
             args.diameter = float(args.diameter)
 
-        if type(args.asterism_quality) is str:
-            args.asterism_quality = float(args.asterism_quality)
+        try:
+            if type(args.asterism_quality) is str:
+                args.asterism_quality = float(args.asterism_quality)
+        except ValueError:
+             args.asterism_quality = None
 
         if type(args.r0) is str:
             args.r0 = float(args.r0)
@@ -109,6 +113,9 @@ class Config():
 
         if type(args.mode_skip) is str:
             args.mode_skip = int(args.mode_skip)
+
+        if type(args.minimum_asterism_angle) is str:
+            args.minimum_asterism_angle = float(args.minimum_asterism_angle)
 
         if args.altitudes is None or len(args.altitudes) == 0:
             args.altitudes = [1000, 5000, 10000]

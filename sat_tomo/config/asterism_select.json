@@ -9,10 +9,10 @@
       "altitudes": [1000,5000,10000],
       "magnitude": 14,
 
-      "train_models": ["MLNN_baseline", "MLNN_glao_offset", "ResNet", "ResNet_glao_offset"],
+      "train_models": ["MLNN_glao_offset", "MLNN_glao_offset_no_angle", "ResNet_glao_offset", "ResNet_glao_offset_no_angle"],
       "lsq_off": false,
-      "glao_off": true,
-      "ao_off": true,
+      "glao_off": false,
+      "ao_off": false,
       
       "epochs": 512,
       "training_size": 32,
@@ -25,6 +25,7 @@
       
       "asterism_size": 3,
       "asterism_quality": 0.0,
+      "minimum_asterism_angle": 0.0,
       
       "satellites": true,
       "period": 72,

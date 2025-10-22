@@ -15,7 +15,7 @@ from itertools import combinations
 import log
 
 logger = log.get_logger(__name__)
-log.setup_logger(logger)
+log.setup_logger(logger, to_console=True)
 
 ASTERISM_SIZE = 3
 LIMITING_ANGLE = 120
@@ -49,7 +49,7 @@ def perturb_asterism_single_star(asterism, perturbation):
             asts.append((i, ast))
     return asts
 
-def generate_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, rng=None, mask=None, group_size=5, asterism_size=3, performance_limit=0.0, model_location="C:/Code/PhD/Data/Models", model_name="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl"):
+def generate_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, rng=None, mask=None, group_size=5, asterism_size=3, performance_limit=0.0, model_location="C:/Code/PhD/Data/Models", model_name="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl", minimum_angle=0.0):
     logger.info(f"Generating {n} variable asterisms")
 
     if rng is None:
@@ -70,11 +70,15 @@ def generate_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, rng=None,
             subgroups = combinations(group, asterism_size)
             for subgroup in subgroups:
                 raw = [s.copy() for s in subgroup]
-                X = asterism_features(raw)
-                if scaler != None:
-                    X = scaler.transform(X)
-                if model.predict(X) > performance_limit:
-                    asterism_list.append(raw)
+                if raw[0]._gamma_arcsec > minimum_angle:
+                    if performance_limit is not None:
+                        X = asterism_features(raw)
+                        if scaler != None:
+                            X = scaler.transform(X)
+                        if model.predict(X) > performance_limit:
+                            asterism_list.append(raw)
+                    else:
+                        asterism_list.append(raw)
 
     rng.shuffle(asterism_list)
     

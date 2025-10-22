@@ -91,8 +91,8 @@ def run(cfg):
 
             log.info(f"Loading asterism groups. Training: {cfg.training_size}. Testing: {cfg.testing_size}")
             
-            training_asterisms = asterisms.generate_asterisms(cfg.training_size, cfg.magnitude, mask=mask, performance_limit=cfg.asterism_quality)
-            testing_asterisms = asterisms.generate_asterisms(cfg.testing_size, cfg.magnitude, mask=mask, performance_limit=cfg.asterism_quality)
+            training_asterisms = asterisms.generate_asterisms(cfg.training_size, cfg.magnitude, mask=mask, performance_limit=cfg.asterism_quality, minimum_angle=cfg.minimum_asterism_angle)
+            testing_asterisms = asterisms.generate_asterisms(cfg.testing_size, cfg.magnitude, mask=mask, performance_limit=cfg.asterism_quality, minimum_angle=cfg.minimum_asterism_angle)
             variable_trainer = trainer
 
             data = run_epoch(variable_trainer,
@@ -152,7 +152,7 @@ def run(cfg):
         log.info(f"Running verification test screen {i+1}/{cfg.testing_size}")
 
         verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
-        verification_asterism = asterisms.generate_asterisms(1, cfg.magnitude, mask=mask)
+        verification_asterism = asterisms.generate_asterisms(1, cfg.magnitude, mask=mask, minimum_angle=cfg.minimum_asterism_angle)
         
         data = run_epoch(trainer, 
                         1,

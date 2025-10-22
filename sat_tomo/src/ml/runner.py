@@ -197,6 +197,7 @@ class DeltaModelRunner(Runner):
         self.model = model
         self.optimiser = optimiser
         self.mode_skip = mode_skip
+        self.position_ignore = False
 
     def train(self, data):
         self.model.train()
@@ -218,6 +219,10 @@ class DeltaModelRunner(Runner):
                 ptt_y = delta_y[:, :self.mode_skip]
                 delta_y = delta_y[:, self.mode_skip:]
                 X = X[:, :, self.mode_skip:, :]
+
+            # Set position data to 0
+            if self.position_ignore:
+                X[:, :, :, 1:] = 0
 
             X, delta_y = X.to(ml.device), delta_y.to(ml.device)
 
@@ -273,6 +278,9 @@ class DeltaModelRunner(Runner):
                     ptt_y = delta_y[:, :self.mode_skip]
                     delta_y = delta_y[:, self.mode_skip:]
                     X = X[:, :, self.mode_skip:, :]
+
+                if self.position_ignore:
+                    X[:, :, :, 1:] = 0
 
                 X, delta_y = X.to(ml.device), delta_y.to(ml.device)
 

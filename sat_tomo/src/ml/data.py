@@ -77,7 +77,10 @@ class TomographyData(Dataset):
                         # - limiting angle: {limiting_angle}; layer r0 {layer_r0}; type {type}")
 
         self.n = n
-        self.rng = rng
+        if rng is None:
+            self.rng = np.random.default_rng()
+        else:
+            self.rng = rng
         self.asterisms = asterisms
         self.atmosphere = atmosphere
 
@@ -117,6 +120,8 @@ class TomographyData(Dataset):
 
         screens = self.atmosphere[scr_idx]
         asterism = self.asterisms[ast_idx]
+
+        self.rng.shuffle(asterism)
 
         target_coeffs = self.target.cutout_coeffs(self.basis, self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         

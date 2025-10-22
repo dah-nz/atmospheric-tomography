@@ -75,54 +75,7 @@ if __name__ == "__main__":
         # with open(f"{cfg.directory}/temp/results.csv", "r") as f:
         #     df = pd.read_csv(f)
 
-        with open(f"{cfg.directory}/current/results.csv", "r") as f:
-            df = pd.read_csv(f)
-
-        df_v = df.drop(df[df.Stage != "Verification"].index)
-        df = df.drop(df[df.Stage == "Verification"].index)
-
-        df = df.sort_values(by=["Stage", "Epoch"])
-
-        df['Moving Average'] = (
-            df.groupby(['Type', 'Stage', 'Model'])['Loss']
-            .transform(lambda x: x.rolling(window=32, min_periods=1).mean())
-        )
-
-        print(df[(df["Type"]=="Coefficients") & (df["Stage"]=="Train")&(df['Model']=='MLNN_baseline')].tail(12))
-
-
-        sns.relplot(data=df, kind='line', 
-                    x='Epoch', y='Loss', row="Type",
-                    style="Stage", hue="Model",
-                    facet_kws={'sharey': "row", 'sharex': True})
-
-        sns.relplot(data=df, kind='line', 
-                    x='Epoch', y='Moving Average', row="Type",
-                    style="Stage", hue="Model",
-                    facet_kws={'sharey': "row", 'sharex': True})
-        
-        # Remove all but last verification results
-        try:
-            max_training_set = df_v["TrainingSet"].max()
-            df_v = df_v.drop(df_v[df_v.TrainingSet != max_training_set].index)
-        except KeyError:
-            pass
-
-        
-        fig, axs = plt.subplots(1, 2)
-        df_v_recon = df_v.drop(df_v[df_v.Type != "Reconstruction"].index)
-        sns.boxplot(data=df_v_recon, x='Model', y='Loss', ax=axs[0])
-        axs[0].set_title("Reconstruction")
-        
-        df_v_coeff = df_v.drop(df_v[df_v.Type != "Coefficients"].index)
-        sns.boxplot(data=df_v_coeff, x='Model', y='Loss', ax=axs[1])
-        axs[1].set_title("Coefficients")
-
-        print("*** Reconstruction Statistics ***")
-        print(df_v_recon[["Model", "Loss"]].groupby("Model").describe())
-
-        print("*** Coefficient Statistics ***")
-        print(df_v_coeff[["Model", "Loss"]].groupby("Model").describe())
+        display.training(cfg)
         
     snapshot = tracemalloc.take_snapshot()
     top_stats = snapshot.statistics('lineno')
