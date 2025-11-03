@@ -1,4 +1,5 @@
 import argparse
+import os
 
 from torch import nn
 from basis import basis
@@ -46,6 +47,7 @@ class Config():
         parser.add_argument('--altitudes', action=AltitudeExtendAction, nargs="*", help="Layer altitudes")
         parser.add_argument('--training_size', action='store', default=256, type=int, help="Size of training batch")
         parser.add_argument('--testing_size', action='store', default=128, type=int, help="Size of test batch")
+        parser.add_argument('--verification_size', action='store', default=-1, type=int, help="Size of verification batch. Defaults to same size as testing batch.")
         parser.add_argument('--fixed_asterism_angle', action='store', default=30.0, help="Angle for fixed asterism (arcseconds)")
         parser.add_argument('--basis_function', action='store', default="Zernike", type=str, help="Set of basis functions")
         parser.add_argument('-n', '--num_modes', action='store', default=21, type=int, help="Number of basis modes")
@@ -63,6 +65,7 @@ class Config():
         parser.add_argument('--asterism_size', action='store', default=3, type=int, help="Number of stars in asterisms")
         parser.add_argument('--asterism_quality', action='store', default=0.0, type=float, help='Lower limit for selecting asterisms based on their predicted quality (Predicted Log of Relative Strehl)')
         parser.add_argument("--minimum_asterism_angle", action="store", default=0.0, type=float, help='Minimum distance for guide stars from the target')
+        parser.add_argument("--shuffle_asterism", action='store_true', help="Shuffle each asterism before performing tomography")
         
         parser.add_argument('--shwfs', action='store_true', help="Use Shack-Hartmann WFS for estimating guide-star wavefront modes")
         parser.add_argument('--noise', action='store_true', help='Turn on noise in the SHWFS')
@@ -116,6 +119,9 @@ class Config():
 
         if type(args.minimum_asterism_angle) is str:
             args.minimum_asterism_angle = float(args.minimum_asterism_angle)
+
+        if args.verification_size <= 0:
+            args.verification_size = args.testing_size
 
         if args.altitudes is None or len(args.altitudes) == 0:
             args.altitudes = [1000, 5000, 10000]
@@ -171,5 +177,14 @@ class Config():
             case _: #mse_loss
                 self.loss_function = nn.MSELoss()
 
+        self.args = args
+
     def get_file_name(self, name):
         return f"{name}_{type(self.basis).__name__}_{self.num_modes}_{self.r0}_{self.fixed_asterism_angle}_{self.diameter}"
+    
+    def save(self, directory):
+
+        with open(os.path.join(directory, "config.txt"), 'w') as f:
+
+            for arg_name, arg_data in vars(self.args).items():
+                f.write(f"{arg_name},{arg_data}\n")

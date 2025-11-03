@@ -9,7 +9,8 @@
       "altitudes": [1000,5000,10000],
       "magnitude": 14,
 
-      "train_models": ["MLNN_glao_offset", "MLNN_glao_offset_no_angle", "ResNet_glao_offset", "ResNet_glao_offset_no_angle"],
+      "train_models": ["MLNN_glao_offset", "MLNN_glao_offset_no_angle", "MLNN_baseline", "MLNN_no_angle", 
+        "ResNet_glao_offset", "ResNet_glao_offset_no_angle", "ResNet", "ResNet_no_angle"],
       "lsq_off": false,
       "glao_off": false,
       "ao_off": false,
@@ -17,6 +18,7 @@
       "epochs": 512,
       "training_size": 32,
       "testing_size": 16,
+      "verification_size": 1024,
       "save_frequency": 32,
       "display_training": true,
       
@@ -24,8 +26,9 @@
       "noise": false,
       
       "asterism_size": 3,
-      "asterism_quality": 0.0,
-      "minimum_asterism_angle": 0.0,
+      "asterism_quality": -0.05,
+      "minimum_asterism_angle": 5.0,
+      "shuffle_asterism": true,
       
       "satellites": true,
       "period": 72,

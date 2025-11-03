@@ -3,6 +3,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from tomography import beacon, tomography, asterisms, wavefront
 from basis import zernike
+import util
 
 import log
 
@@ -54,7 +55,7 @@ class TomographyData(Dataset):
     Pytorch dataset wrapper. Stores the phase screen and asterism data for training machine learning models.
 
     """
-    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, rng=None, packing_function=None, unpacking_function=None, wfs=None, tiptilt_removal=False):
+    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, rng=None, packing_function=None, unpacking_function=None, wfs=None, tiptilt_removal=False, shuffle=False):
         """
         Set up Tomography Dataset
 
@@ -70,6 +71,7 @@ class TomographyData(Dataset):
         n_modes=16              Only necessary if basis is none, determines the number of modes
         rng=None                Pseudorandom number generator, if reproducing is required
         packing_function=None   Function used for packing data into the correct dataset output
+        shuffle                 Whether to shuffle the guide-star information before return the index
         """
         logger.info(f"Creating data set: \n\
                     - size: {n}; asterisms: {len(asterisms)}; screens: {atmosphere.n}; layers: {len(atmosphere.generators)}")
@@ -104,6 +106,8 @@ class TomographyData(Dataset):
 
         self.option = ""
         self.tiptilt_removal = tiptilt_removal
+
+        self.shuffle = shuffle
         
     def __len__(self):
         return self.n
@@ -121,7 +125,8 @@ class TomographyData(Dataset):
         screens = self.atmosphere[scr_idx]
         asterism = self.asterisms[ast_idx]
 
-        self.rng.shuffle(asterism)
+        if self.shuffle:
+            asterism = util.mix3(asterism, idx)
 
         target_coeffs = self.target.cutout_coeffs(self.basis, self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         

@@ -18,11 +18,12 @@ import tracemalloc
 
 
 # ... run your application ...
-
+trace = False
 
 
 if __name__ == "__main__":
-    tracemalloc.start()
+    if trace:
+        tracemalloc.start()
     log = logging.get_logger(__name__)
     logging.setup_logger(log, level=logging.logging.INFO, to_console=True)
 
@@ -77,11 +78,12 @@ if __name__ == "__main__":
 
         display.training(cfg)
         
-    snapshot = tracemalloc.take_snapshot()
-    top_stats = snapshot.statistics('lineno')
+    if trace:
+        snapshot = tracemalloc.take_snapshot()
+        top_stats = snapshot.statistics('lineno')
 
-    print("[ Top 10 ]")
-    for stat in top_stats[:10]:
-        print(stat)
-        
+        print("[ Top 10 ]")
+        for stat in top_stats[:10]:
+            print(stat)
+            
     plt.show()

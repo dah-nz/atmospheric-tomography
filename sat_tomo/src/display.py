@@ -64,6 +64,7 @@ def training(cfg, file_name="current/results.csv"):
     )
 
     df_long["Window Size"] = df_long["Window Size"].str.extract('(\d+)').astype(int)
+    df_long = df_long[df_long["Type"] == "Reconstruction"]
 
     # print(df[(df["Type"]=="Coefficients") & (df["Stage"]=="Train")&(df['Model']=='MLNN_baseline')].tail(12))
 
@@ -90,17 +91,20 @@ def training(cfg, file_name="current/results.csv"):
         pass
 
     
-    fig, axs = plt.subplots(1, 2)
+    fig, axs = plt.subplots(1, 1)
     df_v_recon = df_v.drop(df_v[df_v.Type != "Reconstruction"].index)
-    sns.boxplot(data=df_v_recon, x='Model', y='Loss', ax=axs[0])
-    axs[0].set_title("Reconstruction")
+    sns.boxplot(data=df_v_recon, x='Model', y='Loss', ax=axs)
+    axs.set_title("Reconstruction")
+    axs.tick_params(axis='x', rotation=30)
     
-    df_v_coeff = df_v.drop(df_v[df_v.Type != "Coefficients"].index)
-    sns.boxplot(data=df_v_coeff, x='Model', y='Loss', ax=axs[1])
-    axs[1].set_title("Coefficients")
+    # df_v_coeff = df_v.drop(df_v[df_v.Type != "Coefficients"].index)
+    # sns.boxplot(data=df_v_coeff, x='Model', y='Loss', ax=axs[1])
+    # axs[1].set_title("Coefficients")
+    # axs[1].tick_params(axis='x', rotation=30)
 
     print("*** Reconstruction Statistics ***")
     print(df_v_recon[["Model", "Loss"]].groupby("Model").describe())
 
-    print("*** Coefficient Statistics ***")
-    print(df_v_coeff[["Model", "Loss"]].groupby("Model").describe())
+    # print("*** Coefficient Statistics ***")
+    # print(df_v_coeff[["Model", "Loss"]].groupby("Model").describe())
+    

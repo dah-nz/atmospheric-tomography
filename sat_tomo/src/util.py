@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib as mpl
 import scipy
+from itertools import combinations
 
 from tomography.shwfs.shackHartmann import generateZernike
 
@@ -291,3 +292,9 @@ def signed_distance_triangle(P, A, B, C):
 
     d = min(d1, d2, d3)
     return d if inside else -d
+
+combs = combinations(range(3))
+
+def mix3(thrupple, idx):
+    comb = combs[idx % 6]
+    return [thrupple[comb[0]], thrupple[comb[1]], thrupple[comb[2]]]

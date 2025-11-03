@@ -10,9 +10,9 @@ from tomography import asterisms, phase_screen, wavefront
 
 import tracemalloc
 
-def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True, wfs=None, tiptilt_removal=False):
+def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True, wfs=None, tiptilt_removal=False, shuffle=False):
     
-    dt = data.TomographyData(n, asterisms, atmosphere, basis, wfs=wfs, tiptilt_removal=tiptilt_removal)
+    dt = data.TomographyData(n, asterisms, atmosphere, basis, wfs=wfs, tiptilt_removal=tiptilt_removal, shuffle=shuffle)
     if train:
         results = trainer.train(dt)
     else:
@@ -61,6 +61,9 @@ def run(cfg):
     os.makedirs(f"{directory}/current/parameters", exist_ok=True)
     os.makedirs(f"{directory}/current/definitions", exist_ok=True)
 
+    cfg.save(f"{directory}/current")
+    cfg.save(f"{directory}/{cfg.start_time}")
+
     total_epochs = sum([r[0] for r in cfg.regime])
 
     save_asterism_data = {"fixed": [], "variable": []}
@@ -101,7 +104,8 @@ def run(cfg):
                                 atmosphere_train, 
                                 cfg.basis,
                                 wfs=shwfs,
-                                tiptilt_removal=cfg.wavefront_tip_tilt_removal)
+                                tiptilt_removal=cfg.wavefront_tip_tilt_removal,
+                                shuffle=cfg.shuffle_asterism)
 
             for k, (l, r, bc, br) in data.items():
                 append_results(results, epoch, "Train", k, n_screens, "Variable", "Coefficients", l)
@@ -116,7 +120,8 @@ def run(cfg):
                                 cfg.basis,
                                 train=False,
                                 wfs=shwfs,
-                                tiptilt_removal=cfg.wavefront_tip_tilt_removal)
+                                tiptilt_removal=cfg.wavefront_tip_tilt_removal,
+                                shuffle=cfg.shuffle_asterism)
                 
             for k, (l, r, _, _) in data.items():
                 append_results(results, epoch, "Test", k, cfg.testing_size, "Variable", "Coefficients", l)
@@ -128,10 +133,13 @@ def run(cfg):
 
             save_asterism_data["variable"] += (epoch, training_asterisms + testing_asterisms)
 
-            snapshot = tracemalloc.take_snapshot()
-            top_stats = snapshot.statistics('lineno')
+            try: 
+                snapshot = tracemalloc.take_snapshot()
+                top_stats = snapshot.statistics('lineno')
 
-            log.info(f"tracemalloc: {top_stats[:3]}")
+                log.info(f"tracemalloc: {top_stats[:3]}")
+            except RuntimeError:
+                pass
 
     # Save final model
     trainer.save_models(dir=f"{directory}/{cfg.start_time}")
@@ -147,9 +155,9 @@ def run(cfg):
 
     verification_asterisms = []
 
-    for i in range(cfg.testing_size):
+    for i in range(cfg.verification_size):
 
-        log.info(f"Running verification test screen {i+1}/{cfg.testing_size}")
+        log.info(f"Running verification test screen {i+1}/{cfg.verification_size}")
 
         verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
         verification_asterism = asterisms.generate_asterisms(1, cfg.magnitude, mask=mask, minimum_angle=cfg.minimum_asterism_angle)
@@ -161,11 +169,12 @@ def run(cfg):
                         cfg.basis,
                         train=False,
                         wfs=shwfs,
-                        tiptilt_removal=cfg.wavefront_tip_tilt_removal)
+                        tiptilt_removal=cfg.wavefront_tip_tilt_removal,
+                        shuffle=cfg.shuffle_asterism)
         
         for k, (l, r, _, _) in data.items():
-            append_results(results, epoch, "Verification", k, cfg.testing_size, "Variable", "Coefficients", l)
-            append_results(results, epoch, "Verification", k, cfg.testing_size, "Variable", "Reconstruction", r)
+            append_results(results, epoch, "Verification", k, cfg.verification_size, "Variable", "Coefficients", l)
+            append_results(results, epoch, "Verification", k, cfg.verification_size, "Variable", "Reconstruction", r)
         
         verification_asterisms.append(verification_asterism[0])
 
