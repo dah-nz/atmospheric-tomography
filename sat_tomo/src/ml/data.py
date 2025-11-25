@@ -108,6 +108,7 @@ class TomographyData(Dataset):
         self.tiptilt_removal = tiptilt_removal
 
         self.shuffle = shuffle
+        self.get_angle = lambda x: x.theta
         
     def __len__(self):
         return self.n
@@ -126,7 +127,7 @@ class TomographyData(Dataset):
         asterism = self.asterisms[ast_idx]
 
         if self.shuffle:
-            asterism = util.mix3(asterism, idx)
+            asterism = sorted(asterism, key=self.get_angle)
 
         target_coeffs = self.target.cutout_coeffs(self.basis, self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         

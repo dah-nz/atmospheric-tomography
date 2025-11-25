@@ -74,6 +74,13 @@ class Beacon():
         return pos 
     
     def position_arcsec(self):
+        """
+        Get the current cartesian position of the beacon in arcseconds
+        This is independent of layer height
+
+        Parameters
+        ----------
+        """
         x = np.cos(self.theta) * self._gamma_arcsec
         y = np.sin(self.theta) * self._gamma_arcsec
         return x, y

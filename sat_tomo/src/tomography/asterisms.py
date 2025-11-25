@@ -49,7 +49,18 @@ def perturb_asterism_single_star(asterism, perturbation):
             asts.append((i, ast))
     return asts
 
-def generate_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, rng=None, mask=None, group_size=5, asterism_size=3, performance_limit=0.0, model_location="C:/Code/PhD/Data/Models", model_name="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl", minimum_angle=0.0):
+def generate_asterisms(n, 
+                       magnitude=14, 
+                       limiting_angle=LIMITING_ANGLE, 
+                       rng=None, 
+                       mask=None, 
+                       group_size=5, 
+                       asterism_size=3, 
+                       quality_threshold=0.0,
+                       quality_limit=-0.2,
+                       angle_threshold=10.0,
+                       model_location="C:/Code/PhD/Data/Models", 
+                       model_name="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl"):
     logger.info(f"Generating {n} variable asterisms")
 
     if rng is None:
@@ -70,15 +81,36 @@ def generate_asterisms(n, magnitude=14, limiting_angle=LIMITING_ANGLE, rng=None,
             subgroups = combinations(group, asterism_size)
             for subgroup in subgroups:
                 raw = [s.copy() for s in subgroup]
-                if raw[0]._gamma_arcsec > minimum_angle:
-                    if performance_limit is not None:
-                        X = asterism_features(raw)
-                        if scaler != None:
-                            X = scaler.transform(X)
-                        if model.predict(X) > performance_limit:
-                            asterism_list.append(raw)
+
+                p = rng.uniform()
+
+                if raw[0]._gamma_arcsec >= angle_threshold:
+                    t = 1.0
+                else:
+                    t = 1.0 / (angle_threshold - raw[0]._gamma_arcsec + 1)
+
+                t = t ** 1
+
+            
+                if quality_limit is not None and quality_threshold is not None and quality_threshold >= quality_limit:
+                    X = asterism_features(raw)
+                    if scaler != None:
+                        X = scaler.transform(X)
+                    
+                    q = model.predict(X)
+                    if q >= quality_threshold:
+                        l = 1.0
+                    elif q <= quality_limit:
+                        l = 0.0
                     else:
-                        asterism_list.append(raw)
+                        l = (q - quality_limit) / (quality_threshold - quality_limit)
+                else:
+                    l = 1.0
+
+                l = l ** 2
+                            
+                if t * l > p:
+                    asterism_list.append(raw)
 
     rng.shuffle(asterism_list)
     

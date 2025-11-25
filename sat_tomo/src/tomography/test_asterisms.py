@@ -61,23 +61,29 @@ def run_tests():
 
     # test_asterism_cross_entropy()
     
-    cfg = AsterismConfig()
-    cfg.N = 21
-    cfg.n_asterisms = 512
-    cfg.n_atm = 512
-    cfg.augmented_asterisms = False
-    run_asterism_comparison(cfg)
-    bulk_compile_asterism_data('testing_data_21r015b')
+    # cfg = AsterismConfig()
+    # cfg.N = 21
+    # cfg.n_asterisms = 512
+    # cfg.n_atm = 512
+    # cfg.augmented_asterisms = False
+    # run_asterism_comparison(cfg)
+    # bulk_compile_asterism_data('testing_data_21r015b')
 
-    cfg.augmented_asterisms = False
-    cfg.n_asterisms = 256
-    cfg.n_atm = 256
-    run_asterism_comparison(cfg)
-    bulk_compile_asterism_data('validation_data_21r015b')
+    # cfg.augmented_asterisms = False
+    # cfg.n_asterisms = 256
+    # cfg.n_atm = 256
+    # run_asterism_comparison(cfg)
+    # bulk_compile_asterism_data('validation_data_21r015b')
+
+
 
     # transform_data(cfg)
     # display_results()
     # load_angle_data_test()
+
+
+    test_asterism_quality()
+    # test_generation()
 
     plt.show()
 
@@ -1692,4 +1698,174 @@ class ML_AE(ML_Model):
         return Z_encode.squeeze().to('cpu').numpy()
         # END ML_Model.encode
     
+
+def test_asterism_quality():
+    import pickle
+    from itertools import combinations
+    import astronomy
+    model_location = "C:/Code/PhD/Data/Models"
+    model_name = "Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl"
+    N = 100_000
+    arcsec_margin = 15
+
+    base_q = []
+    q_data = []
+    s_data = []
+    with open(os.path.join(model_location, model_name), 'rb') as f:
+        model, scaler = pickle.load(f)
+
+    while len(base_q) < N:
+        asterism_data = astronomy.asterisms.load_data(14, n=N, limit=120, quick_load=True, asterism_size=5)
+
+        groups = [[beacon.Beacon(t, g, m) for g, t, m in stars] for stars in asterism_data]
+
+
+        for group in groups:
+            for subgroup in combinations(group, 3):
+                raw = [s.copy() for s in subgroup]
+                X = asterisms.asterism_features(raw)
+                if scaler != None:
+                    X = scaler.transform(X)
+                
+                q = model.predict(X)
+
+                closest = min(raw, key=lambda x: x._gamma_arcsec)
+                offset = closest.theta
+
+                if q > 0.0 and closest._gamma_arcsec >= arcsec_margin:
+                    base_q.append(q)
+                    for s in raw:
+                        q_data.append(q)
+                        s = s.offset(theta=-util.rad2arcsec(offset))
+                        s_data.append(s.position_arcsec())
+
+    nrows = 3
+    ncols = 3
+
+
+    # edges = [1/2**(nrows*ncols-n-1) for n in range(nrows*ncols)]
+    # edges = [1/(nrows*ncols-n) for n in range(nrows*ncols)]
+    # edges.insert(0, 0)
+
+    # base_q = np.array(base_q)
+    # for l in edges[1:]:
+    #     print(f"{l}, {len(base_q[base_q <= l])}")
+
+    # edges = np.histogram_bin_edges(base_q, bins=nrows*ncols)
+    edges = np.linspace(0, 0.25, num=nrows*ncols)
+    edges = list(edges)
+    edges.append(1.0)
+
+    print(edges)
+
+    keys = []
+    x_data = {}
+    y_data = {}
+
+    for l, u in zip(edges[:-1], edges[1:]):
+        k = (l, u)
+        keys.append(k)
+        x_data[k] = []
+        y_data[k] = []
+        for q, (x, y) in zip(q_data, s_data):
+            if q >= l and q < u:
+                x_data[k].append(x)
+                y_data[k].append(y)
+            elif q == u and u == edges[-1]:
+                x_data[k].append(x)
+                y_data[k].append(y)
+
+    fig, axs = plt.subplots(nrows, ncols)
+    axs = axs.ravel()
+
+    max_count = 0
+    vmin = -6
+
+    data = []
     
+    for k in keys:
+
+        x = x_data[k]
+        y = y_data[k]
+
+
+        H, xedges, yedges = np.histogram2d(x, y, bins=np.linspace(-120, 120, 50))
+        H = np.log(H / H.max())
+        H[H < vmin] = vmin
+        data.append((H, xedges, yedges, k))
+        # max_count = max(max_count, H.max())
+
+    for ax, (H, xedges, yedges, (l, u)) in zip(axs, data):
+        ax.imshow(H)
+        ax.plot([0, 0], [-120, 120], 'k--')
+        ax.plot([-120, 120], [0, 0], 'k--')
+        pcm = ax.pcolormesh(xedges, yedges, H.T, cmap='viridis', vmin=vmin, vmax=0)
+        ax.set_xlabel('X (")')
+        ax.set_ylabel('Y (")')
+        ax.set_title(f"Quality in [{l}, {u}]")
+
+    # fig.colorbar(pcm, ax=axs, orientation='vertical', label='Count')
+
+    plt.show()
+
+def test_generation():
+
+    import pickle
+
+    model_location = "C:/Code/PhD/Data/Models"
+    model_name = "Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl"
+
+    qlim = 0.05
+    qthr = 0.05
+    athr = 5
+
+    n_asts = 5000
+    n_bins = 20
+
+    with open(os.path.join(model_location, model_name), 'rb') as f:
+        model, scaler = pickle.load(f)
+
+    qlims = [-0.1, -0.05, 0.00, 0.05, 0.1]
+    athrs = [0, 5, 10, 15]
+
+    fig, axs = plt.subplots(len(qlims), len(athrs))
+    axs = axs.ravel()
+
+    max_count = 0
+    data = []
+
+    for qlim in qlims:
+        for athr in athrs:
+            x = []
+            y = []
+
+            asts = asterisms.generate_asterisms(n_asts, quality_threshold=qlim, quality_limit=qlim-0.05, angle_threshold=athr, model_location=model_location, model_name=model_name)
+
+            for ast in asts:
+                X = asterisms.asterism_features(ast)
+                if scaler != None:
+                    X = scaler.transform(X)
+
+                q = model.predict(X)
+
+                m = min([s._gamma_arcsec for s in ast])
+
+                x.append(q)
+                y.append(m)
+
+            H, xedges, yedges = np.histogram2d(x, y, bins=n_bins)
+            data.append((H, xedges, yedges, qlim, athr))
+
+            max_count = max(max_count, H.max())
+
+    for ax, (H, xedges, yedges, qlim, athr) in zip(axs, data):
+        pcm = ax.pcolormesh(xedges, yedges, H.T, cmap='viridis', vmin=0, vmax=max_count)
+        ax.set_xlabel('Quality [ln(Strehl Ratio/Open Loop Strehl Ratio)]')
+        ax.set_ylabel('Minimum Asterism angle (")')
+        ax.set_title(f"Angle Thresh: {athr}; Qual Lim: {qlim}")
+    
+    fig.colorbar(pcm, ax=axs, orientation='vertical', label='Count')
+
+    # Add labels and title for clarity
+    plt.title('Asterism Selection Heatmap')
+    plt.show()

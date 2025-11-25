@@ -293,8 +293,8 @@ def signed_distance_triangle(P, A, B, C):
     d = min(d1, d2, d3)
     return d if inside else -d
 
-combs = combinations(range(3))
+combs = list(combinations(range(3), 3))
 
 def mix3(thrupple, idx):
-    comb = combs[idx % 6]
+    comb = combs[idx % len(combs)]
     return [thrupple[comb[0]], thrupple[comb[1]], thrupple[comb[2]]]

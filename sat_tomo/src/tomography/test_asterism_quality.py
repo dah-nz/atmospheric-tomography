@@ -30,8 +30,8 @@ METHODS = ['lsq_T'] # ['glao', 'lsq_T', 'lsq_K']
 ALTITUDES = [1000, 5000, 10000]
 
 def run_tests():
-    # test_overlap_percentage()
-    # return
+    test_overlap_percentage()
+    return
 
     # dfa = pd.read_parquet(os.path.join(DATA_FOLDER, f'testing_data_21r015a_none_noise.parquet'))
     # dfa['file_id'] = 'a'
@@ -54,7 +54,7 @@ def run_tests():
     # df = pd.concat((dfa, dfb))
     # df.to_parquet(os.path.join(DATA_FOLDER, f'data_66_merge_none_noise.parquet'), index=False)
 
-    files = ['testing_data_21r015_merge', 'validation_data_21r015_merge']
+    # files = ['testing_data_21r015_merge', 'validation_data_21r015_merge']
 
     # noise_types = ['none'] #, 'measurement', 'position']
     # for file in [files[-1]]:
@@ -62,8 +62,8 @@ def run_tests():
     #         print(f"Cleaning data in file: {file}_{noise_type}_noise")
     #         clean_data(file, noise_type)
     
-    print("Analysing results")
-    analyse_results(files[0], files[1])
+    # print("Analysing results")
+    # analyse_results(files[0], files[1])
     # plot_results(files[0])
 
     # analyse_asterisms(files[0], files[1])
@@ -936,8 +936,8 @@ def test_overlap_percentage():
         # Plot circle faces for targets
         for c in circles:
             patch = plotting.plot_polygon(c, ax=ax, color='cyan', linewidth=0.8, add_points=False)
-            patch.set_facecolor((0.2, 0.74, 0.85, 0.3))
-            patch.set_edgecolor((0.2, 0.74, 0.85, 0.0))
+            patch.set_facecolor((0.32, 0.32, 0.46, 0.3))
+            patch.set_edgecolor((0.32, 0.32, 0.46, 0.0))
 
         # Plot white background for the overlap union
         patch = plotting.plot_polygon(overlap, ax=ax, color='white', linewidth=3.0, add_points=False)
@@ -953,7 +953,7 @@ def test_overlap_percentage():
         for c in circles:
             patch = plotting.plot_polygon(c, ax=ax, color='cyan', linewidth=0.8, add_points=False)
             patch.set_facecolor((0.2, 0.74, 0.85, 0.0))
-            patch.set_edgecolor((0.2, 0.74, 0.85, 1.0))
+            patch.set_edgecolor((0.32, 0.32, 0.46, 1.0))
 
         # Plot the target edges
         patch = plotting.plot_polygon(C4, ax=ax, color='k', linewidth=1.0, add_points=False)
@@ -976,4 +976,4 @@ def test_overlap_percentage():
     fig.savefig("./img/overlap/overlap.pgf", bbox_inches='tight')
     fig.savefig("./img/overlap/overlap.pdf", bbox_inches='tight')
     plt.close(fig)
-    # plt.show()
+    plt.show()

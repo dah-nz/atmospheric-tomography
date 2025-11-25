@@ -26,8 +26,9 @@
       "noise": false,
       
       "asterism_size": 3,
-      "asterism_quality": -0.05,
-      "minimum_asterism_angle": 5.0,
+      "asterism_quality_threshold": 0.08,
+      "minimum_asterism_quality": 0.04,
+      "asterism_angle_threshold": 5.0,
       "shuffle_asterism": true,
       
       "satellites": true,

@@ -80,7 +80,6 @@ def training(cfg, file_name="current/results.csv"):
                 x='Epoch', y='Moving Average', row="Type",
                 style="Window Size", hue="Model",
                 facet_kws={'sharey': "row", 'sharex': True})
-    g.figure.suptitle(f"Asterism Quality Cutoff = {cfg.asterism_quality}")
     g.figure.subplots_adjust(top=0.9)
     
     # Remove all but last verification results

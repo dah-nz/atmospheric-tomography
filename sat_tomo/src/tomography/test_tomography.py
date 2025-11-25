@@ -47,52 +47,78 @@ def run_tests():
     plt.show()
 
 def test_psfs():
+    cmap = 'inferno'
     D = 1.8
     A = [1000, 5000, 10000]
     ap = 256
     atm = phase_screen.Atmosphere(1, A, r0=0.25, D=D, aperture_size=ap)
 
+    wavelength = 550e-9
+    res = ap*wavelength/D
+    extent_l = (-res/2, res/2, -res/2, res/2)
+
     target = beacon.Beacon(0, 0, 10)
     screen = target.total_cutout(D, A, atm[0], atm.metapupil_diameters)
     screen = screen * util.circle(ap)
 
-    plt.imshow(screen, extent=(-D/2, D/2, -D/2, D/2))
-
-    a_psf = psf.psf(screen)
-    a_psf = np.log10(a_psf / a_psf.max())
-
-    plt.figure()
-    plt.imshow(a_psf, vmin=-6)
+    scr_im = plt.imshow(screen, extent=(-D/2, D/2, -D/2, D/2), cmap=cmap)
+    plt.xlabel("Position (m)")
+    plt.ylabel("Position (m)")
 
     z = zernike.Zernike(21)
     zcoeffs = z.decompose(screen)
     zscreen = z.compose(ap, zcoeffs)
     zresid = screen - zscreen
-
-    plt.figure()
-    plt.imshow(zresid, extent=(-D/2, D/2, -D/2, D/2))
-
     z_psf = psf.psf(zresid)
-    z_psf = np.log10(z_psf / z_psf.max())
-
-    plt.figure()
-    plt.imshow(z_psf, vmin=-6)
-
 
     plt.figure()
     flat = util.circle(ap)
-    plt.imshow(flat, extent=(-D/2, D/2, -D/2, D/2))
+    plt.imshow(flat, extent=(-D/2, D/2, -D/2, D/2), cmap=cmap)
+    plt.xlabel("Position (m)")
+    plt.ylabel("Position (m)")
 
-    f_psf = psf.psf(flat)
-    f_psf = np.log10(f_psf / f_psf.max())
+    f_psf_b = psf.psf(flat)
+    f_psf = np.log10(f_psf_b / f_psf_b.max())
 
     plt.figure()
-    plt.imshow(f_psf, vmin=-6)
+    psf_im = plt.imshow(f_psf, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.xlabel("Position (m)")
+    plt.ylabel("Position (m)")
 
-    DATA_FOLDER = 'C:/Code/PhD/Data'
+    a_psf = psf.psf(screen)
+    a_psf = np.log10(a_psf / f_psf_b.max())
+    z_psf = np.log10(z_psf / f_psf_b.max())
 
-    df = pd.read_parquet(os.path.join(DATA_FOLDER, 'testing_data_none_prediction_results.parquet'))
-    print(df.head(10))
+    plt.figure()
+    plt.imshow(a_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.xlabel("Position (m)")
+    plt.ylabel("Position (m)")
+
+    plt.figure()
+    plt.imshow(zresid, extent=(-D/2, D/2, -D/2, D/2), cmap=cmap)
+    plt.xlabel("Position (m)")
+    plt.ylabel("Position (m)")
+
+
+    plt.figure()
+    plt.imshow(z_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.xlabel("Position (m)")
+    plt.ylabel("Position (m)")
+
+    fig2, ax2 = plt.subplots(figsize=(4.5, 1))
+    cbar = fig2.colorbar(psf_im, cax=ax2, orientation='horizontal', cmap=cmap)
+    cbar.set_label("Normalised Intensity [$\\log(I/I_{max})$]")
+    fig2.tight_layout()
+
+    fig3, ax3 = plt.subplots(figsize=(4.5, 1))
+    cbar = fig3.colorbar(scr_im, cax=ax3, orientation='horizontal', cmap=cmap)
+    cbar.set_label("Phase (radians)")
+    fig3.tight_layout()
+
+    # DATA_FOLDER = 'C:/Code/PhD/Data'
+
+    # df = pd.read_parquet(os.path.join(DATA_FOLDER, 'testing_data_none_prediction_results.parquet'))
+    # print(df.head(10))
     pass
 
 def test_intra_phase_screen():
