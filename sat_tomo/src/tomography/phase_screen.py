@@ -8,6 +8,7 @@ import os
 import warnings
 
 from tomography import tomography, beacon
+from tqdm import tqdm
 
 rng_min = 0
 rng_max = (2 ** 31) - 1
@@ -54,15 +55,17 @@ class PhaseScreenGenerator():
             cut_out:        size of cut out to be used
                             calculates the scaling factor if not none
         """
+        screens = []
+        for _ in tqdm(range(n), desc="Generate atmospheres"):
+            screens.append(self._get_raw())
+
         if cut_out is not None:
-            screens = [self._get_raw() for _ in range(n)]
-            k = self.find_scaling(cut_out, screens)
-            screens = [scr - np.average(scr, weights=self.mask) * self.mask * k for scr in screens]
-            return [np.float32(scr) * k for scr in screens]
+            self.k = self.find_scaling(cut_out, screens)
         else:
-            screens = [self._get_raw() for _ in range(n)]
-            screens = [scr - np.average(scr, weights=self.mask) * self.mask * self.k for scr in screens]
-            return [np.float32(scr) * self.k for scr in screens]
+            self.k = 1
+        
+        screens = [scr - np.average(scr, weights=self.mask) * self.mask * self.k for scr in screens]
+        return [np.float32(scr) * self.k for scr in screens]
 
 
 
@@ -133,7 +136,7 @@ class PhaseScreenGenerator():
 
         sigma = []
 
-        for screen in screens:
+        for screen in tqdm(screens, desc="Estimating phase screen cut-out sigma"):
             x_max = screen.shape[0] - size
             y_max = screen.shape[1] - size
 

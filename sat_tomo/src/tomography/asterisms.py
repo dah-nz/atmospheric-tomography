@@ -11,6 +11,7 @@ from astronomy import asterisms
 from util import cart2pol, distance_of_point_from_line, rad2arcsec, point_in_triangle, lerp, rmse, signed_distance_triangle
 import util
 from itertools import combinations
+import Orange
 
 import log
 
@@ -57,23 +58,30 @@ def generate_asterisms(n,
                        group_size=5, 
                        asterism_size=3, 
                        quality_threshold=0.0,
-                       quality_limit=-0.2,
-                       angle_threshold=10.0,
+                       quality_limit=0.0,
                        model_location="C:/Code/PhD/Data/Models", 
-                       model_name="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl"):
+                       quality_model="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+                       regime_model="TomographicRegimeModel.pkcls",
+                       include_quality=False):
     logger.info(f"Generating {n} variable asterisms")
 
     if rng is None:
         rng = np.random.default_rng()
     asterism_list = []
+    quality_list = []
 
-    with open(os.path.join(model_location, model_name), 'rb') as f:
+    with open(os.path.join(model_location, quality_model), 'rb') as f:
         model, scaler = pickle.load(f)
+
+    with open(os.path.join(model_location, regime_model), 'rb') as f:
+        regime = pickle.load(f)
+        domain = regime.domain
 
     while (len(asterism_list) < n):
         if len(asterism_list) > 0:
             logger.info(f"Searching for new asterisms. Currently {len(asterism_list)}/{n}")
         asterism_data = asterisms.load_data(magnitude, n=n, limit=limiting_angle, rng=rng, quick_load=True, asterism_size=group_size)
+        # asterism_data = [[(g+1, t, rng.normal()) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for g in range(0, n)]
 
         groups = [[beacon.Beacon(t, g, m, aperture_mask=mask) for g, t, m in stars] for stars in asterism_data]
 
@@ -84,16 +92,25 @@ def generate_asterisms(n,
 
                 p = rng.uniform()
 
-                if raw[0]._gamma_arcsec >= angle_threshold:
-                    t = 1.0
-                else:
-                    t = 1.0 / (angle_threshold - raw[0]._gamma_arcsec + 1)
+                X = asterism_features(raw)
+                dat = X.iloc[0].to_list()
+                dat.append(None)
 
-                t = t ** 1
+                # Orange.data.domain
+                instance = Orange.data.Instance(domain, dat)
+                tomographic = regime(instance)
+
+                t = tomographic
+
+                # if raw[0]._gamma_arcsec >= angle_threshold:
+                #     t = 1.0
+                # else:
+                #     t = 1.0 / (angle_threshold - raw[0]._gamma_arcsec + 1)
+
+                # t = t ** 1
 
             
                 if quality_limit is not None and quality_threshold is not None and quality_threshold >= quality_limit:
-                    X = asterism_features(raw)
                     if scaler != None:
                         X = scaler.transform(X)
                     
@@ -110,7 +127,10 @@ def generate_asterisms(n,
                 l = l ** 2
                             
                 if t * l > p:
-                    asterism_list.append(raw)
+                    if include_quality:
+                        asterism_list.append((raw, q))
+                    else:
+                        asterism_list.append(raw)
 
     rng.shuffle(asterism_list)
     
@@ -427,8 +447,12 @@ def incentre(asterism):
     b = np.sqrt((Cx - Ax) ** 2 + (Cy - Ay) ** 2)
     c = np.sqrt((Bx - Ax) ** 2 + (By - Ay) ** 2)
 
-    X = (a*Ax+b*Bx+c*Cx) / (a+b+c)
-    Y = (a*Ay+b*By+c*Cy) / (a+b+c)
+    if (a+b+c) != 0:
+        X = (a*Ax+b*Bx+c*Cx) / (a+b+c)
+        Y = (a*Ay+b*By+c*Cy) / (a+b+c)
+    else:
+        X = 0
+        Y = 0
 
     r, t = cart2pol(X, Y)
 

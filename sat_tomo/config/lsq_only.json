@@ -1,43 +1,43 @@
 [
     {
       "num_modes": 21,
-      "aperture_size": 100,
+      "aperture_size": 256,
       "diameter": 1.8,
-      "r0": 0.07,
+      "r0": 0.15,
       "per_layer_r0": false,
       "layers": 3,
       "altitudes": [1000,5000,10000],
       "magnitude": 14,
 
-      "train_models": [],
+      "train_models": ["MLNN_simple"],
       "lsq_off": false,
       "glao_off": false,
       "ao_off": false,
       
-      "epochs": 12,
+      "epochs": 32,
       "training_size": 1,
-      "testing_size": 1,
+      "testing_size": 8,
+      "verification_size": 32,
       "save_frequency": 32,
+      "display_training": true,
       
       "shwfs": false,
       "noise": false,
       
-      "variable_off": false,
-      "fixed_off": false,
       "asterism_size": 3,
-      "fixed_asterism_angle": 15,
-      "fixed_theta_0_randomised": false,
-      "limiting_angle": 10,
-      "train_combined": false,
+      "asterism_quality_threshold": 0.08,
+      "minimum_asterism_quality": 0.04,
+      "asterism_angle_threshold": 10.0,
+      "shuffle_asterism": true,
       
       "build_star_map": false,
       "satellites": true,
-      "period": 24,
+      "period": 72,
       
       "tip_tilt_passthrough": false,
       "wavefront_tip_tilt_removal": false,
       
-      "display_training": false,
+  
       "load_previous": false,
       "continue_training": false
     }

@@ -155,7 +155,13 @@ class LeastSquares(Tomography):
         self.angle_mix   = angle_mix
         self.display     = display
 
+        self._last_ast = None
+        self._last_tgt = None
+
         self.epsilons    = []
+
+        self.A = None
+        self.T = None
 
         self.sv = None
 
@@ -186,8 +192,20 @@ class LeastSquares(Tomography):
 
         L = np.array(beacon_coeffs[:, self.mode_skip:].flatten())
 
-        A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
-        T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
+        if self._last_ast != beacons:
+            A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
+            self.A = A
+            self._last_ast = beacons
+        else:
+            A = self.A
+
+        if self._last_tgt != target:
+            T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
+            self.T = T
+            self._last_tgt = target
+        else:
+            T = self.T
+
         self.sv = None
 
         if self.method in ["Ainv", "dotAT", "dotAK"]:

@@ -18,7 +18,21 @@ class SquarePlus(nn.Module):
         super(SquarePlus, self).__init__()
     def forward(self, x):
         return (x + sqrt(x ** 2 + 4)) / 2
-    
+
+class MLNN_simple(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.n_features*3*4, 512),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_features)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_relu_stack(x)
+
 class MLNN_baseline(Network):
     def __init__(self, cfg):
         super().__init__(cfg)

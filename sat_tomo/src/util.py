@@ -209,6 +209,7 @@ def point_in_triangle(p1, p2, p3, p):
 
     a = ((y2 - y3)*(x - x3) + (x3 - x2)*(y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
     b = ((y3 - y1)*(x - x3) + (x1 - x3)*(y - y3)) / ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3))
+
     c = 1 - a - b
 
     # print(p1, p2, p3, p, a, b, c)

@@ -1,9 +1,9 @@
 [
     {
-      "num_modes": 21,
+      "num_modes": 35,
       "aperture_size": 100,
       "diameter": 1.8,
-      "r0": 0.15,
+      "r0": 0.25,
       "per_layer_r0": false,
       "layers": 3,
       "altitudes": [1000,5000,10000],
@@ -26,9 +26,8 @@
       "noise": false,
       
       "asterism_size": 3,
-      "asterism_quality_threshold": 0.08,
-      "minimum_asterism_quality": 0.04,
-      "asterism_angle_threshold": 5.0,
+      "asterism_quality_threshold": 0.04,
+      "minimum_asterism_quality": 0.00,
       "shuffle_asterism": true,
       
       "satellites": true,

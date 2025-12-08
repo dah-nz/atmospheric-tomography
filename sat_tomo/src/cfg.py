@@ -65,7 +65,7 @@ class Config():
         parser.add_argument('--asterism_size', action='store', default=3, type=int, help="Number of stars in asterisms")
         parser.add_argument('--asterism_quality_threshold', action='store', default=0.0, type=float, help='Threshold for selecting asterisms based on their predicted quality (Predicted Log of Relative Strehl). Assterisms above this qualities have no penalty for selection from the quality metric.')
         parser.add_argument('--minimum_asterism_quality', action='store', default=-0.2, type=float, help='Lower limit for selecting asterisms based on their predicted quality (Predicted Log of Relative Strehl). Asterisms that are worse than this will not be selected.')
-        parser.add_argument("--asterism_angle_threshold", action="store", default=0.0, type=float, help='Threshold distance for guide stars from the target. Minimum angles less than this are less likely to be selected.')
+        # parser.add_argument("--asterism_angle_threshold", action="store", default=0.0, type=float, help='Threshold distance for guide stars from the target. Minimum angles less than this are less likely to be selected.')
         parser.add_argument("--shuffle_asterism", action='store_true', help="Shuffle each asterism before performing tomography")
         
         parser.add_argument('--shwfs', action='store_true', help="Use Shack-Hartmann WFS for estimating guide-star wavefront modes")
@@ -124,8 +124,8 @@ class Config():
         if type(args.mode_skip) is str:
             args.mode_skip = int(args.mode_skip)
 
-        if type(args.asterism_angle_threshold) is str:
-            args.asterism_angle_threshold = float(args.asterism_angle_threshold)
+        # if type(args.asterism_angle_threshold) is str:
+        #     args.asterism_angle_threshold = float(args.asterism_angle_threshold)
 
         if args.verification_size <= 0:
             args.verification_size = args.testing_size

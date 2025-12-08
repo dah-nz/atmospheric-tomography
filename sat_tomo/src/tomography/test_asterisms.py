@@ -54,6 +54,8 @@ asterism_data_queue = None
 def run_tests():
     mp.set_start_method('spawn')
 
+    # test_show_asterisms()
+
     # test_asterism_features()
 
     # test_asterism_generation()
@@ -62,18 +64,18 @@ def run_tests():
     # test_asterism_cross_entropy()
     
     # cfg = AsterismConfig()
-    # cfg.N = 21
-    # cfg.n_asterisms = 512
-    # cfg.n_atm = 512
+    # cfg.N = 35 # 8 radial degrees
+    # cfg.n_asterisms = 2000
+    # cfg.n_atm = 2000
     # cfg.augmented_asterisms = False
     # run_asterism_comparison(cfg)
-    # bulk_compile_asterism_data('testing_data_21r015b')
+    # bulk_compile_asterism_data('testing_data_35r025')
 
     # cfg.augmented_asterisms = False
-    # cfg.n_asterisms = 256
-    # cfg.n_atm = 256
+    # cfg.n_asterisms = 500
+    # cfg.n_atm = 500
     # run_asterism_comparison(cfg)
-    # bulk_compile_asterism_data('validation_data_21r015b')
+    # bulk_compile_asterism_data('validation_data_35r025')
 
 
 
@@ -82,12 +84,37 @@ def run_tests():
     # load_angle_data_test()
 
 
-    test_asterism_quality()
-    # test_generation()
+    # test_asterism_quality()
+    test_generation()
 
     plt.show()
 
     return # END run_tests
+
+def test_show_asterisms():
+    asts = asterisms.generate_asterisms(10000, quality_threshold=0.00, quality_limit=0.00, include_quality=True)
+
+    angle_1 = []
+    angle_2 = []
+    distance_min = []
+    quality = []
+
+    for ast, q in asts:
+        quality.append(q)
+        angle_1.append(abs(ast[0].theta - ast[1].theta))
+        angle_2.append(abs(ast[1].theta - ast[2].theta))
+        distance_min.append(asterisms.min_distance(ast))
+
+    from mpl_toolkits.mplot3d import Axes3D
+    from matplotlib import cm
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    sc = ax.scatter(angle_1, angle_2, distance_min, c=quality, cmap='coolwarm')
+    fig.colorbar(sc)
+    # plt.show()
+
 
 def test_asterism_features():
     # Print features for Latex document
@@ -288,7 +315,7 @@ class AsterismConfig():
         self.tomo_methods = ['glao', 'lsq_T', 'lsq_K', 'open_loop', 'fitting'] # 'tiptilt', 'ao', 'lsq'
 
         # Include augmented asterisms at asterism generation
-        self.augmented_asterisms = True
+        self.augmented_asterisms = False
 
         # Add noise to position/WFS measurements
         self.position_n = 0
@@ -328,12 +355,12 @@ class AsterismConfig():
             self.single_perturbations = [(0.0, 0.0)]
             self.single_perturbed_asterism_types = []
 
-        if False:
-            self.rotations = np.linspace(0, 2*np.pi/3, 4)
-            self.rotated_asterism_types = ["_raw", "star_0_circular"]
-        else:
-            self.rotations = np.array([])
-            self.rotated_asterism_types = []
+        # if False:
+        #     self.rotations = np.linspace(0, 2*np.pi/3, 4)
+        #     self.rotated_asterism_types = ["_raw", "star_0_circular"]
+        # else:
+        #     self.rotations = np.array([])
+        #     self.rotated_asterism_types = []
 
 
         return # END Filter.__init__
@@ -353,18 +380,18 @@ def asterism_test_worker(cfg, atm_gens):
         worker_id = os.getpid()
         print(f"[{worker_id:5} | Worker] Started")
 
-        tomo_cfg = { 'mask': {}, 'glao': {}, 'ao': {}, 'lsq_T': {}, 'lsq_K': {} }
+        tomo_cfg = { 'mask': {}, 'glao': {}, 'ao': {}, 'lsq': {} }
         for atm in atm_gens:
             ap = atm.aperture_size
             tomo_cfg['mask'][ap] =  util.circle(atm.aperture_size)
             tomo_cfg['glao'][ap] =  GLAO(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size)
             tomo_cfg['ao'][ap] =    AO(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size)
             # tomo_cfg['lsq'][ap] =   LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, start_angle=15, end_angle=45)
-            tomo_cfg['lsq_T'][ap] = LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='Tinv')
-            tomo_cfg['lsq_K'][ap] = LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='K')
+            tomo_cfg['lsq'][ap] = LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='Tinv')
+            # tomo_cfg['lsq_K'][ap] = LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='K')
 
         # Covariance matrix for adding measurement noise
-        C_mat = tomo_cfg['lsq_T'][ap].C_diag * cfg.measurement_uncertainty
+        # C_mat = tomo_cfg['lsq_T'][ap].C_diag * cfg.measurement_uncertainty
 
         while not asterism_data_queue.empty(): # Asterism Queue
             group_id, asterism_id, asterism_type, asterism = asterism_data_queue.get()
@@ -616,7 +643,7 @@ def run_asterism_comparison(cfg):
 
     print("Multi-processing completed")
 
-def bulk_compile_asterism_data(dest_filename):
+def bulk_compile_asterism_data(dest_filename, save_csv=True):
     files = glob.glob(os.path.join(DATA_FOLDER, 'batch', '*.parquet'))
     if len(files) > 0:
         for noise_type in ['measurement', 'position', 'none']:
@@ -632,7 +659,7 @@ def bulk_compile_asterism_data(dest_filename):
         print(f"Merged data in {os.path.join(DATA_FOLDER, 'batch')} into {file_path}")
 
         # Save csv for checking values
-        if False:
+        if save_csv:
             file_path = os.path.join(DATA_FOLDER, dest_filename + '.csv')
             df.to_csv(file_path, index=False)
             print(f"Created csv file for checking in {file_path}")
@@ -1825,38 +1852,36 @@ def test_generation():
     with open(os.path.join(model_location, model_name), 'rb') as f:
         model, scaler = pickle.load(f)
 
-    qlims = [-0.1, -0.05, 0.00, 0.05, 0.1]
-    athrs = [0, 5, 10, 15]
+    qlims = [0.00, 0.02, 0.04]
 
-    fig, axs = plt.subplots(len(qlims), len(athrs))
+    fig, axs = plt.subplots(1, len(qlims))
     axs = axs.ravel()
 
     max_count = 0
     data = []
 
     for qlim in qlims:
-        for athr in athrs:
-            x = []
-            y = []
+        x = []
+        y = []
 
-            asts = asterisms.generate_asterisms(n_asts, quality_threshold=qlim, quality_limit=qlim-0.05, angle_threshold=athr, model_location=model_location, model_name=model_name)
+        asts = asterisms.generate_asterisms(n_asts, quality_threshold=qlim, quality_limit=qlim, model_location=model_location, quality_model=model_name)
 
-            for ast in asts:
-                X = asterisms.asterism_features(ast)
-                if scaler != None:
-                    X = scaler.transform(X)
+        for ast in asts:
+            X = asterisms.asterism_features(ast)
+            if scaler != None:
+                X = scaler.transform(X)
 
-                q = model.predict(X)
+            q = model.predict(X)
 
-                m = min([s._gamma_arcsec for s in ast])
+            m = min([s._gamma_arcsec for s in ast])
 
-                x.append(q)
-                y.append(m)
+            x.append(q)
+            y.append(m)
 
-            H, xedges, yedges = np.histogram2d(x, y, bins=n_bins)
-            data.append((H, xedges, yedges, qlim, athr))
+        H, xedges, yedges = np.histogram2d(x, y, bins=n_bins)
+        data.append((H, xedges, yedges, qlim, athr))
 
-            max_count = max(max_count, H.max())
+        max_count = max(max_count, H.max())
 
     for ax, (H, xedges, yedges, qlim, athr) in zip(axs, data):
         pcm = ax.pcolormesh(xedges, yedges, H.T, cmap='viridis', vmin=0, vmax=max_count)
@@ -1867,5 +1892,5 @@ def test_generation():
     fig.colorbar(pcm, ax=axs, orientation='vertical', label='Count')
 
     # Add labels and title for clarity
-    plt.title('Asterism Selection Heatmap')
+    # plt.title('Asterism Selection Heatmap')
     plt.show()

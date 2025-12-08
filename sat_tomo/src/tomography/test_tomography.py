@@ -25,12 +25,13 @@ import util
 def run_tests():
     # test_layer_shapes()
 
-    test_psfs()
+    # test_psfs()
 
     # test_strehl()
     # test_beacons()
     # test_atmospheres()
     # test_leastsquares()
+    test_least_squares_asterisms()
     # display_leastsquares_results()
     # test_asterisms()
     # projection.test_projection()
@@ -221,11 +222,158 @@ def test_atmospheres():
             calculated_r0 = D / ((var / 1.03) ** (3/5))
             print(f"Layer {i} r0: {calculated_r0:.4f}m, intended r0: {atms.layer_r0[i]:.4f}m [var: {var:.4f}]")
 
+def test_least_squares_asterisms():
+    # Show comparisons of Least Squares performance to other standard methods for understanding
+    from tomography import strehl
+
+    # Configure tomography
+    rng = np.random.default_rng()
+
+    alts = [1000, 5000, 10000]
+    r0_total = 0.35
+
+    D = 1.8
+    N = 32
+    N_ATMS = 100
+    N_ASTS = 100
+    ap = 100
+
+    bss = zernike.Zernike(N)
+    atms = phase_screen.Atmosphere(N_ATMS, alts, r0_total, D, ap, rng=rng)
+    target = beacon.Beacon(0, 0)
+
+    # Generate asterisms
+    asts = asterisms.generate_asterisms(N_ASTS, quality_threshold=0.00, quality_limit=0.00, include_quality=True)
+    
+    glao = tomo.GLAO(bss, D, N, alts, ap)
+    ao = tomo.AO(bss, D, N, alts, ap)
+    lsq = tomo.LeastSquares(bss, D, N, alts, ap)
+
+    glao_out = []
+    ao_out = []
+    lsq_out = []
+    raw_out = []
+    ol_out = []
+    angle_1 = []
+    angle_2 = []
+    distance_min = []
+    quality = []
+
+    for ast, q in tqdm(asts):
+
+        glao_results = []
+        ao_results = []
+        lsq_results = []
+        lsq_results_raw = []
+        ol_results = []
+
+        for i in range(N_ATMS):
+            screen = atms[i]
+            ptt = target.cutout_coeffs(bss, D, alts, screen, atms.metapupil_diameters)[:3]
+            coeffs = tomo.get_coeffs_for_asterism(ast, bss, D, screen, alts, atms.metapupil_diameters)
+            
+            glao_coeffs = glao.run(ast, target, coeffs, ptt=ptt)
+            glao_screen = bss.compose(ap, glao_coeffs)
+
+            ao_coeffs = ao.run(ast, target, coeffs, ptt=ptt)
+            ao_screen = bss.compose(ap, ao_coeffs)
+
+            lsq_coeffs = lsq.run(ast, target, coeffs, ptt=ptt)
+            lsq_screen = bss.compose(ap, lsq_coeffs)
+
+            actual_screen = target.total_cutout(D, alts, screen, atms.metapupil_diameters)
+
+            glao_resid = actual_screen - glao_screen
+            ao_resid = actual_screen - ao_screen
+            lsq_resid = actual_screen - lsq_screen
+
+            ol_strehl = strehl.ratio(actual_screen)
+            lsq_raw = strehl.ratio(lsq_resid)
+
+            glao_results.append(lsq_raw / strehl.ratio(glao_resid))
+            ao_results.append(lsq_raw / strehl.ratio(ao_resid))
+            lsq_results.append(lsq_raw / ol_strehl)
+            ol_results.append(ol_strehl)
+            lsq_results_raw.append(lsq_raw)
+
+            # glao_results.append(strehl.ratio(glao_resid))
+            # ao_results.append(strehl.ratio(ao_resid))
+            # lsq_results.append(strehl.ratio(lsq_resid))
+            # ol_results.append(strehl.ratio(actual_screen))
+
+        glao_out.append(np.mean(glao_results))
+        ao_out.append(np.mean(ao_results))
+        lsq_out.append(np.mean(lsq_results))
+        raw_out.append(np.mean(lsq_results_raw))
+        ol_out.append(np.mean(ol_results))
+        quality.append(q)
+        angle_1.append(abs(ast[0].theta - ast[1].theta))
+        angle_2.append(abs(ast[1].theta - ast[2].theta))
+        distance_min.append(asterisms.min_distance(ast))
+
+    from mpl_toolkits.mplot3d import Axes3D
+    from matplotlib import cm
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure()
+    fig.suptitle("Open Loop")
+    ax = fig.add_subplot(111, projection='3d')
+    sc = ax.scatter(angle_1, angle_2, distance_min, c=ol_out, cmap='coolwarm')
+    fig.colorbar(sc)
+
+    # Least Square
+    fig = plt.figure()
+    fig.suptitle("Least Squares")
+    ax = fig.add_subplot(111, projection='3d')
+    sc = ax.scatter(angle_1, angle_2, distance_min, c=raw_out, cmap='coolwarm')
+    fig.colorbar(sc)
+
+    # LSQ - Difference
+    fig = plt.figure()
+    fig.suptitle("LSQ/Open Loop")
+    ax = fig.add_subplot(111, projection='3d')
+    sc = ax.scatter(angle_1, angle_2, distance_min, c=lsq_out, cmap='coolwarm')
+    fig.colorbar(sc)
+
+    # AO - Difference
+    fig = plt.figure()
+    fig.suptitle("LSQ/AO")
+    ax = fig.add_subplot(111, projection='3d')
+    sc = ax.scatter(angle_1, angle_2, distance_min, c=ao_out, cmap='coolwarm')
+    fig.colorbar(sc)
+
+    # GLAO - Difference
+    fig = plt.figure()
+    fig.suptitle("LSQ/GLAO")
+    ax = fig.add_subplot(111, projection='3d')
+    sc = ax.scatter(angle_1, angle_2, distance_min, c=glao_out, cmap='coolwarm')
+    fig.colorbar(sc)
+
+    limited_a1 = []
+    limited_a2 = []
+    limited_q = []
+    limited_ma = []
+
+    for glao, ao, lsq, q, a1, a2, ma in zip(glao_out, ao_out, lsq_out, quality, angle_1, angle_2, distance_min):
+
+        if (glao > 0.9 and ao > 1.0 and lsq > 1.0) \
+            or (glao > 1.0 and ao > 0.9 and lsq > 1.0):
+            limited_a1.append(a1)
+            limited_a2.append(a2)
+            limited_ma.append(ma)
+            limited_q.append(q)
+    
+    fig = plt.figure()
+    fig.suptitle("Tomographic Regime")
+    ax = fig.add_subplot(111, projection='3d')
+    sc = ax.scatter(limited_a1, limited_a2, limited_ma, c=limited_q, cmap='coolwarm')
+    fig.colorbar(sc)
+
 def test_leastsquares():
     rng = np.random.default_rng()
 
     alts = [1000, 5000, 10000]
-    r0_total = 0.25
+    r0_total = 0.15
 
     D = 1.8
     N = 21
