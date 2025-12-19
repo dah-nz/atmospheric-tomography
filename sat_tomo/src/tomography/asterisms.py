@@ -50,6 +50,30 @@ def perturb_asterism_single_star(asterism, perturbation):
             asts.append((i, ast))
     return asts
 
+def sample_asterisms(n, mask, sample_size=10, seed=31415, data_location="C:/Code/PhD/Data", filename='asterism_sample.tab'):
+    """
+    This is a sample of asterisms from the dataset used to generate the tomo regime model that are both in the tomographic regime and of high quality (>0.15 log strehl Ratio)
+    """
+    data = Orange.data.Table(os.path.join(data_location, filename))
+    rng = np.random.default_rng(seed=seed)
+
+    sample = rng.choice(data, sample_size)
+    ast_list = []
+
+    for ast_data in sample:
+        ast = []
+
+        distances = [ast_data[i] for i in range(3)]
+        angles = [ast_data[i] for i in range(3, 6)]
+
+        for d, a in zip(distances, angles):
+            ast.append(beacon.Beacon(a, d, magnitude=8, arcseconds=True, aperture_mask=mask))
+        ast_list.append(ast)
+
+    ast_list = ast_list * int((n/sample_size) + 1)
+    
+    return rng.choice(ast_list, n)
+
 def generate_asterisms(n, 
                        magnitude=14, 
                        limiting_angle=LIMITING_ANGLE, 
@@ -61,8 +85,9 @@ def generate_asterisms(n,
                        quality_limit=0.0,
                        model_location="C:/Code/PhD/Data/Models", 
                        quality_model="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl",
-                       regime_model="TomographicRegimeModel.pkcls",
-                       include_quality=False):
+                       regime_model="NN_tomo_regime.pkl",
+                       include_quality=False,
+                       use_regime_model=True):
     logger.info(f"Generating {n} variable asterisms")
 
     if rng is None:
@@ -74,8 +99,7 @@ def generate_asterisms(n,
         model, scaler = pickle.load(f)
 
     with open(os.path.join(model_location, regime_model), 'rb') as f:
-        regime = pickle.load(f)
-        domain = regime.domain
+        regime_model, regime_scaler = pickle.load(f)
 
     while (len(asterism_list) < n):
         if len(asterism_list) > 0:
@@ -93,22 +117,15 @@ def generate_asterisms(n,
                 p = rng.uniform()
 
                 X = asterism_features(raw)
-                dat = X.iloc[0].to_list()
-                dat.append(None)
 
-                # Orange.data.domain
-                instance = Orange.data.Instance(domain, dat)
-                tomographic = regime(instance)
+                if use_regime_model:
+                    if regime_scaler != None:
+                        X1 = regime_scaler.transform(X)
+                    tomographic = regime_model.predict(X1)
 
-                t = tomographic
-
-                # if raw[0]._gamma_arcsec >= angle_threshold:
-                #     t = 1.0
-                # else:
-                #     t = 1.0 / (angle_threshold - raw[0]._gamma_arcsec + 1)
-
-                # t = t ** 1
-
+                    t = int(tomographic)
+                else:
+                    t = 1.0
             
                 if quality_limit is not None and quality_threshold is not None and quality_threshold >= quality_limit:
                     if scaler != None:
@@ -123,8 +140,9 @@ def generate_asterisms(n,
                         l = (q - quality_limit) / (quality_threshold - quality_limit)
                 else:
                     l = 1.0
-
-                l = l ** 2
+                
+                # l = l ** 1
+                # l = 1.0
                             
                 if t * l > p:
                     if include_quality:
@@ -132,9 +150,12 @@ def generate_asterisms(n,
                     else:
                         asterism_list.append(raw)
 
-    rng.shuffle(asterism_list)
+                # print(len(asterism_list), t, l, p)
+
+    # rng.shuffle(asterism_list)
+    # print(n_tomo, n_total)
     
-    return asterism_list[:n]
+    return rng.choice(asterism_list, n) #[:n]
 
 def asterism_features(a):
 

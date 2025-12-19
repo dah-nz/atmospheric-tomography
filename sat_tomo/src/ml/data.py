@@ -171,9 +171,18 @@ class TomographyData(Dataset):
             X = np.concatenate([X, X2], axis=0, dtype=np.float32)
 
             extra = -1
+        elif self.option == "gs_separate":
+            gs = [[a.theta, a.gamma, a.magnitude] for a in asterism]
+            return (np.array(asterism_coeffs, dtype=np.float32), 
+                    np.array(gs, dtype=np.float32), 
+                    np.array(target_coeffs, dtype=np.float32),
+                    np.array(gs, dtype=np.float32),
+                    np.array(target_screen, dtype=np.float32)
+            )
         else:
             X = self.pack(asterism_coeffs, asterism)
             extra = -1
+        
         
         logger.debug(f"X: {X.shape}, target: {target_coeffs.shape}, option: {self.option}")
 

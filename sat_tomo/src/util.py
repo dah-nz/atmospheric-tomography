@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib as mpl
+import math
 import scipy
 from itertools import combinations
 
@@ -274,6 +275,9 @@ def is_outlier(points, thresh=3.5):
 
 def point_segment_distance(P, A, B):
     AB = B - A
+    l = np.dot(AB, AB)
+    if l == 0:
+        return np.linalg.norm(P - A)
     t = np.dot(P - A, AB) / np.dot(AB, AB)
     t = np.clip(t, 0, 1)
     closest = A + t * AB

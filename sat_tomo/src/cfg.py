@@ -77,6 +77,8 @@ class Config():
         parser.add_argument('--lsq_off', action='store_true', help='Turn off Least Squares tomography comparison')
         parser.add_argument('--glao_off', action='store_true', help='Turn off GLAO tomography comparison')
         parser.add_argument('--ao_off', action='store_true', help="Turn off adaptive optics comparison")
+        parser.add_argument('--sample_set_off', action='store_true', help='Turn off set of static asterisms sampled from dataset used for model generation')
+        parser.add_argument('--sample_seed', action='store', default=31415, help='Seed used for selecting sample of static asterisms')
 
         parser.add_argument('--per_layer_r0', action='store_true', help="Set r0 value as each layer, rather than total across layers.")
         parser.add_argument('--fixed_theta_0_randomised', action="store_true", help="Randomise the starting angle for fixed asterisms (rotating the equally spaced guide-stars about the centre)")
@@ -124,6 +126,9 @@ class Config():
         if type(args.mode_skip) is str:
             args.mode_skip = int(args.mode_skip)
 
+        if type(args.sample_seed) is str:
+            args.sample_seed = int(args.sample_seed)
+
         # if type(args.asterism_angle_threshold) is str:
         #     args.asterism_angle_threshold = float(args.asterism_angle_threshold)
 
@@ -143,9 +148,9 @@ class Config():
 
         #   Name                Run in parallel? , Fixed asterisms only?
         self.tomo_methods = {
-            "LeastSquares":     {'run': True },
-            "GLAO":             {'run': True },
-            "AO":               {'run': True }
+            "LeastSquares":     {'run': True , 'fixed_only': True },
+            "GLAO":             {'run': True , 'fixed_only': False },
+            "AO":               {'run': True , 'fixed_only': False },
             }
 
         if self.lsq_off:
@@ -154,7 +159,7 @@ class Config():
             self.tomo_methods["GLAO"]['run'] = False
         if self.ao_off:
             self.tomo_methods["AO"]['run'] = False
-        
+                
         self.basis = basis.select(self.basis_function, self.num_modes)
         
         max_screens = min(self.testing_size, self.training_size)
@@ -164,21 +169,24 @@ class Config():
             case 'screen_scaling':
                 n = 8
                 scaling_factor = 1.44
-                self.regime = [(n, 2)]
-                sum = self.regime[-1][0]
+                self.regime_settings = [(n, 2)]
+                sum = self.regime_settings[-1][0]
                 while sum < self.epochs:
-                    self.regime.append((self.regime[-1][0], min(max_screens, int(self.regime[-1][1] * scaling_factor + 0.5))))
-                    sum += self.regime[-1][0]
+                    self.regime_settings.append((self.regime[-1][0], min(max_screens, int(self.regime[-1][1] * scaling_factor + 0.5))))
+                    sum += self.regime_settings[-1][0]
             case 'linear_scaling':
                 n = 8
                 linear_factor = 10
-                self.regime = [(n, 2)]
-                sum = self.regime[-1][0]
+                self.regime_settings = [(n, 2)]
+                sum = self.regime_settings[-1][0]
                 while sum < self.epochs:
-                    self.regime.append((self.regime[-1][0], min(max_screens, int(self.regime[-1][1] + linear_factor))))
-                    sum += self.regime[-1][0]
+                    self.regime_settings.append((self.regime[-1][0], min(max_screens, int(self.regime[-1][1] + linear_factor))))
+                    sum += self.regime_settings[-1][0]
+            case 'quality_split':
+                self.regime_settings = [(int(self.epochs * 0.5), max_screens, False), (int(self.epochs * 0.5), max_screens, True)]
             case _: #default
-                self.regime = [(self.epochs, max_screens)]
+                self.regime_settings = [(self.epochs, max_screens)]
+
 
         match self.loss_function:
             case _: #mse_loss

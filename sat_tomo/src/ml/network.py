@@ -10,9 +10,14 @@ class Network(nn.Module):
         super().__init__()
         self.name = self.__class__.__name__
 
+        self.learning_rate = config.learning_rate
         self.LRELU_grad = config.LReLU_grad
+        self.weight_decay = config.weight_decay
+
         self.do = config.dropout_rate
         self.mode_skip = config.mode_skip
         self.n_features = config.num_modes - config.mode_skip
+
+        print(f"Initiating model {self.name}; n_features={self.n_features}")
 
         logger.info(f"Initiating model {self.name}; n_features={self.n_features}")

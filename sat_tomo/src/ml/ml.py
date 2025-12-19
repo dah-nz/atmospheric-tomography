@@ -31,7 +31,7 @@ def initialise():
 #     return s
 
 class Trainer():
-    def __init__(self, cfg, load=False):
+    def __init__(self, cfg, load=False, skip_lsq=False):
         self.device = initialise()
         
         logger.info(f"Building models for networks {cfg.train_models}, with n_modes={cfg.num_modes}")
@@ -40,7 +40,7 @@ class Trainer():
         self.models = {k: eval(f"models.{k}(cfg).to(self.device)") for k in cfg.train_models}
         self.model_file_names = [cfg.get_file_name(k) for k in cfg.train_models]
 
-        self.optimisers = {k: torch.optim.AdamW(m.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay) for k, m in self.models.items()}
+        self.optimiser = torch.optim.AdamW
         self.loss_fn = cfg.loss_function
 
         self.regime = cfg.regime
@@ -50,12 +50,14 @@ class Trainer():
         self.trainers = []
         for k in self.models.keys():
             model = self.models[k]
-            opti = self.optimisers[k]
+            opti = self.optimiser
             try:
                 if model.model_type == "wfs_image":
                     self.trainers.append(runner.ImageModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
                 elif model.model_type == "glao_offset":
                     self.trainers.append(runner.DeltaModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+                elif model.model_type == "gs_separate":
+                    self.trainers.append(runner.SeparateGuidestarModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
                 else:
                     self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
             except AttributeError:
@@ -69,7 +71,7 @@ class Trainer():
                 if opts['run']:
                     self.tomo[t] = eval(f"tomography.{t}(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size, mode_skip=cfg.mode_skip)")
             for k, algo in self.tomo.items():
-                self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis))
+                self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, skip_lsq=skip_lsq))
 
         # self.runners.append(runner.TipTiltRunner(self.loss_fn, cfg.basis))
         self.runners.append(runner.OpenLoopRunner(self.loss_fn, cfg.basis))

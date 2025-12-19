@@ -24,10 +24,10 @@ class Runner(object):
         raise NotImplementedError
     
 class TomoRunner(Runner):
-    def __init__(self, tomo_algorithm, loss_fn, target, basis, fixed_only=False) -> None:
+    def __init__(self, tomo_algorithm, loss_fn, target, basis, skip_lsq=False) -> None:
         super().__init__(type(tomo_algorithm).__name__, loss_fn, basis)
         self.tomography = tomo_algorithm
-        self.fixed_only = fixed_only
+        self.skip_lsq = skip_lsq
         self.target = target
     def train(self, data):
         return self._run(data)
@@ -38,6 +38,9 @@ class TomoRunner(Runner):
         recon_data = []
         loss_bias = []
         recon_bias = []
+
+        if type(self.tomography).__name__ == "LeastSquares" and self.skip_lsq:
+            return {}
 
         # Limit situations when doing tomo for an entire epoch of least squares would take too long
         if type(self.tomography).__name__ == "LeastSquares" and data.n > MAX_LSQ:
@@ -78,7 +81,12 @@ class TomoRunner(Runner):
     
         logger.info(f" -> {self.name} loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
     
 class OpenLoopRunner(Runner):
     def __init__(self, loss_fn, basis) -> None:
@@ -117,7 +125,12 @@ class OpenLoopRunner(Runner):
 
         logger.info(f" -> {self.name} loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
     
 class TipTiltRunner(Runner):
     def __init__(self, loss_fn, basis) -> None:
@@ -159,8 +172,13 @@ class TipTiltRunner(Runner):
 
         logger.info(f" -> {self.name} loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
-
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
+    
 class FittingErrorRunner(Runner):
     def __init__(self, loss_fn, basis) -> None:
         super().__init__("Fitting Error", loss_fn, basis)
@@ -189,13 +207,16 @@ class FittingErrorRunner(Runner):
 
         logger.info(f" -> {self.name} recon loss: {np.mean(recon_data):>7f}")
 
-        return None, np.sqrt(np.mean(recon_data)), None, np.mean(recon_bias)
+        return {
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
 
 class DeltaModelRunner(Runner):
     def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
-        self.optimiser = optimiser
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
         self.position_ignore = False
 
@@ -256,8 +277,13 @@ class DeltaModelRunner(Runner):
 
         logger.info(f" -> {self.name} training loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
-
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
+    
     def test(self, data):
         self.model.eval()
         loss_data = []
@@ -319,13 +345,18 @@ class DeltaModelRunner(Runner):
 
         logger.info(f" -> {self.name} testing loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
     
 class ImageModelRunner(Runner):
     def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
-        self.optimiser = optimiser
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
 
     def train(self, data):
@@ -381,7 +412,12 @@ class ImageModelRunner(Runner):
 
         logger.info(f" -> {self.name} training loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
 
     def test(self, data):
         self.model.eval()
@@ -431,13 +467,18 @@ class ImageModelRunner(Runner):
 
         logger.info(f" -> {self.name} testing loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
     
 class ModelRunner(Runner):
     def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
-        self.optimiser = optimiser
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
 
     def train(self, data):
@@ -493,7 +534,12 @@ class ModelRunner(Runner):
 
         logger.info(f" -> {self.name} training loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
 
     def test(self, data):
         self.model.eval()
@@ -543,4 +589,166 @@ class ModelRunner(Runner):
 
         logger.info(f" -> {self.name} testing loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
 
-        return np.mean(loss_data), np.sqrt(np.mean(recon_data)), np.mean(loss_bias), np.mean(recon_bias)
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
+    
+class SeparateGuidestarModelRunner(Runner):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+        super().__init__(type(model).__name__, loss_fn, basis)
+        self.model = model
+        # self.optimiser = optimiser
+        self.mode_skip = mode_skip
+        self.position_ignore = False
+
+        self.opt_shared = optimiser(
+            list(self.model.guide_star_latent_space_encoder.parameters()) +
+            list(self.model.feature_extraction_init.parameters()) +
+            list(self.model.combined_step_a.parameters()) +
+            list(self.model.combined_step_b.parameters()) +
+            list(self.model.estimator_step.parameters()),
+            lr=self.model.learning_rate,
+            weight_decay=self.model.weight_decay
+        )
+
+        self.opt_decoder = optimiser(
+            self.model.guide_star_latent_space_decoder.parameters(),
+            lr=self.model.learning_rate,
+            weight_decay=self.model.weight_decay
+        )
+
+    def train(self, data):
+        self.model.train()
+
+        feature_loss_data = []
+        gs_loss_data = []
+        recon_data = []
+        feature_bias = []
+        recon_bias = []
+
+        train_data = data.get_dataloader(option="gs_separate")
+
+        mask = None
+
+        for X_modes, X_gs, y_mode, y_gs, scr in train_data:
+
+            if mask is None:
+                mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+
+            if self.mode_skip > 0:
+                ptt_y = y_mode[:, :self.mode_skip]
+                y_mode = y_mode[:, self.mode_skip:]
+                X_modes = X_modes[:, :, self.mode_skip:]
+
+            X_modes, y_mode = X_modes.to(ml.device), y_mode.to(ml.device)
+            X_gs, y_gs = X_gs.to(ml.device), y_gs.to(ml.device)
+            y_gs = torch.flatten(y_gs, start_dim=1)
+
+            pred_mode, pred_gs = self.model(X_modes, X_gs)
+
+            loss_mode = self.loss_fn(pred_mode, y_mode)
+            loss_gs = self.loss_fn(pred_gs, y_gs)
+
+            feature_loss_data.append(loss_mode.item())
+            gs_loss_data.append(loss_gs.item())
+
+            self.opt_shared.zero_grad()
+            self.opt_decoder.zero_grad()    
+
+            loss_mode.backward(retain_graph=True)
+            loss_gs.backward()
+
+            self.opt_shared.step()
+            self.opt_decoder.step()
+
+            prediction = pred_mode.to("cpu").detach() # + glao_y
+            y_act = y_mode.to("cpu").detach()
+            feature_bias.append(y_act-prediction)
+
+            for pred, ptt, y, screen in zip(prediction, ptt_y, y_act, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.concatenate((ptt, pred))
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                recon_bias.append(screen-recon.numpy())
+
+        logger.info(f" -> {self.name} training loss (modes): {np.mean(feature_loss_data):>7f}, loss (gs): {np.mean(gs_loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
+
+        return {
+            "Coefficients": np.mean(feature_loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(feature_bias),
+            "Reconstruction Bias": np.mean(recon_bias),
+            "Guidestar Loss": np.mean(gs_loss_data)
+        }
+
+    def test(self, data):
+        self.model.eval()
+
+        feature_loss_data = []
+        gs_loss_data = []
+        recon_data = []
+        feature_bias = []
+        recon_bias = []
+
+        test_data = data.get_dataloader(option="gs_separate")
+        mask = None
+
+        with torch.no_grad():
+            for X_modes, X_gs, y_mode, y_gs, scr in test_data:
+
+                if mask is None:
+                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+
+            if self.mode_skip > 0:
+                ptt_y = y_mode[:, :self.mode_skip]
+                y_mode = y_mode[:, self.mode_skip:]
+                X_modes = X_modes[:, :, self.mode_skip:]
+
+                X_modes, y_mode = X_modes.to(ml.device), y_mode.to(ml.device)
+                X_gs, y_gs = X_gs.to(ml.device), y_gs.to(ml.device)
+                y_gs = torch.flatten(y_gs, start_dim=1)
+
+                pred_mode, pred_gs = self.model(X_modes, X_gs)
+
+                loss_mode = self.loss_fn(pred_mode, y_mode)
+                loss_gs = self.loss_fn(pred_gs, y_gs)
+
+                feature_loss_data.append(loss_mode.item())
+                gs_loss_data.append(loss_gs.item())
+
+                prediction = pred_mode.to("cpu").detach()
+                y_act = y_mode.to("cpu").detach()
+                feature_bias.append(y_act-prediction)
+
+                for pred, ptt, y, screen in zip(prediction, ptt_y, y_act, scr):
+                    screen = screen.numpy() * mask
+                    pred = pred.numpy()
+                    # res = np.zeros_like(y)
+                    res = np.concatenate((ptt, pred))
+                    # res = res + y.numpy()
+                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                    recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                    recon_bias.append(screen-recon.numpy())
+
+
+                # for p0, s0 in zip(prediction, scr):
+                #     s0 = s0.numpy() * mask
+                #     p0 = p0.numpy()
+                    # recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
+                    # recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
+                    # recon_bias.append(s0-recon.numpy())
+
+        logger.info(f" -> {self.name} testing loss (modes): {np.mean(feature_loss_data):>7f}, loss (gs): {np.mean(gs_loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
+
+        return {
+            "Coefficients": np.mean(feature_loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(feature_bias),
+            "Reconstruction Bias": np.mean(recon_bias),
+            "Guidestar Loss": np.mean(gs_loss_data)
+        }

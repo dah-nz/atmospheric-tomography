@@ -52,7 +52,7 @@ def training(cfg, file_name="current/results.csv"):
     for window_size in ma_windows:
 
         df[f'ma_{window_size}'] = (
-            df.groupby(['Type', 'Model'])['Loss']
+            df.groupby(['Type', 'Model', 'Stage', 'Asterism'])['Loss']
             .transform(lambda x: x.rolling(window=window_size, min_periods=1).mean())
         )
 
@@ -64,28 +64,34 @@ def training(cfg, file_name="current/results.csv"):
     )
 
     df_long["Window Size"] = df_long["Window Size"].str.extract('(\d+)').astype(int)
+    df_long = df_long[df_long['Window Size'] == 32]
+    df_gs = df_long[df_long['Type'] == "Guidestar Loss"]
     df_long = df_long[df_long["Type"] == "Reconstruction"]
 
     # print(df[(df["Type"]=="Coefficients") & (df["Stage"]=="Train")&(df['Model']=='MLNN_baseline')].tail(12))
 
-    # g = sns.relplot(data=df, kind='line', 
-    #             x='Epoch', y='Loss', row="Type",
-    #             style="Stage", hue="Model",
-    #             facet_kws={'sharey': "row", 'sharex': True})
-    # g.figure.suptitle(f"Asterism Quality Cutoff = {cfg.asterism_quality}")
+    print(df_gs.head())
+    g = sns.relplot(data=df_gs, kind='line', 
+                x='Epoch', y='Moving Average', row="Type",
+                style="Asterism", hue="Model",
+                facet_kws={'sharey': "row", 'sharex': True})
+    g.figure.suptitle(f"Guidestar Reconstruction Loss")
 
     print(df_long.head())
+    for comparison in ['RseNet']: #, 'MLNN']:
+        df = df_long[~df_long['Model'].str.contains(comparison)]
 
-    g = sns.relplot(data=df_long, kind='line', 
-                x='Epoch', y='Moving Average', row="Type",
-                style="Window Size", hue="Model",
-                facet_kws={'sharey': "row", 'sharex': True})
-    g.figure.subplots_adjust(top=0.9)
+        g = sns.relplot(data=df, kind='line', 
+                    x='Epoch', y='Moving Average', row="Type",
+                    style="Asterism", hue="Model",
+                    facet_kws={'sharey': "row", 'sharex': True})
+        g.figure.subplots_adjust(top=0.9)
     
     # Remove all but last verification results
     try:
         max_training_set = df_v["TrainingSet"].max()
         df_v = df_v.drop(df_v[df_v.TrainingSet != max_training_set].index)
+        df_v = df_v[df_v["Asterism"] == "Variable"]
     except KeyError:
         pass
 

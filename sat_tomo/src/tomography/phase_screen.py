@@ -56,7 +56,7 @@ class PhaseScreenGenerator():
                             calculates the scaling factor if not none
         """
         screens = []
-        for _ in tqdm(range(n), desc="Generate atmospheres"):
+        for _ in range(n): #tqdm(range(n), desc="Generate atmospheres"):
             screens.append(self._get_raw())
 
         if cut_out is not None:
@@ -136,7 +136,7 @@ class PhaseScreenGenerator():
 
         sigma = []
 
-        for screen in tqdm(screens, desc="Estimating phase screen cut-out sigma"):
+        for screen in screens: #tqdm(screens, desc="Estimating phase screen cut-out sigma"):
             x_max = screen.shape[0] - size
             y_max = screen.shape[1] - size
 

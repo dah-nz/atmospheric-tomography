@@ -14,6 +14,7 @@ import seaborn as sns
 import pyarrow
 import uuid
 import glob
+import Orange
 
 from itertools import combinations
 from scipy.stats import gmean, linregress
@@ -54,7 +55,9 @@ asterism_data_queue = None
 def run_tests():
     mp.set_start_method('spawn')
 
-    # test_show_asterisms()
+    test_show_asterisms()
+
+    # visualise_angles()
 
     # test_asterism_features()
 
@@ -85,24 +88,88 @@ def run_tests():
 
 
     # test_asterism_quality()
-    test_generation()
+    # test_generation()
 
     plt.show()
 
     return # END run_tests
 
+def visualise_angles():
+    N = 100
+    AB = np.linspace(-2*np.pi, 2*np.pi, N)
+    AC = np.linspace(-2*np.pi, 2*np.pi, N)
+
+    plt.scatter(AB, AC)
+    plt.figure()
+
+    ax = np.linspace(1, 2, N)
+    ay = [0] * N
+
+    bx, by = util.pol2cart(ax, AB)
+
+    cx, cy = util.pol2cart(ax, AC)
+
+
+    plt.scatter(ax, ay, c='k')
+    plt.scatter(bx, by, c='b')
+    plt.scatter(cx, cy, c='r')
+
+    plt.figure()
+    AB = np.linspace(-np.pi, 2*np.pi, N)
+    AC = np.linspace(-2*np.pi, np.pi, N)
+
+    plt.scatter(AB, AC)
+    plt.figure()
+
+    ax = np.linspace(1, 2, N)
+    ay = [0] * N
+
+    bx, by = util.pol2cart(ax, AB)
+
+    cx, cy = util.pol2cart(ax, AC)
+
+
+    plt.scatter(ax, ay, c='k')
+    plt.scatter(bx, by, c='b')
+    plt.scatter(cx, cy, c='r')
+    return
+
 def test_show_asterisms():
-    asts = asterisms.generate_asterisms(10000, quality_threshold=0.00, quality_limit=0.00, include_quality=True)
+    import Orange
+    import pickle 
+    asts = asterisms.generate_asterisms(1000, quality_threshold=0.00, quality_limit=0.00, include_quality=True)
+
+    rng = np.random.default_rng()
 
     angle_1 = []
     angle_2 = []
     distance_min = []
     quality = []
+    tomo_regime = []
 
-    for ast, q in asts:
+    model_location="C:/Code/PhD/Data/Models"
+    regime_model="NN_tomo_regime.pkl"
+
+    with open(os.path.join(model_location, regime_model), 'rb') as f:
+        regime_model, regime_scaler = pickle.load(f)
+
+    for ast, q in tqdm(asts):
+        # rng.shuffle(ast)
+        X = asterisms.asterism_features(ast)
+        # dat = X.iloc[0].to_list()
+        # dat.append(None)
+
+        # Orange.data.domain
+        if regime_scaler != None:
+            X = regime_scaler.transform(X)
+
+        # instance = Orange.data.Instance(domain, dat)
+        t = regime_model.predict(X)
+
         quality.append(q)
-        angle_1.append(abs(ast[0].theta - ast[1].theta))
-        angle_2.append(abs(ast[1].theta - ast[2].theta))
+        # tomo_regime.append(t * q)
+        angle_1.append(ast[0].theta - ast[1].theta)
+        angle_2.append(ast[0].theta - ast[2].theta)
         distance_min.append(asterisms.min_distance(ast))
 
     from mpl_toolkits.mplot3d import Axes3D
@@ -110,8 +177,15 @@ def test_show_asterisms():
     import matplotlib.pyplot as plt
 
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    sc = ax.scatter(angle_1, angle_2, distance_min, c=quality, cmap='coolwarm')
+    ax = fig.add_subplot(111)
+    sc = ax.scatter(angle_1, angle_2, c=quality, cmap='coolwarm')
+    # ax = fig.add_subplot(111, projection='3d')
+    # sc = ax.scatter(angle_1, angle_2, tomo_regime, c=quality, cmap='coolwarm')
+    ax.set_xlim(-2*np.pi, 2*np.pi)
+    ax.set_ylim(-2*np.pi, 2*np.pi)
+    ax.set_xlabel("Angle between A and B (rad)")
+    ax.set_ylabel("Angle between A and C (rad)")
+    # ax.set_zlabel("Closest distance")
     fig.colorbar(sc)
     # plt.show()
 
@@ -1732,14 +1806,19 @@ def test_asterism_quality():
     import astronomy
     model_location = "C:/Code/PhD/Data/Models"
     model_name = "Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl"
-    N = 100_000
-    arcsec_margin = 15
+    regime_model="TomographicRegimeModel.pkcls"
+    N = 1000
+    # arcsec_margin = 15
 
     base_q = []
     q_data = []
     s_data = []
     with open(os.path.join(model_location, model_name), 'rb') as f:
         model, scaler = pickle.load(f)
+
+    with open(os.path.join(model_location, regime_model), 'rb') as f:
+        regime = pickle.load(f)
+        domain = regime.domain
 
     while len(base_q) < N:
         asterism_data = astronomy.asterisms.load_data(14, n=N, limit=120, quick_load=True, asterism_size=5)
@@ -1751,6 +1830,16 @@ def test_asterism_quality():
             for subgroup in combinations(group, 3):
                 raw = [s.copy() for s in subgroup]
                 X = asterisms.asterism_features(raw)
+
+                dat = X.iloc[0].to_list()
+                dat.append(None)
+
+                # Orange.data.domain
+                instance = Orange.data.Instance(domain, dat)
+                tomographic = regime(instance)
+
+                t = tomographic
+
                 if scaler != None:
                     X = scaler.transform(X)
                 
@@ -1759,12 +1848,14 @@ def test_asterism_quality():
                 closest = min(raw, key=lambda x: x._gamma_arcsec)
                 offset = closest.theta
 
-                if q > 0.0 and closest._gamma_arcsec >= arcsec_margin:
+                if q > 0.0 and t > 0.0: #closest._gamma_arcsec >= arcsec_margin:
                     base_q.append(q)
                     for s in raw:
                         q_data.append(q)
                         s = s.offset(theta=-util.rad2arcsec(offset))
                         s_data.append(s.position_arcsec())
+
+        print(f"Generating asterisms: {len(base_q)}/{N}")
 
     nrows = 3
     ncols = 3

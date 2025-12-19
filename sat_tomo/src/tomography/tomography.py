@@ -31,7 +31,7 @@ class Tomography():
     run:
         runs tomographic algorithm using beacon coefficients, and positions of guide beacons and target
     """
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3, fixed_only=False):
         """
         Parameters
         ---------
@@ -158,6 +158,8 @@ class LeastSquares(Tomography):
         self._last_ast = None
         self._last_tgt = None
 
+        self.cache = {}
+
         self.epsilons    = []
 
         self.A = None
@@ -192,19 +194,28 @@ class LeastSquares(Tomography):
 
         L = np.array(beacon_coeffs[:, self.mode_skip:].flatten())
 
-        if self._last_ast != beacons:
-            A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
-            self.A = A
-            self._last_ast = beacons
-        else:
-            A = self.A
+        h = hash(tuple([(b.theta, b.gamma, b.magnitude) for b in beacons]))
 
-        if self._last_tgt != target:
-            T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
-            self.T = T
-            self._last_tgt = target
+        if h in self.cache.keys():
+            A = self.cache[h]['A']
+            T = self.cache[h]['T']
+
         else:
-            T = self.T
+            if self._last_ast != beacons:
+                A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
+                self.A = A
+                self._last_ast = beacons
+            else:
+                A = self.A
+
+            if self._last_tgt != target:
+                T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
+                self.T = T
+                self._last_tgt = target
+            else:
+                T = self.T
+
+            self.cache[h] = {'A': A, 'T': T}
 
         self.sv = None
 
