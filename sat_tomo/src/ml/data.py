@@ -179,6 +179,13 @@ class TomographyData(Dataset):
                     np.array(gs, dtype=np.float32),
                     np.array(target_screen, dtype=np.float32)
             )
+        elif self.option == 'deep':
+            gs = [[a.theta, a.gamma] for a in asterism]
+            return (np.array(asterism_coeffs, dtype=np.float32), 
+                    np.array(target_coeffs, dtype=np.float32),
+                    np.array(target_screen, dtype=np.float32),
+                    np.array(gs, dtype=np.float32)
+            )
         else:
             X = self.pack(asterism_coeffs, asterism)
             extra = -1

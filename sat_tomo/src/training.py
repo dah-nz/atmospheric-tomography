@@ -171,14 +171,14 @@ def run(cfg):
     
     for asterism_set in asterism_sets:
         if asterism_set == "Variable":
-            verification_asterism = asterisms.generate_asterisms(cfg.verification_size, cfg.magnitude, mask=mask, quality_threshold=cfg.asterism_quality_threshold, quality_limit=cfg.minimum_asterism_quality)
+            verification_asterism = asterisms.generate_asterisms(cfg.verification_size, cfg.magnitude, mask=mask, quality_threshold=cfg.asterism_quality_threshold, quality_limit=cfg.minimum_asterism_quality, use_regime_model=True)
             trainer = variable_trainer
         else:
             verification_asterism = asterisms.sample_asterisms(cfg.verification_size, mask=mask, seed=cfg.sample_seed)
             trainer = sample_trainer
-        verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
 
         for i in range(cfg.verification_size):
+            verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
             log.info(f"Running verification test screen {i+1}/{cfg.verification_size}")
             data = run_epoch(trainer, 
                             1,

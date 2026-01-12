@@ -177,6 +177,78 @@ class MLNN_separate_b(Network):
             nn.Linear(512, self.n_features),
         )
 
+    def forward(self, x_m, x_gs):
+        # x_m = batch["modes"]
+        # x_gs = batch["guidestars"]
+        x_m = self.flatten(x_m)
+        x_gs = self.flatten(x_gs)
+
+        x_gs = self.guide_star_latent_space_encoder(x_gs)
+
+        x_m = self.feature_extraction_init(x_m)
+        x = cat([x_m, x_gs], dim=1)
+        x = self.combined_step_a(x)
+        x = cat([x, x_gs], dim=1)
+        x = self.combined_step_b(x)
+        x = cat([x, x_gs], dim=1)
+
+        x_m = self.estimator_step(x)
+        x_gs = self.guide_star_latent_space_decoder(x_gs)
+
+        return x_m, x_gs #{ "modes": x_m, "guidestars": x_gs }
+
+class MLNN_separate_ab(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.model_type = "gs_separate"
+        self.flatten = nn.Flatten()
+
+        # Put angle infromation into a higher dimensional latent space
+        self.guide_star_latent_space_encoder = nn.Sequential(
+            nn.Linear(9, 64),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+        )
+        self.guide_star_latent_space_decoder = nn.Sequential(
+            nn.Linear(64, 9),
+        )
+
+        # Initial feature extraction
+        self.feature_extraction_init = nn.Sequential(
+            nn.Linear(self.n_features*3, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, 512),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do)
+        )
+
+        # Two steps for angle and feature information together
+        self.combined_step_a = nn.Sequential(
+            nn.Linear(512+64, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1024, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do)
+        )
+
+        self.combined_step_b = nn.Sequential(
+            nn.Linear(1024+64, 2048),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do)
+        )
+
+        # Output step for estimated modes
+        self.estimator_step = nn.Sequential(
+            nn.Linear(1024+64, 512),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_features),
+        )
 
     def forward(self, x_m, x_gs):
         # x_m = batch["modes"]
@@ -197,6 +269,7 @@ class MLNN_separate_b(Network):
         x_gs = self.guide_star_latent_space_decoder(x_gs)
 
         return x_m, x_gs #{ "modes": x_m, "guidestars": x_gs }
+
 
 class MLNN_no_angle(Network):
     def __init__(self, cfg):
@@ -467,12 +540,13 @@ class CNN2Da(Network):
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride = 1, downsample = None):
         super(ResidualBlock, self).__init__()
+        padding = 1
         self.conv1 = nn.Sequential(
-                        nn.Conv2d(in_channels, out_channels, kernel_size = 3, stride = stride, padding = 1),
+                        nn.Conv2d(in_channels, out_channels, kernel_size = 3, stride = stride, padding = padding),
                         nn.BatchNorm2d(out_channels),
                         nn.ReLU())
         self.conv2 = nn.Sequential(
-                        nn.Conv2d(out_channels, out_channels, kernel_size = 3, stride = 1, padding = 1),
+                        nn.Conv2d(out_channels, out_channels, kernel_size = 3, stride = 1, padding = padding),
                         nn.BatchNorm2d(out_channels))
         self.downsample = downsample
         self.relu = nn.ReLU()
@@ -1108,5 +1182,131 @@ class ResNet_no_angle(Network):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
+
+        return x
+
+class DeepV1Block(nn.Module):
+    def __init__(self, in_channels, out_channels, in_size, out_size, kernel_size = 3, stride = 1, lrelu_grad=0.01):
+        super(DeepV1Block, self).__init__()
+
+        # O = floor((W-K+2P)/S) + 1
+        # O = output_size, W = input_size, K = kernel_size, P = padding, S = stride
+
+        # P = (S(O-1)+K-W)/2
+        c1_padding = int((stride*(out_size-1)+kernel_size-in_size) / 2 + 0.5)
+        c2_padding = int((stride*(out_size-1)+kernel_size-out_size) / 2 + 0.5)
+        ds_padding = int((stride*(out_size-1)+1-in_size) / 2 + 0.5)
+
+        downsample = None
+        if stride != 1 or in_channels != out_channels:
+            downsample = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=ds_padding),
+                nn.BatchNorm2d(out_channels)
+            )
+
+        self.conv1 = nn.Sequential(
+                        nn.Conv2d(in_channels, out_channels, kernel_size = kernel_size, stride = stride, padding = c1_padding),
+                        nn.BatchNorm2d(out_channels),
+                         nn.LeakyReLU(lrelu_grad))
+        self.conv2 = nn.Sequential(
+                        nn.Conv2d(out_channels, out_channels, kernel_size = kernel_size, stride = stride, padding = c2_padding),
+                        nn.BatchNorm2d(out_channels))
+        self.downsample = downsample
+        self.relu = nn.LeakyReLU(lrelu_grad)
+        self.out_channels = out_channels
+        
+    def forward(self, x):
+        residual = x
+        # print(f"In x: {residual.shape}")
+        out = self.conv1(x)
+        # print(f"conv1: {out.shape}")
+        out = self.conv2(out)
+        # print(f"conv2: {out.shape}")
+        if self.downsample:
+            residual = self.downsample(x)
+        # print(f"downsample: {residual.shape}")
+        out = out + residual
+        out = self.relu(out)
+        return out
+    
+
+class Deep_V1(Network):
+    def __init__(self, config):
+        super().__init__(config)
+        self.model_type="deep"
+        self.flatten = nn.Flatten()
+
+        # Transform guidestar features into a latent space
+        self.gs_features = nn.Sequential(
+            nn.Linear(6, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Unflatten(1, (1, 16, 16))
+        )
+
+        # Transform modes into a latent space
+        self.mode_features = nn.Sequential(
+            nn.Linear(self.n_features, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Unflatten(1, (1, 16, 16))
+        )
+
+        self.conv_in = nn.Sequential(
+            nn.Conv2d(4, 16, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(16),
+            nn.LeakyReLU(self.LRELU_grad, True)
+        )
+
+        self.inplanes = 16
+        block = DeepV1Block
+
+        # 16x16x16 -> 12x12x32
+        self.layer16to32 = self._make_layer(block, 32, 3, 16, 12, stride=2)
+        # 12x12x32 -> 8x8x64
+        self.layer32to64 = self._make_layer(block, 64, 3, 12, 8, stride=2)
+        # 8x8x64 -> 4x4x128
+        self.layer64to128 = self._make_layer(block, 128, 3, 8, 4, stride=2)
+        # 4x4x128 -> 1x1x256
+        self.layer128to256 = self._make_layer(block, 256, 3, 4, 2, stride=2)
+
+        self.avgpool = nn.AvgPool2d(kernel_size=2, stride=1)
+
+        self.out_mlp = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(1024, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, self.n_features)
+        )
+    
+    def _make_layer(self, block, planes, blocks, in_size, out_size, kernel_size=4, stride=2):
+        
+        layers = []
+        layers.append(block(self.inplanes, planes, in_size, out_size, kernel_size=4, stride=stride))
+        self.inplanes = planes
+        for _ in range(1, blocks):
+            layers.append(block(self.inplanes, planes, out_size, out_size, kernel_size=3))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x, gs):
+        x0 = self.mode_features(x[:, 0, :])
+        x1 = self.mode_features(x[:, 1, :])
+        x2 = self.mode_features(x[:, 2, :])
+
+        gs = self.flatten(gs)
+        gs_l = self.gs_features(gs)
+
+        x = cat([x0,x1,x2,gs_l], 1)
+
+        x = self.conv_in(x)
+
+        x = self.layer16to32(x)
+        x = self.layer32to64(x)
+        x = self.layer64to128(x)
+        x = self.layer128to256(x)
+        # x = self.avgpool(x)
+        x = self.out_mlp(x)
 
         return x

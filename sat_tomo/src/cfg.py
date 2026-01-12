@@ -183,7 +183,8 @@ class Config():
                     self.regime_settings.append((self.regime[-1][0], min(max_screens, int(self.regime[-1][1] + linear_factor))))
                     sum += self.regime_settings[-1][0]
             case 'quality_split':
-                self.regime_settings = [(int(self.epochs * 0.5), max_screens, False), (int(self.epochs * 0.5), max_screens, True)]
+                split = 0.2
+                self.regime_settings = [(int(self.epochs * split), max_screens, False), (int(self.epochs * (1-split)), max_screens, True)]
             case _: #default
                 self.regime_settings = [(self.epochs, max_screens)]
 

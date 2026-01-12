@@ -752,3 +752,122 @@ class SeparateGuidestarModelRunner(Runner):
             "Reconstruction Bias": np.mean(recon_bias),
             "Guidestar Loss": np.mean(gs_loss_data)
         }
+    
+class DeepModelRunner(Runner):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+        super().__init__(type(model).__name__, loss_fn, basis)
+        self.model = model
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
+        self.mode_skip = mode_skip
+
+    def train(self, data):
+        self.model.train()
+        loss_data = []
+        recon_data = []
+        loss_bias = []
+        recon_bias = []
+
+        train_data = data.get_dataloader(option="deep")
+
+        mask = None
+
+        for X, y, scr, gs in train_data:
+
+            if mask is None:
+                mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+                
+            sz = np.zeros_like(y[0])
+
+            if self.mode_skip > 0:
+                ptt_y = y[:, :self.mode_skip]
+                y = y[:, self.mode_skip:]
+                X = X[:, :, self.mode_skip:]
+
+            X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
+
+            pred = self.model(X, gs)
+
+            loss = self.loss_fn(pred, y)
+
+            loss_data.append(loss.item())
+
+            loss.backward()
+            self.optimiser.step()
+            self.optimiser.zero_grad()
+
+            prediction = pred.to("cpu").detach()
+            y = y.to("cpu").detach()
+            loss_bias.append(y-prediction)
+
+            for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.zeros_like(sz)
+                np.concatenate((ptt, pred), out=res)
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                recon_bias.append(screen-recon.numpy())
+
+        logger.info(f" -> {self.name} training loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
+
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }
+
+    def test(self, data):
+        self.model.eval()
+        loss_data = []
+        recon_data = []
+        loss_bias = []
+        recon_bias = []
+
+        test_data = data.get_dataloader(option="deep")
+        mask = None
+
+        with torch.no_grad():
+            for X, y, scr, gs in test_data:
+
+                if mask is None:
+                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+                
+                sz = np.zeros_like(y[0])
+
+                if self.mode_skip > 0:
+                    ptt_y = y[:, :self.mode_skip]
+                    y = y[:, self.mode_skip:]
+                    X = X[:, :, self.mode_skip:]
+
+                X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
+                pred = self.model(X, gs)
+
+                # if self.mode_skip:
+                #     pred[:, :self.mode_skip] = y[:, :self.mode_skip]    # For each item in batch, replace the first three coefficients
+
+                loss = self.loss_fn(pred, y).item()
+
+                loss_data.append(loss)
+
+                prediction = pred.to("cpu").detach()
+                y = y.to("cpu").detach()
+                loss_bias.append(y-prediction)
+
+                for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                    screen = screen.numpy() * mask
+                    pred = pred.numpy()
+                    res = np.zeros_like(sz)
+                    np.concatenate((ptt, pred), out=res)
+                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                    recon_data.append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                    recon_bias.append(screen-recon.numpy())
+
+        logger.info(f" -> {self.name} testing loss: {np.mean(loss_data):>7f}, recon: {np.mean(recon_data):>7f}")
+
+        return {
+            "Coefficients": np.mean(loss_data),
+            "Reconstruction": np.sqrt(np.mean(recon_data)),
+            "Coefficient Bias": np.mean(loss_bias),
+            "Reconstruction Bias": np.mean(recon_bias)
+        }

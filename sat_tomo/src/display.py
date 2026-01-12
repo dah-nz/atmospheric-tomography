@@ -47,7 +47,7 @@ def training(cfg, file_name="current/results.csv"):
 
     df = df.sort_values(by=["Epoch"])
 
-    ma_windows = [32, 128]
+    ma_windows = [64]
 
     for window_size in ma_windows:
 
@@ -64,7 +64,7 @@ def training(cfg, file_name="current/results.csv"):
     )
 
     df_long["Window Size"] = df_long["Window Size"].str.extract('(\d+)').astype(int)
-    df_long = df_long[df_long['Window Size'] == 32]
+    df_long = df_long[df_long['Window Size'] == ma_windows[0]]
     df_gs = df_long[df_long['Type'] == "Guidestar Loss"]
     df_long = df_long[df_long["Type"] == "Reconstruction"]
 

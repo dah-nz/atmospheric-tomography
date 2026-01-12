@@ -58,6 +58,8 @@ class Trainer():
                     self.trainers.append(runner.DeltaModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
                 elif model.model_type == "gs_separate":
                     self.trainers.append(runner.SeparateGuidestarModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+                elif model.model_type == "deep":
+                    self.trainers.append(runner.DeepModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
                 else:
                     self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
             except AttributeError:
