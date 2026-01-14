@@ -8,18 +8,20 @@
       "layers": 3,
       "altitudes": [1000,5000,10000],
       "magnitude": 14,
-
-      "train_models": ["MLNN_separate_a", "MLNN_separate_b", "MLNN_baseline", "MLNN_no_angle"],
+      
+      "train_models": ["MLNN_separate_b", "MLNN_baseline", "MLNN_no_angle", "Deep_V1", "ResNet_glao_offset"],
       "lsq_off": false,
       "glao_off": false,
       "ao_off": false,
+
       "sample_set_off": false,
+      "sample_seed": 123,
       
       "epochs": 512,
-      "training_size": 64,
-      "testing_size": 16,
-      "verification_size": 256,
-      "save_frequency": 32,
+      "training_size": 256,
+      "testing_size": 64,
+      "verification_size": 512,
+      "save_frequency": 256,
       "display_training": true,
       
       "shwfs": false,

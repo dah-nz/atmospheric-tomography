@@ -76,7 +76,7 @@ if __name__ == "__main__":
         # with open(f"{cfg.directory}/temp/results.csv", "r") as f:
         #     df = pd.read_csv(f)
 
-        display.training(cfg)
+        display.training(cfg, file_name="current/results.csv")
         
     if trace:
         snapshot = tracemalloc.take_snapshot()
