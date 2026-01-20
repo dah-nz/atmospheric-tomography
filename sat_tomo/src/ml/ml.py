@@ -17,19 +17,6 @@ def initialise():
     logger.info(f"Using {device} device")
     return device
 
-# def summary(settings, model):
-#     s = ""
-#     for k, v in settings.items():
-#         if type(v) not in [int, float, list, str]:
-#             n = v.__class__.__name__
-#         else:
-#             n = v
-#         s += f"{k},{n}\n"
-#     s += f"loss_fn,{model.loss_fn.__class__.__name__}\n"
-#     s += f"optimiser,{model.optimiser_fix.__class__.__name__}\n"
-#     s += str(torchinfo.summary(model.model_fix, input_size=(1, 3, cfg.n_coeffs, 3), verbose=0))
-#     return s
-
 class Trainer():
     def __init__(self, cfg, load=False, skip_lsq=False):
         self.device = initialise()

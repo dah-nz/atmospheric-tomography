@@ -55,8 +55,8 @@ class Beacon():
         theta, gamma_a, mag = string_repr.split(',')
         return Beacon(float(theta), float(gamma_a), float(mag), arcseconds=True)
     
-    def from_tuple(tuple_repr):
-        return Beacon(float(tuple_repr[0]), float(tuple_repr[1]), float(tuple_repr[2]), arcseconds=True)
+    def from_tuple(tuple_repr, arcseconds=True):
+        return Beacon(float(tuple_repr[0]), float(tuple_repr[1]), float(tuple_repr[2]), arcseconds=arcseconds)
     
     def copy(self):
         return Beacon(self.theta, self.gamma, self.magnitude, aperture_mask=self.aperture_mask, arcseconds=False)
@@ -227,7 +227,7 @@ class Beacon():
             cutout = cutout - np.average(cutout)
         return cutout
     
-    def cutout_coeffs(self, basis, diameter, layer_altitudes, layer_screens, layer_sizes, wfs=None, tiptilt=None):
+    def cutout_coeffs(self, basis, diameter, layer_altitudes, layer_screens, layer_sizes, wfs=None):
         """
         Calculate coefficients of the total wavefront across a number of layers
 
@@ -244,8 +244,6 @@ class Beacon():
         coeffs:             Basis function coefficients for the total wavefront of each beacon in the asterism
         """
         cutout = self.total_cutout(diameter, layer_altitudes, layer_screens, layer_sizes)
-        if tiptilt is not None:
-            cutout = cutout - tiptilt
         if wfs is None:
             out = np.array(basis.decompose(cutout), dtype=np.float32)
         else:

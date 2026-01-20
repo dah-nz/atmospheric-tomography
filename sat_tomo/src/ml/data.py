@@ -55,7 +55,7 @@ class TomographyData(Dataset):
     Pytorch dataset wrapper. Stores the phase screen and asterism data for training machine learning models.
 
     """
-    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, rng=None, packing_function=None, unpacking_function=None, wfs=None, tiptilt_removal=False, shuffle=False):
+    def __init__(self, n, asterisms, atmosphere, basis=None, n_modes=16, rng=None, packing_function=None, unpacking_function=None, wfs=None):
         """
         Set up Tomography Dataset
 
@@ -105,7 +105,6 @@ class TomographyData(Dataset):
             self.unpack = packing_function
 
         self.option = ""
-        self.tiptilt_removal = tiptilt_removal
 
         self.shuffle = shuffle
         self.get_angle = lambda x: x.theta
@@ -132,15 +131,6 @@ class TomographyData(Dataset):
         target_coeffs = self.target.cutout_coeffs(self.basis, self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         
         target_screen = self.target.total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
-
-        if self.tiptilt_removal:
-            tiptilt_coeffs = np.zeros_like(target_coeffs)
-            tiptilt_coeffs[1:2] = target_coeffs[1:2]
-            tiptilt = self.basis.compose(target_screen.shape, tiptilt_coeffs)
-            target_screen -= tiptilt
-            target_coeffs[1:2] = 0
-        else:
-            tiptilt=None
         
         asterism_coeffs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters, self.wfs, tiptilt=tiptilt)
 
