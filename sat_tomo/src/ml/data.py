@@ -106,7 +106,6 @@ class TomographyData(Dataset):
 
         self.option = ""
 
-        self.shuffle = shuffle
         self.get_angle = lambda x: x.theta
         
     def __len__(self):
@@ -125,14 +124,13 @@ class TomographyData(Dataset):
         screens = self.atmosphere[scr_idx]
         asterism = self.asterisms[ast_idx]
 
-        if self.shuffle:
-            asterism = sorted(asterism, key=self.get_angle)
+        asterism = sorted(asterism, key=self.get_angle)
 
         target_coeffs = self.target.cutout_coeffs(self.basis, self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         
         target_screen = self.target.total_cutout(self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         
-        asterism_coeffs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters, self.wfs, tiptilt=tiptilt)
+        asterism_coeffs = tomography.get_coeffs_for_asterism(asterism, self.basis, self.atmosphere.D, screens, self.atmosphere.altitudes, self.atmosphere.metapupil_diameters, self.wfs)
 
         if self.option == "glao_offset":
             glao_coeffs = np.sum(asterism_coeffs, 0) / np.shape(asterism_coeffs)[0]

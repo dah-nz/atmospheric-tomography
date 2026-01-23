@@ -85,7 +85,6 @@ class Config():
         parser.add_argument('-l', '--load_previous', action='store_true', help="Load models from previous training run")
         parser.add_argument('-c', '--continue_training', action='store_true', help="Save results appended to previous training run")
         parser.add_argument("--mode_skip", action='store', default=3, help="Skip modes from the beginning. Default=3, skipping piston, tip/tilt.")
-        parser.add_argument("--wavefront_tip_tilt_removal", action='store_true', help="Remove tip/tilt component from wavefronts prior to wavefront sensing, based on target tip/tilt value, approximating a tip/tilt mirror in the optical path")
 
         try:
             args = parser.parse_args()

@@ -40,17 +40,19 @@ class Trainer():
             opti = self.optimiser
             try:
                 if model.model_type == "wfs_image":
-                    self.trainers.append(runner.ImageModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+                    trainer_class = runner.ImageModelRunner
                 elif model.model_type == "glao_offset":
-                    self.trainers.append(runner.DeltaModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+                    trainer_class = runner.DeltaModelRunner
                 elif model.model_type == "gs_separate":
-                    self.trainers.append(runner.SeparateGuidestarModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+                    trainer_class = runner.SeparateGuidestarModelRunner
                 elif model.model_type == "deep":
-                    self.trainers.append(runner.DeepModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+                    trainer_class = runner.DeepModelRunner
                 else:
-                    self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+                    trainer_class = runner.ModelRunner
             except AttributeError:
-                self.trainers.append(runner.ModelRunner(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+                trainer_class = runner.ModelRunner
+
+            self.trainers.append(trainer_class(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
             
 
         if len(cfg.tomo_methods) > 0:
@@ -62,7 +64,6 @@ class Trainer():
             for k, algo in self.tomo.items():
                 self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, skip_lsq=skip_lsq))
 
-        # self.runners.append(runner.TipTiltRunner(self.loss_fn, cfg.basis))
         self.runners.append(runner.OpenLoopRunner(self.loss_fn, cfg.basis))
         self.runners.append(runner.FittingErrorRunner(self.loss_fn, cfg.basis))
     
@@ -72,6 +73,10 @@ class Trainer():
         if func == "train":
             for r in self.trainers:
                 logger.info(f"{r.name}: Training")
+                results[r.name] = r.train(data)
+                
+            for r in self.runners:
+                logger.info(f"{r.name}: Running")
                 results[r.name] = r.train(data)
         else:
             for r in self.trainers:

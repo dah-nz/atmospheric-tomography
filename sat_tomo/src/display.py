@@ -43,7 +43,7 @@ def training(cfg, file_name="current/results.csv"):
 
     df_v = df.drop(df[df.Stage != "Verification"].index)
     df = df.drop(df[df.Model == "Open Loop"].index)
-    df = df.drop(df[df.Stage != "Test"].index)
+    df = df.drop(df[df.Stage != "Train"].index)
 
     df = df.sort_values(by=["Epoch"])
 

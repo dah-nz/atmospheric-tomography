@@ -10,9 +10,9 @@ from tomography import asterisms, phase_screen, wavefront
 
 import tracemalloc
 
-def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True, wfs=None, tiptilt_removal=False, shuffle=False):
+def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True, wfs=None):
     
-    dt = data.TomographyData(n, asterisms, atmosphere, basis, wfs=wfs, tiptilt_removal=tiptilt_removal, shuffle=shuffle)
+    dt = data.TomographyData(n, asterisms, atmosphere, basis, wfs=wfs)
     if train:
         results = trainer.train(dt)
     else:
@@ -20,15 +20,27 @@ def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True, wfs=None, ti
 
     return results
 
-def append_results(results, epoch, stage, model, screens, asterism, output_dict):
-    for key, value in output_dict.items():
-        results["Epoch"].append(epoch)
-        results["Stage"].append(stage)
-        results["Model"].append(model)
-        results["Screens"].append(screens)
-        results["Asterism"].append(asterism)
-        results["Type"].append(key)
-        results["Loss"].append(value)
+def append_results(results, epoch, stage, screens, asterism, output_dict):
+    for model, data_dict in output_dict.items():
+        for key, value in data_dict.items():
+            if stage != "Verification":
+
+                results["Epoch"].append(epoch)
+                results["Stage"].append(stage)
+                results["Model"].append(model)
+                results["Screens"].append(screens)
+                results["Asterism"].append(asterism)
+                results["Type"].append(key)
+                results["Loss"].append(np.mean(value))
+            else:
+                for v in value:
+                    results["Epoch"].append(epoch)
+                    results["Stage"].append(stage)
+                    results["Model"].append(model)
+                    results["Screens"].append(screens)
+                    results["Asterism"].append(asterism)
+                    results["Type"].append(key)
+                    results["Loss"].append(v)
 
 def run(cfg):
     log = logging.get_logger(__name__)
@@ -100,18 +112,19 @@ def run(cfg):
             epoch += 1
             log.info(f"Running Epoch {epoch}/{total_epochs} (Sub-epoch {e+1}/{n_epochs})")
             atmosphere_train = phase_screen.Atmosphere(n_screens, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size, per_layer_r0=cfg.per_layer_r0)
-            atmosphere_test = phase_screen.Atmosphere(cfg.testing_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size, per_layer_r0=cfg.per_layer_r0)
+            # atmosphere_test = phase_screen.Atmosphere(cfg.testing_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size, per_layer_r0=cfg.per_layer_r0)
 
             log.info(f"Loading asterism groups. Training: {cfg.training_size}. Testing: {cfg.testing_size}")
 
             for asterism_set in asterism_sets:
+                print(asterism_set)
                 if asterism_set == "Variable":
                     training_asterisms = asterisms.generate_asterisms(cfg.training_size, cfg.magnitude, mask=mask, quality_threshold=cfg.asterism_quality_threshold, quality_limit=cfg.minimum_asterism_quality, use_regime_model=use_regime_model)
-                    testing_asterisms = asterisms.generate_asterisms(cfg.testing_size, cfg.magnitude, mask=mask, quality_threshold=cfg.asterism_quality_threshold, quality_limit=cfg.minimum_asterism_quality, use_regime_model=use_regime_model)
+                    # testing_asterisms = asterisms.generate_asterisms(cfg.testing_size, cfg.magnitude, mask=mask, quality_threshold=cfg.asterism_quality_threshold, quality_limit=cfg.minimum_asterism_quality, use_regime_model=use_regime_model)
                     trainer = variable_trainer
                 else:
                     training_asterisms = asterisms.sample_asterisms(cfg.training_size, mask=mask, seed=cfg.sample_seed)
-                    testing_asterisms = asterisms.sample_asterisms(cfg.testing_size, mask=mask, seed=cfg.sample_seed)
+                    # testing_asterisms = asterisms.sample_asterisms(cfg.testing_size, mask=mask, seed=cfg.sample_seed)
                     trainer = sample_trainer
                 
                 data = run_epoch(trainer,
@@ -119,31 +132,25 @@ def run(cfg):
                                     training_asterisms, 
                                     atmosphere_train, 
                                     cfg.basis,
-                                    wfs=shwfs,
-                                    tiptilt_removal=cfg.wavefront_tip_tilt_removal,
-                                    shuffle=cfg.shuffle_asterism)
+                                    wfs=shwfs)
 
-                for k, output_dict in data.items():
-                    append_results(results, epoch, "Train", k, n_screens, asterism_set, output_dict)
+                append_results(results, epoch, "Train", n_screens, asterism_set, data)
 
-                data = run_epoch(trainer, 
-                                    cfg.testing_size,
-                                    testing_asterisms,
-                                    atmosphere_test,
-                                    cfg.basis,
-                                    train=False,
-                                    wfs=shwfs,
-                                    tiptilt_removal=cfg.wavefront_tip_tilt_removal,
-                                    shuffle=cfg.shuffle_asterism)
+                # data = run_epoch(trainer, 
+                #                     cfg.testing_size,
+                #                     testing_asterisms,
+                #                     atmosphere_test,
+                #                     cfg.basis,
+                #                     train=False,
+                #                     wfs=shwfs)
                     
-                for k, output_dict in data.items():
-                    append_results(results, epoch, "Test", k, cfg.testing_size, asterism_set, output_dict)
+                # append_results(results, epoch, "Test", cfg.testing_size, asterism_set, data)
 
                 if (epoch - 1) % cfg.save_frequency == 0:
                     trainer.save_models(epoch, suffix=asterism_set, dir=f"{directory}/{cfg.start_time}")
                     trainer.save_models(epoch, suffix=asterism_set, dir=f"{directory}/current")
 
-                save_asterism_data[asterism_set] += (epoch, np.concatenate([training_asterisms, testing_asterisms]))
+                # save_asterism_data[asterism_set] += (epoch, np.concatenate([training_asterisms, testing_asterisms]))
 
             try: 
                 snapshot = tracemalloc.take_snapshot()
@@ -177,23 +184,17 @@ def run(cfg):
             verification_asterism = asterisms.sample_asterisms(cfg.verification_size, mask=mask, seed=cfg.sample_seed)
             trainer = sample_trainer
 
-        for i in range(cfg.verification_size):
-            verification_atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
-            log.info(f"Running verification test screen {i+1}/{cfg.verification_size}")
-            data = run_epoch(trainer, 
-                            1,
-                            [verification_asterism[i]],
-                            verification_atmosphere,
-                            cfg.basis,
-                            train=False,
-                            wfs=shwfs,
-                            tiptilt_removal=cfg.wavefront_tip_tilt_removal,
-                            shuffle=cfg.shuffle_asterism)
-            
-            for k, output_dict in data.items():
-                append_results(results, epoch, "Verification", k, cfg.verification_size, asterism_set, output_dict)
-            
-            verification_asterisms.append(verification_asterism[i])
+        verification_atmosphere = phase_screen.Atmosphere(cfg.verification_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+        log.info(f"Running verification test for {asterism_set}")
+        data = run_epoch(trainer, 
+                        cfg.verification_size,
+                        verification_asterism,
+                        verification_atmosphere,
+                        cfg.basis,
+                        train=False,
+                        wfs=shwfs)
+
+        append_results(results, epoch, "Verification", cfg.verification_size, asterism_set, data)
 
     df = pd.DataFrame.from_dict(results, orient="columns")
 
@@ -225,14 +226,5 @@ def run(cfg):
 
     shutil.make_archive(f'{directory}/{cfg.start_time}', 'zip', f'{directory}/{cfg.start_time}')
     shutil.rmtree(f'{directory}/{cfg.start_time}')
-
-    # if len(fixed_bias_c) > 0:
-    #     print(f"Bias (Fixed, Coefficient) = {np.mean(fixed_bias_c)}")
-    # if len(fixed_bias_r) > 0:
-    #     print(f"Bias (Fixed, Reconstruction) = {np.mean(fixed_bias_r)}")
-    # if len(var_bias_c) > 0:
-    #     print(f"Bias (Variable, Coefficient) = {np.mean(var_bias_c)}")
-    # if len(var_bias_r) > 0:
-    #     print(f"Bias (Variable, Reconstruction) = {np.mean(var_bias_r)}")
 
     return df
