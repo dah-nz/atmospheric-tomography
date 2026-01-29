@@ -17,10 +17,10 @@
       "sample_set_off": false,
       "sample_seed": 123,
       
-      "epochs": 512,
+      "epochs": 1024,
       "training_size": 256,
-      "testing_size": 64,
-      "verification_size": 512,
+      "testing_size": 256,
+      "verification_size": 128,
       "save_frequency": 256,
       "display_training": true,
       
@@ -30,12 +30,9 @@
       "asterism_size": 3,
       "asterism_quality_threshold": 0.04,
       "minimum_asterism_quality": 0.00,
-      "shuffle_asterism": true,
       
       "satellites": true,
       "period": 72,
-
-      "wavefront_tip_tilt_removal": false,
 
       "load_previous": false,
       "continue_training": false

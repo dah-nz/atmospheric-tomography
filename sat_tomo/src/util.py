@@ -119,11 +119,16 @@ def rmse(a, b, mask=None):
     b:          Second array
     mask:       Mask to determine sections of a and b to perform error calculation over
     """
-    if mask is not None:
-        rms = np.sqrt(np.sum((mask * (a - b)) ** 2) / np.sum(mask))
-        return rms
-    else:
-        return np.sqrt(((a - b) ** 2).mean())
+    try:
+        if mask is not None:
+            rms = np.sqrt(np.sum((mask * (a - b)) ** 2) / np.sum(mask))
+            return rms
+        else:
+            return np.sqrt(((a - b) ** 2).mean())
+    except TypeError:
+        a = np.array(a)
+        b = np.array(b)
+        return rmse(a, b, mask=mask)
 
 def mse(a, b, mask=None):
     """
@@ -135,10 +140,15 @@ def mse(a, b, mask=None):
     b:          Second array
     mask:       Mask to determine sections of a and b to perform error calculation over
     """
-    if mask is not None:
-        return np.sum((mask * (a - b)) ** 2) / np.sum(mask)
-    else:
-        return ((a - b) ** 2).mean()
+    try:
+        if mask is not None:
+            return np.sum((mask * (a - b)) ** 2) / np.sum(mask)
+        else:
+            return ((a - b) ** 2).mean()
+    except TypeError:
+        a = np.array(a)
+        b = np.array(b)
+        return mse(a, b, mask=mask)
     
 def array_centroid(x):
     xis, yis = np.nonzero(x)

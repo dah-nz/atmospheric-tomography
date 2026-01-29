@@ -47,7 +47,7 @@ def training(cfg, file_name="current/results.csv"):
 
     df = df.sort_values(by=["Epoch"])
 
-    ma_windows = [64]
+    ma_windows = [16]
 
     for window_size in ma_windows:
 

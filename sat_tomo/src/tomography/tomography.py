@@ -68,7 +68,7 @@ class Tomography():
         return get_layer_shapes(beacons, self.altitudes, self.D, self.aperture_size)
     
     @lru_cache(maxsize=256)
-    def projection_matrix(self, theta, gamma, altitude, layer_size, layer_pixels, grid_not_pix=True, display=False):
+    def projection_matrix(self, theta, gamma, altitude, layer_size, layer_pixels, grid_not_pix=False, display=False):
         global proj_data
         # split beacon into theta and gamma to make the caching a bit easier
         b = beacon.Beacon(theta, gamma, aperture_mask=util.circle(self.aperture_size))
@@ -91,9 +91,9 @@ class Tomography():
 
             cutout_coeffs = []
 
-            for i, cos in enumerate(coeffs):
+            for _, cos in enumerate(coeffs):
                 scr = self.basis.compose(p, cos)
-                co = b.cutout(self.D, altitude, scr, layer_size, interp=True)
+                co = b.cutout(self.D, altitude, scr, layer_size, interp=False)
                 cutout_coeffs.append(self.basis.decompose(co)[self.mode_skip:])
             
             coeffs = np.array(coeffs)[:, self.mode_skip:].T
@@ -194,7 +194,7 @@ class LeastSquares(Tomography):
 
         L = np.array(beacon_coeffs[:, self.mode_skip:].flatten())
 
-        h = hash(tuple([(b.theta, b.gamma, b.magnitude) for b in beacons]))
+        h = hash(tuple([(b.theta, b.gamma) for b in beacons]))
 
         if h in self.cache.keys():
             A = self.cache[h]['A']
