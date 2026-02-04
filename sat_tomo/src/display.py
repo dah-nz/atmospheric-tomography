@@ -78,14 +78,15 @@ def training(cfg, file_name="current/results.csv"):
     g.figure.suptitle(f"Guidestar Reconstruction Loss")
 
     print(df_long.head())
-    for comparison in ['RseNet']: #, 'MLNN']:
-        df = df_long[~df_long['Model'].str.contains(comparison)]
+    # for comparison in ['ResNet']: #, 'MLNN']:
+    #     df = df_long[~df_long['Model'].str.contains(comparison)]
 
-        g = sns.relplot(data=df, kind='line', 
-                    x='Epoch', y='Moving Average', row="Type",
-                    style="Asterism", hue="Model",
-                    facet_kws={'sharey': "row", 'sharex': True})
-        g.figure.subplots_adjust(top=0.9)
+    df = df_long[df_long['Asterism'] == "Variable"]
+    g = sns.relplot(data=df, kind='line', 
+                x='Epoch', y='Moving Average', row="Type",
+                style="Asterism", hue="Model",
+                facet_kws={'sharey': "row", 'sharex': True})
+    g.figure.subplots_adjust(top=0.9)
     
     # Remove all but last verification results
     try:

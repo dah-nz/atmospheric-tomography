@@ -1,5 +1,6 @@
 from torch import nn, cat, sin, sqrt, unsqueeze, reshape
 from ml.network import Network
+from ml.model.GuidestarEmbed import GuidestarEmbedding
 
 class MLNN_separate_a(Network):
     def __init__(self, cfg):

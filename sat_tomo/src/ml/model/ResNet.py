@@ -151,7 +151,7 @@ class ResNet_glao_offset(Network):
         self.layer2 = self._make_layer(block, 255, layers[2], stride = 2)
         self.layer3 = self._make_layer(block, 513, layers[3], stride = 2)
         self.avgpool = nn.AvgPool2d(kernel_size=(2, 1), stride=1)
-        self.fc = nn.Linear(513, self.n_features)
+        self.fc = nn.Linear(1026, self.n_features)
         
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None

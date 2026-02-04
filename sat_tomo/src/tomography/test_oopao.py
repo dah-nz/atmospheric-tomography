@@ -132,7 +132,7 @@ def compare_oopao_and_local_lots():
 
         atm = [getattr(oopao_tomo.atm, f'layer_{i+1}') for i in range(len(alts))]
         atm_D = [s.D_fov for s in atm]
-        screen = [s.OPD / (2 * np.pi) for s in atm]
+        screen = [s.OPD for s in atm]
 
         target_screen = target.total_cutout(D, alts, screen, atm_D)
         ptt = target.cutout_coeffs(Z, D, alts, screen, atm_D)[:3]

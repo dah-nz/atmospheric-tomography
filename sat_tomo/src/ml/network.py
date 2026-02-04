@@ -16,7 +16,9 @@ class Network(nn.Module):
 
         self.do = config.dropout_rate
         self.mode_skip = config.mode_skip
+
         self.n_features = config.num_modes - config.mode_skip
+        self.asterism_features = 2 * config.asterism_size # theta, gamma and magnitude
 
         print(f"Initiating model {self.name}; n_features={self.n_features}")
 

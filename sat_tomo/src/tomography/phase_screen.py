@@ -158,6 +158,7 @@ class PhaseScreenGenerator():
 class Atmosphere():
     def __init__(self, n, layer_altitudes, r0, D, aperture_size, limiting_angle=120, rng=None, per_layer_r0=False):
         self.limit_star = [beacon.Beacon(0, limiting_angle+1, arcseconds=True)]            # add one to limiting angle to add a little leeway for numerical differences pushing bounds slightly over the edges
+        self.limit_angle = limiting_angle
         m, l = tomography.get_layer_shapes(self.limit_star, layer_altitudes, D, aperture_size)
         self.metapupil_diameters = m
         self.layer_shapes = l

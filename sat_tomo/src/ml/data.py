@@ -107,6 +107,9 @@ class TomographyData(Dataset):
         self.option = ""
 
         self.get_angle = lambda x: x.theta
+        lim = self.atmosphere.limit_angle
+        self.angle_norm = lambda x: [(x.theta % (2*np.pi)) / (2*np.pi), x._gamma_arcsec / lim]
+        self.beacon_norm = lambda x: [(x.theta % (2*np.pi)) / (2*np.pi), x._gamma_arcsec / lim, x.magnitude / 14.]
         
     def __len__(self):
         return self.n
@@ -123,8 +126,6 @@ class TomographyData(Dataset):
 
         screens = self.atmosphere[scr_idx]
         asterism = self.asterisms[ast_idx]
-
-        asterism = sorted(asterism, key=self.get_angle)
 
         target_coeffs = self.target.cutout_coeffs(self.basis, self.atmosphere.D, self.atmosphere.altitudes, screens, self.atmosphere.metapupil_diameters)
         
@@ -168,11 +169,21 @@ class TomographyData(Dataset):
                     np.array(target_screen, dtype=np.float32)
             )
         elif self.option == 'deep':
-            gs = [[a.theta, a.gamma] for a in asterism]
-            return (np.array(asterism_coeffs, dtype=np.float32), 
+            gs = [self.angle_norm(a) for a in asterism]
+            return (np.array(asterism_coeffs, dtype=np.float32),
                     np.array(target_coeffs, dtype=np.float32),
                     np.array(target_screen, dtype=np.float32),
-                    np.array(gs, dtype=np.float32)
+                    np.array(gs, dtype=np.float32),
+            )
+        elif self.option == 'deep_glao':
+            glao_coeffs = np.sum(asterism_coeffs, 0) / np.shape(asterism_coeffs)[0]
+            asterism_coeffs = [asterism_coeffs[i, :] - glao_coeffs for i in range(asterism_coeffs.shape[0])]
+            gs = [self.angle_norm(a) for a in asterism]
+            return (np.array(asterism_coeffs, dtype=np.float32),
+                    np.array(glao_coeffs, dtype=np.float32),
+                    np.array(target_screen, dtype=np.float32),
+                    np.array(gs, dtype=np.float32),
+                    np.array(target_coeffs - glao_coeffs, dtype=np.float32)
             )
         else:
             X = self.pack(asterism_coeffs, asterism)

@@ -4,3 +4,6 @@ from ml.model.CustomDeep import *
 from ml.model.mlnn import *
 from ml.model.ResNet import *
 from ml.model.separate_gs import *
+from ml.model.GuidestarEmbed import *
+from ml.model.single_mode import *
+from ml.model.transformers import *

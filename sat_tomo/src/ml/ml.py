@@ -47,6 +47,10 @@ class Trainer():
                     trainer_class = runner.SeparateGuidestarModelRunner
                 elif model.model_type == "deep":
                     trainer_class = runner.DeepModelRunner
+                elif model.model_type == "deep_glao":
+                    trainer_class = runner.DeepGLAORunner
+                elif model.model_type == "single_mode":
+                    trainer_class = runner.SingleModeRunner
                 else:
                     trainer_class = runner.ModelRunner
             except AttributeError:

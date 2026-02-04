@@ -95,6 +95,8 @@ def generate_asterisms(n,
     asterism_list = []
     quality_list = []
 
+    get_angle = lambda x: x.theta
+
     with open(os.path.join(model_location, quality_model), 'rb') as f:
         model, scaler = pickle.load(f)
 
@@ -113,6 +115,7 @@ def generate_asterisms(n,
             subgroups = combinations(group, asterism_size)
             for subgroup in subgroups:
                 raw = [s.copy() for s in subgroup]
+                raw = sorted(raw, key=get_angle)
 
                 p = rng.uniform()
 

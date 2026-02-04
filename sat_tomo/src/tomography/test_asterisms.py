@@ -55,7 +55,8 @@ asterism_data_queue = None
 def run_tests():
     mp.set_start_method('spawn')
 
-    test_show_asterisms()
+    test_encoding()
+    # test_show_asterisms()
 
     # visualise_angles()
 
@@ -1985,3 +1986,95 @@ def test_generation():
     # Add labels and title for clarity
     # plt.title('Asterism Selection Heatmap')
     plt.show()
+
+def test_encoding():
+    n_asts = 3
+    asts = asterisms.generate_asterisms(n=n_asts, group_size=3)
+
+    rng = np.random.default_rng()
+
+    all = []
+
+    def augment(ast, rng, change_rate=0.3):
+
+        t = [b.theta for b in ast]
+        g = [b._gamma_arcsec for b in ast]
+        mag = [b.magnitude for b in ast]
+        
+        tn = []
+        gn = []
+
+        change = rng.uniform(size=len(t))
+        for theta, r in zip(t, change):
+            if r < change_rate:
+                tn.append(theta + rng.normal(scale=np.pi/180))
+            else:
+                tn.append(theta)
+
+        change = rng.uniform(size=len(g))
+        for gamma, r in zip(g, change):
+            if r < change_rate:
+                gn.append(gamma + rng.normal())
+            else:
+                gn.append(gamma)
+
+        return [beacon.Beacon(t, g, m) for t, g, m, in zip(tn, gn, mag)]
+
+
+    for ast in asts:
+        for _ in range(10):
+            ast_new = augment(ast, rng)
+            all.append(ast_new)
+
+    def encode(ast): #, W, b):
+        freqs = [61,67,71,73,79,83,89,97,101,103,107,109,113,127,131,137,139]#,149,151]
+        # freqs = [10, 100, 1000, 17, 3779, 82021]
+        bias = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59]#,61,67]
+        x = np.ravel([[s.theta/(2*np.pi), s._gamma_arcsec/120] for s in ast])
+        # encoding = [np.sin(W*x+b), np.cos(W*x+b)]
+        encoding = []
+        for p, b in zip(freqs, bias):
+            encoding.append(np.sin(p * x + b))
+            encoding.append(np.cos(p * x + b))
+            # encoding.append(np.cos(p * x) + np.sin(b * x))
+            # encoding.append(np.cos(b * x) * np.sin(p * x))
+            # encoding.append(np.tanh(x * b / p))
+            # encoding.append(np.tanh(p * x + b))
+        # for p in freqs:
+        #     encoding.append(np.sin(x * p))
+        #     encoding.append(np.cos(x * p))
+        #     encoding.append(np.tanh(p * vals))
+        return np.concatenate((x, np.ravel(encoding)))
+    
+    def not_encoded(ast):
+        return np.ravel([[b.theta, b._gamma_arcsec, b.magnitude] for b in ast])
+
+    # W = np.reshape([2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97,101,103,107,109,113,127,131,137,139,149,151], (4, 9))
+    # W = np.reshape(np.array([2**(n / 2) for n in range(36)]), (4, 9))
+    # b = np.zeros_like(W) # np.random.normal(0, 1, size=W.shape)
+
+    all_e = []
+    all_n = []
+    for ast in all:
+        all_e.append(encode(ast)) #, W, b))
+        all_n.append(not_encoded(ast))
+
+    raw_corr = np.array([[np.dot(a, b)/np.dot(a, a) for a in all_n] for b in all_n])
+    plt.matshow(raw_corr)
+    plt.title("Raw Asterism data")
+    print(f'Raw Asterism average correlation: {np.mean(raw_corr)}')
+
+    # enc_corr = np.corrcoef(np.array(all_e))
+    enc_corr = np.array([[np.dot(a, b)/np.dot(a, a) for a in all_e] for b in all_e])
+    plt.matshow(all_e)
+    plt.matshow(enc_corr)
+    plt.title("Encoded Asterism data")
+    print(f'Encoded Asterism average correlation: {np.mean(enc_corr)}')
+
+    # for r in all_e:
+    #     plt.matshow(np.reshape(r, (9, 10)))
+
+    # plt.matshow(enc_corr * (enc_corr > 0.5))
+    # plt.title("Thresholded Encoded Asterism data")
+
+    

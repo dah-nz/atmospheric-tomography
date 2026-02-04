@@ -1,6 +1,6 @@
 [
     {
-      "num_modes": 35,
+      "num_modes": 36,
       "aperture_size": 100,
       "diameter": 1.8,
       "r0": 0.25,
@@ -9,12 +9,12 @@
       "altitudes": [1000,5000,10000],
       "magnitude": 14,
       
-      "train_models": ["MLNN_separate_b", "MLNN_baseline", "MLNN_no_angle", "Deep_V1", "ResNet_glao_offset"],
+      "train_models": ["MLNN_baseline", "MLNN_no_angle", "ResNet_glao_offset", "GuideStarEmbedding_simple", "GSEmbed_glao_offset_simple", "MLNN_singlemode", "QKV_singlemode", "QKV_simple"],
       "lsq_off": false,
       "glao_off": false,
       "ao_off": false,
 
-      "sample_set_off": false,
+      "sample_set_off": true,
       "sample_seed": 123,
       
       "epochs": 1024,
