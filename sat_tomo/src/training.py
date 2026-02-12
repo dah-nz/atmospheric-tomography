@@ -52,8 +52,9 @@ def run(cfg):
     directory = cfg.directory
 
     if cfg.load_previous or cfg.continue_training:
-        variable_trainer.load_models(dir=f"{directory}/current")
-        
+        variable_trainer.load_models(dir=f"{directory}/current", suffix="Variable_Final")
+        sample_trainer.load_models(dir=f"{directory}/current", suffix="Sample_Final")
+
     epoch = 0
 
     results = {
@@ -161,10 +162,12 @@ def run(cfg):
                 pass
 
     # Save final model
-    variable_trainer.save_models(suffix='Variable_Final', dir=f"{directory}/{cfg.start_time}")
-    variable_trainer.save_models(suffix='Variable_Final', dir=f"{directory}/current")
-    sample_trainer.save_models(suffix='Sample_Final', dir=f"{directory}/{cfg.start_time}")
-    sample_trainer.save_models(suffix='Sample_Final', dir=f"{directory}/current")
+    if "Variable" in asterism_sets:
+        variable_trainer.save_models(suffix='Variable_Final', dir=f"{directory}/{cfg.start_time}")
+        variable_trainer.save_models(suffix='Variable_Final', dir=f"{directory}/current")
+    if "Sample" in asterism_sets:
+        sample_trainer.save_models(suffix='Sample_Final', dir=f"{directory}/{cfg.start_time}")
+        sample_trainer.save_models(suffix='Sample_Final', dir=f"{directory}/current")
 
     # Run verification test
     log.info(f"Running final verification test")

@@ -19,6 +19,7 @@ class Network(nn.Module):
 
         self.n_features = config.num_modes - config.mode_skip
         self.asterism_features = 2 * config.asterism_size # theta, gamma and magnitude
+        self.ast_size = config.asterism_size
 
         print(f"Initiating model {self.name}; n_features={self.n_features}")
 

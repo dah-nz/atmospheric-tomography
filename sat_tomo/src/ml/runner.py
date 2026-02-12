@@ -5,6 +5,7 @@ import log
 from ml.data import default_unpack
 from ml import ml
 from util import circle
+from tqdm import trange
 
 import matplotlib.pyplot as plt
 
@@ -46,6 +47,11 @@ class TomoRunner(Runner):
         if type(self.tomography).__name__ == "LeastSquares" and self.skip_lsq:
             return {}
 
+        if type(self.tomography).__name__ == "LeastSquares":
+            range_fn = trange
+        else:
+            range_fn = range
+
         # # Limit situations when doing tomo for an entire epoch of least squares would take too long
         # if type(self.tomography).__name__ == "LeastSquares" and data.n > MAX_LSQ:
         #     N = MAX_LSQ
@@ -59,7 +65,8 @@ class TomoRunner(Runner):
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first is the batch size
 
-            for i in range(N):
+
+            for i in range_fn(N):
                 logger.debug(f"Calculating tomography ({self.name}) test data, index {i}/{data.n}")
                 target_coeffs, beacon_coeffs, beacons = data.unpack(X, y, i)
 

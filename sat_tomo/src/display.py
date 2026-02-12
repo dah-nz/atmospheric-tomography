@@ -69,15 +69,17 @@ def training(cfg, file_name="current/results.csv"):
     df_long = df_long[df_long["Type"] == "Reconstruction"]
 
     # print(df[(df["Type"]=="Coefficients") & (df["Stage"]=="Train")&(df['Model']=='MLNN_baseline')].tail(12))
-
-    print(df_gs.head())
-    g = sns.relplot(data=df_gs, kind='line', 
-                x='Epoch', y='Moving Average', row="Type",
-                style="Asterism", hue="Model",
-                facet_kws={'sharey': "row", 'sharex': True})
-    g.figure.suptitle(f"Guidestar Reconstruction Loss")
+    if not df_gs.empty:
+        print(df_gs.head())
+        g = sns.relplot(data=df_gs, kind='line', 
+                    x='Epoch', y='Moving Average', row="Type",
+                    style="Asterism", hue="Model",
+                    facet_kws={'sharey': "row", 'sharex': True})
+        
+        g.figure.suptitle(f"Guidestar Reconstruction Loss")
 
     print(df_long.head())
+
     # for comparison in ['ResNet']: #, 'MLNN']:
     #     df = df_long[~df_long['Model'].str.contains(comparison)]
 

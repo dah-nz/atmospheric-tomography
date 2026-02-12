@@ -133,6 +133,6 @@ class Trainer():
         for (name, model), ff in zip(self.models.items(), files):
             logger.info(f"Loading {suffix} model state dict for model {name} from {ff}")
             try:
-                model.load_state_dict(torch.load(ff))
+                model.load_state_dict(torch.load(ff, weights_only=True))
             except FileNotFoundError:       # If the file isn't found, there's nothing to load, so the model will remain uninitialised
-                pass
+                logger.info(f"State dict for model {name} with suffix {suffix} not found in {ff}")

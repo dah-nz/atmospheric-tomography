@@ -1,7 +1,7 @@
 from torch import nn, cat, sin, sqrt, unsqueeze, reshape
 import torch
 from ml.network import Network
-from ml.model.GuidestarEmbed import GuidestarEmbedding
+from ml.model.GuidestarEmbed import GuidestarEmbed
 
 class DeepV1Block(nn.Module):
     def __init__(self, in_channels, out_channels, in_size, out_size, kernel_size = 3, stride = 1, lrelu_grad=0.01):
@@ -53,11 +53,11 @@ class Deep_V1(Network):
         super().__init__(config)
         self.model_type="deep"
         self.flatten = nn.Flatten()
-        self.gs_embed = GuidestarEmbedding(config)
+        self.gs_embed = GuidestarEmbed(config)
 
         # Transform guidestar features into a latent space
         self.gs_features = nn.Sequential(
-            nn.Linear(self.asterism_features*4, 256),
+            nn.Linear(self.gs_embed.size, 256),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
             nn.Unflatten(1, (1, 16, 16))
