@@ -7,3 +7,4 @@ from ml.model.separate_gs import *
 from ml.model.GuidestarEmbed import *
 from ml.model.single_mode import *
 from ml.model.transformers import *
+from ml.model.MeasurementEmbed import *

@@ -47,13 +47,15 @@ def run(cfg):
     logging.setup_logger(log, to_console=True)
     
     variable_trainer = ml.Trainer(cfg, skip_lsq=True)
-    sample_trainer = ml.Trainer(cfg, skip_lsq=False)
+    if not cfg.sample_set_off:
+        sample_trainer = ml.Trainer(cfg, skip_lsq=False)
     
     directory = cfg.directory
 
     if cfg.load_previous or cfg.continue_training:
         variable_trainer.load_models(dir=f"{directory}/current", suffix="Variable_Final")
-        sample_trainer.load_models(dir=f"{directory}/current", suffix="Sample_Final")
+        if not cfg.sample_set_off:
+            sample_trainer.load_models(dir=f"{directory}/current", suffix="Sample_Final")
 
     epoch = 0
 

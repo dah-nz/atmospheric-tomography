@@ -1017,3 +1017,122 @@ class SingleModeRunner(Runner):
         logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
+    
+class PseudoLSQRunner(Runner):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+        super().__init__(type(model).__name__, loss_fn, basis)
+        self.model = model
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
+        self.mode_skip = mode_skip
+
+    def train(self, data):
+        self.model.train()
+        output = {
+            "Coefficients": [],
+            "Reconstruction": [],
+            "Coefficient Bias": [],
+            "Reconstruction Bias": []
+        }
+        train_data = data.get_dataloader(option="deep")
+
+        mask = None
+
+        for X, y, scr, gs in train_data:
+
+            if mask is None:
+                mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+                
+            sz = np.zeros_like(y[0])
+
+            if self.mode_skip > 0:
+                ptt_y = y[:, :self.mode_skip]
+                y = y[:, self.mode_skip:]
+                X = X[:, :, self.mode_skip:]
+
+            X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
+
+            pred_A = self.model(gs)
+
+            X = torch.flatten(X, start_dim=1)
+            X = torch.unsqueeze(X, 2)
+
+            pred = torch.squeeze(torch.matmul(pred_A, X))
+
+            loss = self.loss_fn(pred, y)
+
+            output["Coefficients"].append(loss.item())
+
+            loss.backward()
+            self.optimiser.step()
+            self.optimiser.zero_grad()
+
+            prediction = pred.to("cpu").detach()
+            y = y.to("cpu").detach()
+            output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
+
+            for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.zeros_like(sz)
+                np.concatenate((ptt, pred), out=res)
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
+
+        logger.info(f" -> {self.name} training loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+
+        return output
+
+    def test(self, data):
+        self.model.eval()
+        output = {
+            "Coefficients": [],
+            "Reconstruction": [],
+            "Coefficient Bias": [],
+            "Reconstruction Bias": []
+        }
+
+        test_data = data.get_dataloader(option="deep")
+        mask = None
+
+        with torch.no_grad():
+            for X, y, scr, gs in test_data:
+
+                if mask is None:
+                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+                
+                sz = np.zeros_like(y[0])
+
+                if self.mode_skip > 0:
+                    ptt_y = y[:, :self.mode_skip]
+                    y = y[:, self.mode_skip:]
+                    X = X[:, :, self.mode_skip:]
+
+                X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
+                pred_A = self.model(gs)
+
+                X = torch.flatten(X, start_dim=1)
+                X = torch.unsqueeze(X, 2)
+
+                pred = torch.squeeze(torch.matmul(pred_A, X))
+
+                loss = self.loss_fn(pred, y).item()
+
+                output["Coefficients"].append(loss)
+
+                prediction = pred.to("cpu").detach()
+                y = y.to("cpu").detach()
+                output["Coefficient Bias"].append(np.mean(y.numpy()-prediction.numpy()))
+
+                for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                    screen = screen.numpy() * mask
+                    pred = pred.numpy()
+                    res = np.zeros_like(sz)
+                    np.concatenate((ptt, pred), out=res)
+                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
+
+        logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+
+        return output

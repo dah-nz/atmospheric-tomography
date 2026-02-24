@@ -2,6 +2,7 @@ from torch import nn, cat, sin, sqrt, unsqueeze, reshape
 import torch
 from ml.network import Network
 from ml.model.GuidestarEmbed import GuidestarEmbed
+from ml.model.MeasurementEmbed import MeasurementEmbed
 
 class DeepV1Block(nn.Module):
     def __init__(self, in_channels, out_channels, in_size, out_size, kernel_size = 3, stride = 1, lrelu_grad=0.01):
@@ -128,3 +129,61 @@ class Deep_V1(Network):
         x = self.out_mlp(x)
 
         return x
+
+class Deep_V2(Network):
+    def __init__(self, config):
+        super().__init__(config)
+        self.model_type="deep"
+        self.flatten = nn.Flatten()
+        self.gs_embed1 = GuidestarEmbed(config)
+        self.gs_embed2 = GuidestarEmbed(config)
+        self.x_embed = MeasurementEmbed(config)
+
+        self.x_fc = nn.Sequential(
+            nn.Linear(self.x_embed.size, 4 * self.n_features),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(4 * self.n_features, 5 * self.n_features),
+            # nn.LeakyReLU(self.LRELU_grad, True),
+            # nn.Dropout(self.do),
+        )
+        self.at_fc = nn.Sequential(
+            nn.Linear(self.gs_embed1.size + self.gs_embed2.size, self.n_features * self.n_features),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(self.n_features * self.n_features, 5 * self.n_features * self.n_features),
+            # nn.LeakyReLU(self.LRELU_grad, True),
+            # nn.Dropout(self.do),
+        )
+
+        # self.y_fc = nn.Sequential(
+        #     nn.Linear(self.n_features, self.n_features * int(torch.sqrt(self.n_features))),
+        #     nn.LeakyReLU(self.LRELU_grad, True),
+        #     nn.Dropout(self.do),
+        #     nn.Linear(self.n_features * int(torch.sqrt(self.n_features)), self.n_features)
+        # )
+
+    def forward(self, x, gs):
+
+        x = self.x_embed(x)
+        L = self.x_fc(x)
+        L = self.flatten(L)
+        
+        A = self.gs_embed1(gs)
+        A = self.flatten(A)
+
+        T = self.gs_embed2(gs)
+        T = self.flatten(T)
+        
+        AT = torch.concat([A, T], dim=1)
+
+        AT = self.at_fc(AT)
+        AT = reshape(AT, shape=(-1, self.n_features, 5*self.n_features))
+
+        Y = torch.einsum('bmn,bn->bm', AT, L) # torch.matmul(AT, L)
+
+        return Y # self.y_fc(Y)
+
+
+
+

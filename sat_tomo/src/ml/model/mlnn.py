@@ -37,6 +37,42 @@ class MLNN_baseline(Network):
         x = self.flatten(x)
         return self.linear_relu_stack(x)
     
+class MLNN_pseudo_lsq(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.model_type="pseudo_lsq"
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.asterism_features, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1024, 4096),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+        )
+    def forward(self, gs):
+        x = self.flatten(gs)
+        x = self.linear_relu_stack(x)
+        return reshape(x, (-1, self.n_features, 3*self.n_features))
+
+class MLNN_tiny(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.n_features*3*4, 512),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_features)
+        )
+    def forward(self, x):
+        x = self.flatten(x)
+        return self.linear_relu_stack(x)
+    
 class MLNN_no_angle(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -49,6 +85,21 @@ class MLNN_no_angle(Network):
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
             nn.Linear(2048, 512),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(512, self.n_features)
+        )
+    def forward(self, x):
+        x = x[:, :, :, 0]
+        x = self.flatten(x)
+        return self.linear_relu_stack(x)
+    
+class MLNN_tiny_no_angle(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.n_features*3, 512),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
             nn.Linear(512, self.n_features)

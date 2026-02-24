@@ -51,6 +51,8 @@ class Trainer():
                     trainer_class = runner.DeepGLAORunner
                 elif model.model_type == "single_mode":
                     trainer_class = runner.SingleModeRunner
+                elif model.model_type == "pseudo_lsq":
+                    trainer_class = runner.PseudoLSQRunner
                 else:
                     trainer_class = runner.ModelRunner
             except AttributeError:
