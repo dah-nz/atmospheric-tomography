@@ -9,6 +9,7 @@ import log as logging
 from tomography import asterisms, phase_screen, wavefront
 
 import tracemalloc
+from tqdm import tqdm
 
 def run_epoch(trainer, n, asterisms, atmosphere, basis, train=True, wfs=None):
     
@@ -179,27 +180,18 @@ def run(cfg):
         except AttributeError:
             pass
 
-    verification_asterisms = []
-    
-    for asterism_set in asterism_sets:
-        if asterism_set == "Variable":
-            verification_asterism = asterisms.generate_asterisms(cfg.verification_size, cfg.magnitude, mask=mask, quality_threshold=cfg.asterism_quality_threshold, quality_limit=cfg.minimum_asterism_quality, use_regime_model=True)
-            trainer = variable_trainer
-        else:
-            verification_asterism = asterisms.sample_asterisms(cfg.verification_size, mask=mask, seed=cfg.sample_seed)
-            trainer = sample_trainer
+    # PERFORM VERIFICATION
+    if not cfg.sample_set_off:
+        trainers = {
+            "Variable": variable_trainer,
+            "Sample": sample_trainer
+        }
+    else:
+        trainers = {
+            "Variable": variable_trainer,
+        }
 
-        verification_atmosphere = phase_screen.Atmosphere(cfg.verification_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
-        log.info(f"Running verification test for {asterism_set}")
-        data = run_epoch(trainer, 
-                        cfg.verification_size,
-                        verification_asterism,
-                        verification_atmosphere,
-                        cfg.basis,
-                        train=False,
-                        wfs=shwfs)
-
-        append_results(results, epoch, "Verification", cfg.verification_size, asterism_set, data)
+    verification(cfg, log, asterism_sets, trainers, mask, shwfs, results)
 
     df = pd.DataFrame.from_dict(results, orient="columns")
 
@@ -233,3 +225,60 @@ def run(cfg):
     shutil.rmtree(f'{directory}/{cfg.start_time}')
 
     return df
+
+
+def verification(cfg, log, asterism_sets, trainers, mask, shwfs, results):
+    from tomography import oopao, beacon
+    import torch
+    # does a verification run, including 
+    target = beacon.Beacon(0, 0, 14, aperture_mask=mask)
+    
+    for asterism_set in asterism_sets:
+        if asterism_set == "Variable":
+            verification_asterism = asterisms.generate_asterisms(cfg.verification_size, cfg.magnitude, mask=mask, quality_threshold=cfg.asterism_quality_threshold, quality_limit=cfg.minimum_asterism_quality, use_regime_model=True)
+            trainer = trainers["Variable"]
+        else:
+            verification_asterism = asterisms.sample_asterisms(cfg.verification_size, mask=mask, seed=cfg.sample_seed)
+            trainer = trainers["Sample"]
+
+        log.info(f"Running verification test for {asterism_set}")
+        N = 16
+
+        atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+
+        for n, asterism in tqdm(enumerate(verification_asterism)):
+
+            oopao_tomo = oopao.OOPAO_Tomo(asterism, cfg.r0, cfg.num_modes, cfg.altitudes, cfg.diameter, fov=max([g._gamma_arcsec*2 for g in asterism]), res=cfg.aperture_size, n_subaps=10, seed=n)
+            
+            atm = [getattr(oopao_tomo.atm, f'layer_{i+1}') for i in range(len(cfg.altitudes))]
+            atm_D = [s.D_fov for s in atm]
+            # screen = [s.OPD / (2 * np.pi) for s in atm]
+            screen = [s.OPD for s in atm]
+            screen = [s - np.mean(s) for s in screen]
+            
+            atmosphere.screens = [screen]
+
+            target_screen = np.array(target.total_cutout(cfg.diameter, cfg.altitudes, atmosphere[0], atm_D))
+            oopao_base, oopao_resid = oopao_tomo.run()
+            oopao_base = oopao_base - np.mean(oopao_base, where=np.array(mask, dtype=bool))
+            oopao_resid = oopao_resid - np.mean(oopao_resid, where=np.array(mask, dtype=bool))
+            oopao_rec = oopao_base - oopao_resid
+            oopao_rec = oopao_rec - np.mean(oopao_rec, where=np.array(mask, dtype=bool))
+
+            target_coeffs = np.array(cfg.basis.decompose(target_screen))
+            oopao_coeffs = np.array(cfg.basis.decompose(oopao_rec))
+
+            dt = data.TomographyData(N, [asterism], atmosphere, cfg.basis, wfs=shwfs)
+            out = trainer.test(dt)
+
+            oopao_coeff_res = trainer.loss_fn(torch.from_numpy(target_coeffs), torch.from_numpy(oopao_coeffs)).item()
+            oopao_rec_res = trainer.loss_fn(torch.from_numpy(target_screen), torch.from_numpy(oopao_rec)).item()
+
+            out['OOPAO'] = {
+                "Coefficients": [np.mean(oopao_coeff_res)],
+                "Reconstruction": [np.mean(oopao_rec_res)],
+            }
+            log.info(f"OOPAO loss {out['OOPAO']['Coefficients'][0]}, recon: {out['OOPAO']['Reconstruction'][0]}")
+            append_results(results, cfg.epochs, "Verification", cfg.verification_size, asterism_set, out)
+
+    return results

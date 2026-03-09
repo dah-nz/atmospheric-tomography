@@ -140,7 +140,10 @@ class Beacon():
 
         cut_out_dim = screen_dim * (diameter / phase_screen_size)
         # r = int(cut_out_dim / 2 + 0.5)
-        r = cut_out_dim / 2.0
+        if self.aperture_mask is None:
+            r = cut_out_dim / 2.0
+        else:
+            r = self.aperture_mask.shape[0] / 2.0
 
         # interp = False
 
@@ -156,6 +159,10 @@ class Beacon():
                 y1 = y0 + self.aperture_mask.shape[0]
 
             if y0 < 0 or x0 < 0 or x1 > screen_dim or y1 > screen_dim:
+                if self.aperture_mask is None:
+                    print("No aperture mask")
+                else:
+                    print(self.aperture_mask.shape)
                 print(layer_altitude, pos, pix_x, pix_y, r, cut_out_dim, screen_dim, phase_screen_size, x0, x1, y0, y1)
                 raise ValueError("Requested location of cut out is outside bounds of given phase screen")
 

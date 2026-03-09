@@ -36,8 +36,19 @@ class OOPAO_Tomo():
                               windDirection=[0]*N,
                               altitude=altitudes)
         
+        self.target = Source(optBand='V',
+                             magnitude=0.0,
+                             altitude=np.inf,
+                             coordinates=[0, 0])
+        
+        self.science = Source(optBand='V',
+                              magnitude=10.0,
+                              coordinates=[0, 0])
+        
         self.atm.initializeAtmosphere(telescope=self.tel, compute_covariance=False)
         self.atm.generateNewPhaseScreen(seed=seed)
+        self.atm.relay(self.target)
+
         if display == True:
             self.atm.display_atm_layers()
 
@@ -67,14 +78,7 @@ class OOPAO_Tomo():
         unfiltered_act_mask = M.reshape(self.dm.nAct,self.dm.nAct)
         self.dm.unfiltered_act_mask = unfiltered_act_mask
 
-        self.target = Source(optBand='V',
-                             magnitude=10.0,
-                             altitude=np.inf,
-                             coordinates=[0, 0])
-        
-        self.science = Source(optBand='H',
-                              magnitude=0,
-                              coordinates=[0, 0])
+
 
         self.target * self.tel
         self.science * self.tel
@@ -120,9 +124,11 @@ class OOPAO_Tomo():
 
         self.science ** self.atm * self.tel
         original = self.science.phase.copy()
+        original = original # - np.mean(original, where=np.array(self.tel.pupil, dtype=bool))
 
         self.science ** self.atm * self.tel * self.dm
         reconstruction = self.science.phase.copy()
+        reconstruction = reconstruction # - np.mean(reconstruction, where=np.array(self.tel.pupil, dtype=bool))
 
         # self.science.OPD = self.science.OPD - np.mean(self.science.OPD)
 

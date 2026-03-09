@@ -126,7 +126,7 @@ def generate_asterisms(n,
                         X1 = regime_scaler.transform(X)
                     tomographic = regime_model.predict(X1)
 
-                    t = int(tomographic)
+                    t = float(tomographic[0])
                 else:
                     t = 1.0
             
