@@ -86,16 +86,18 @@ def compare_phase_screens():
 
 def compare_oopao_and_local_display():
 
-    ap = 256
+    ap = 160
+    n_sub_aps = 10
     D = 1.8
-    N = 32
+    N = 36
     Z = zernike.Zernike(N)
+    alts = [1000, 5000, 10000]
+    r0 = 0.15
 
     seed = np.random.random_integers(1, 65536)
 
+    opd_atm = phase_screen.Atmosphere(1, alts, r0=r0, D=D, aperture_size=ap)
 
-    alts = [1000, 5000, 10000]
-    r0 = 0.15
     
     LSQ = tomography.LeastSquares(Z, D, N, altitudes=alts, r0=r0, mode_skip=3)
 
@@ -105,13 +107,15 @@ def compare_oopao_and_local_display():
 
     target = beacon.Beacon(0, 0, 14, aperture_mask=mask)
 
-    oopao_tomo = oopao.OOPAO_Tomo(asterism, r0, N, alts, D=D, res=ap, fov=max([b._gamma_arcsec*2 for b in asterism]), seed=seed)
+    oopao_tomo = oopao.OOPAO_Tomo(asterism, r0, N, alts, D=D, res=ap, fov=240, seed=seed, n_subaps=n_sub_aps)
 
     atm = [getattr(oopao_tomo.atm, f'layer_{i+1}') for i in range(len(alts))]
     atm_D = [s.D_fov for s in atm]
     # screen = [s.OPD / (2 * np.pi) for s in atm]
-    screen = [s.OPD for s in atm]
+    screen = [s.OPD * ((1/3)**0.5) for s in atm]
     screen = [s - np.mean(s) for s in screen]
+
+    opd_atm.screens = [[s] for s in screen]
 
     # print(atm.metapupil_diameters)
     # plt.show()
@@ -119,12 +123,17 @@ def compare_oopao_and_local_display():
 
     # screen = atm[0]
     target_screen = target.total_cutout(D, alts, screen, atm_D)
+    target_scr1 = target.total_cutout(D, alts, opd_atm[0], atm_D)
     ptt = target.cutout_coeffs(Z, D, alts, screen, atm_D)[:3]
+    ptt1 = target.cutout_coeffs(Z, D, alts, opd_atm[0], atm_D)[:3]
     coeffs = tomography.get_coeffs_for_asterism(asterism, Z, D, screen, alts, atm_D)
-    print([np.mean(s) for s in screen])
-    print(np.mean(target_screen))
+    coeffs1 = tomography.get_coeffs_for_asterism(asterism, Z, D, opd_atm[0], alts, atm_D)
+
+    # print([np.mean(s) for s in screen])
+    # print(np.mean(target_screen))
 
     lsq_coeffs = LSQ.run(asterism, target, coeffs, ptt)
+    lsq_coeffs1 = LSQ.run(asterism, target, coeffs1, ptt1)
 
     oopao_base, oopao_resid = oopao_tomo.run()
     oopao_base = oopao_base - np.mean(oopao_base, where=np.array(mask, dtype=bool))
@@ -135,18 +144,23 @@ def compare_oopao_and_local_display():
     oopao_rec = oopao_base - oopao_resid
     oopao_rec = oopao_rec - np.mean(oopao_rec, where=np.array(mask, dtype=bool))
     oopao_coeffs = Z.decompose(oopao_rec)
+    oopao_coeffs[:3] = ptt
     oopao_Z_rec = Z.compose(ap, oopao_coeffs)
     oopao_Z_resid = oopao_Z_rec - target_screen
+
+    lsq1_rec = Z.compose(ap, lsq_coeffs1)
+    lsq1_resid = lsq1_rec - target_screen
 
     ideal_coeffs = Z.decompose(target_screen)
     ideal_screen = Z.compose(ap, ideal_coeffs)
 
     wfe_oopao = np.round(np.std(oopao_resid, where=np.array(mask, dtype=bool)), 4)
     wfe_lsq = np.round(np.std(lsq_resid, where=np.array(mask, dtype=bool)), 4)
+    wfe_lsq1 = np.round(np.std(lsq1_resid, where=np.array(mask, dtype=bool)), 4)
     wfe_Z_oopao = np.round(np.std(oopao_Z_resid, where=np.array(mask, dtype=bool)), 4)
 
 
-    fig, axs = plt.subplots(3, 3)
+    fig, axs = plt.subplots(4, 4)
     fig.suptitle(f"Figure {seed}")
     axs[0, 0].imshow(target_screen * mask)
     axs[0, 0].set_title(f"Target")
@@ -155,22 +169,39 @@ def compare_oopao_and_local_display():
     axs[0, 2].imshow(lsq_resid * mask)
     axs[0, 2].set_title(f"LSQ Resid (WFE: {wfe_lsq:.3f})")
 
-    axs[1, 0].imshow(ideal_screen * mask)
-    axs[1, 0].set_title(f"Ideal Recon")
-    axs[1, 1].imshow(oopao_rec * mask)
-    axs[1, 1].set_title(f"OOPAO Recon")
-    axs[1, 2].imshow(oopao_resid * mask)
-    axs[1, 2].set_title(f"OOPAO Resid (WFE: {wfe_oopao:.3f})")
+    axs[1, 0].imshow(target_scr1 * mask)
+    axs[1, 0].set_title(f"Target 1")
+    axs[1, 1].imshow(lsq1_rec * mask)
+    axs[1, 1].set_title(f"LSQ1 Recon")
+    axs[1, 2].imshow(lsq1_resid * mask)
+    axs[1, 2].set_title(f"LSQ1 Resid (WFE: {wfe_lsq1:.3f})")
 
-    axs[2, 0].imshow(oopao_base * mask)
-    axs[2, 0].set_title(f"OOPAO Base")
-    axs[2, 1].imshow(oopao_Z_rec * mask)
-    axs[2, 1].set_title(f"OOPAO Zernike Recon")
-    axs[2, 2].imshow(oopao_Z_resid * mask)
-    axs[2, 2].set_title(f"OOPAO Zernike resid (WFE: {wfe_Z_oopao:.3f})")
+    axs[2, 0].imshow(ideal_screen * mask)
+    axs[2, 0].set_title(f"Ideal Recon")
+    axs[2, 1].imshow(oopao_rec * mask)
+    axs[2, 1].set_title(f"OOPAO Recon")
+    axs[2, 2].imshow(oopao_resid * mask)
+    axs[2, 2].set_title(f"OOPAO Resid (WFE: {wfe_oopao:.3f})")
+
+    axs[3, 0].imshow(oopao_base * mask)
+    axs[3, 0].set_title(f"OOPAO Base")
+    axs[3, 1].imshow(oopao_Z_rec * mask)
+    axs[3, 1].set_title(f"OOPAO Zernike Recon")
+    axs[3, 2].imshow(oopao_Z_resid * mask)
+    axs[3, 2].set_title(f"OOPAO Zernike resid (WFE: {wfe_Z_oopao:.3f})")
+
+    axs[0, 3].imshow((target_screen - ideal_screen) * mask)
+    axs[0, 3].set_title(f"Target - Ideal (diff)")
+    axs[1, 3].imshow((target_screen - target_scr1) * mask)
+    axs[1, 3].set_title(f"Target - Target1 (diff)")
+    axs[2, 3].imshow((target_screen - oopao_base) * mask)
+    axs[2, 3].set_title(f"Target - OOPAO Base (diff)")
+    axs[3, 3].imshow((oopao_Z_resid - lsq_resid) * mask)
+    axs[3, 3].set_title(f"OOPAO Zernike resid - LSQ resid (diff)")
 
     plt.figure()
     plt.plot(lsq_coeffs, 'r', label='LSQ')
+    plt.plot(lsq_coeffs1, 'g', label='LSQ1')
     plt.plot(oopao_coeffs, 'b', label='OOPAO')
     plt.plot(ideal_coeffs, 'k', label='Ideal')
     plt.legend()

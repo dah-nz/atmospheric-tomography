@@ -30,7 +30,7 @@ class OOPAO_Tomo():
 
         self.atm = Atmosphere(telescope=self.tel,
                               r0=r0,
-                              L0=25,
+                              L0=50,
                               fractionalR0=[1./N] * N,
                               windSpeed=[1.]*N,
                               windDirection=[0]*N,
@@ -42,7 +42,7 @@ class OOPAO_Tomo():
                              coordinates=[0, 0])
         
         self.science = Source(optBand='V',
-                              magnitude=10.0,
+                              magnitude=0.0,
                               coordinates=[0, 0])
         
         self.atm.initializeAtmosphere(telescope=self.tel, compute_covariance=False)

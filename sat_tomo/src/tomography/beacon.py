@@ -109,7 +109,7 @@ class Beacon():
 
         return g
     
-    def cutout(self, diameter, layer_altitude, phase_screen, phase_screen_size, remove_piston=False, full_phase=False, interp=False):
+    def cutout(self, diameter, layer_altitude, phase_screen, phase_screen_size, remove_piston=False, full_phase=False, interp=False, pixel_size=None):
         """
         Get the beacon wavefront projection on a layer at an altitude for optical simulation
 
@@ -123,6 +123,7 @@ class Beacon():
         remove_piston: bool         Return the cutout with no piston offset (default = False)
         full_phase: bool            Return the cutout as the only non-zero part of a full size screen (default = False)
         interp: bool                Make each pixel in the output an interpolation between the surrounding pixels of the phase screen.
+        use_pixels: bool            Interpret the phase screen size as pixels
 
         Return
         ------
@@ -134,16 +135,18 @@ class Beacon():
 
         # Convert location to pixel position
         screen_dim = max(phase_screen.shape)
-
         # print(screen_dim, phase_screen_size, pos)
         pix_x, pix_y = util.cart2imagespace(screen_dim, phase_screen_size, pos, dtype=float)
 
         cut_out_dim = screen_dim * (diameter / phase_screen_size)
         # r = int(cut_out_dim / 2 + 0.5)
-        if self.aperture_mask is None:
+        if pixel_size is not None:
+            r = pixel_size / 2.0
+        elif self.aperture_mask is None:
             r = cut_out_dim / 2.0
         else:
             r = self.aperture_mask.shape[0] / 2.0
+
 
         # interp = False
 
@@ -151,13 +154,16 @@ class Beacon():
             x0 = int(pix_x - r + 0.5)
             y0 = int(pix_y - r + 0.5)
             
-            if self.aperture_mask is None:
+            if pixel_size is not None:
+                x1 = x0 + pixel_size
+                y1 = y0 + pixel_size
+            elif self.aperture_mask is None:
                 x1 = x0 + int(cut_out_dim)
                 y1 = y0 + int(cut_out_dim)
             else:
                 x1 = x0 + self.aperture_mask.shape[0]
                 y1 = y0 + self.aperture_mask.shape[0]
-
+            
             if y0 < 0 or x0 < 0 or x1 > screen_dim or y1 > screen_dim:
                 if self.aperture_mask is None:
                     print("No aperture mask")
@@ -220,12 +226,14 @@ class Beacon():
             
         """
         try:
-            cutouts = np.array([self.cutout(diameter, a, l, d, interp=False) for a, l, d in zip(layer_altitudes, layer_screens, layer_sizes)])
+            cutouts = np.array([self.cutout(diameter, a, l, d) for a, l, d in zip(layer_altitudes, layer_screens, layer_sizes)])
         except ValueError as err:
+            min_pix = layer_screens[-1].shape[0]
             for a, l, s in zip(layer_altitudes, layer_screens, layer_sizes):
                 co = self.cutout(diameter, a, l, s, interp=False)
-                print(a, l.shape, s, diameter, co.shape)
-            raise err
+                min_pix = min(min_pix, co.shape[0])
+            cutouts = np.array([self.cutout(diameter, a, l, s, pixel_size=min_pix) for a, l, s in zip(layer_altitudes, layer_screens, layer_sizes)])
+            # raise err
 
         cutout = np.sum(cutouts, 0)
         if self.aperture_mask is not None:

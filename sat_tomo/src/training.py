@@ -242,23 +242,25 @@ def verification(cfg, log, asterism_sets, trainers, mask, shwfs, results):
             trainer = trainers["Sample"]
 
         log.info(f"Running verification test for {asterism_set}")
-        N = 16
+        # N = 16
 
         atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
 
         for n, asterism in tqdm(enumerate(verification_asterism)):
 
-            oopao_tomo = oopao.OOPAO_Tomo(asterism, cfg.r0, cfg.num_modes, cfg.altitudes, cfg.diameter, fov=max([g._gamma_arcsec*2 for g in asterism]), res=cfg.aperture_size, n_subaps=10, seed=n)
+            # max([g._gamma_arcsec*2 for g in asterism])
+            oopao_tomo = oopao.OOPAO_Tomo(asterism, cfg.r0, cfg.num_modes, cfg.altitudes, cfg.diameter, fov=2*(cfg.limiting_angle+1), res=cfg.aperture_size, n_subaps=10, seed=n)
             
             atm = [getattr(oopao_tomo.atm, f'layer_{i+1}') for i in range(len(cfg.altitudes))]
             atm_D = [s.D_fov for s in atm]
             # screen = [s.OPD / (2 * np.pi) for s in atm]
-            screen = [s.OPD for s in atm]
+            screen = [s.OPD * ((1/3)**0.5) for s in atm]
             screen = [s - np.mean(s) for s in screen]
             
-            atmosphere.screens = [screen]
+            atmosphere.screens = [[s] for s in screen]
 
             target_screen = np.array(target.total_cutout(cfg.diameter, cfg.altitudes, atmosphere[0], atm_D))
+            
             oopao_base, oopao_resid = oopao_tomo.run()
             oopao_base = oopao_base - np.mean(oopao_base, where=np.array(mask, dtype=bool))
             oopao_resid = oopao_resid - np.mean(oopao_resid, where=np.array(mask, dtype=bool))
@@ -268,7 +270,7 @@ def verification(cfg, log, asterism_sets, trainers, mask, shwfs, results):
             target_coeffs = np.array(cfg.basis.decompose(target_screen))
             oopao_coeffs = np.array(cfg.basis.decompose(oopao_rec))
 
-            dt = data.TomographyData(N, [asterism], atmosphere, cfg.basis, wfs=shwfs)
+            dt = data.TomographyData(1, [asterism], atmosphere, cfg.basis, wfs=shwfs)
             out = trainer.test(dt)
 
             oopao_coeff_res = trainer.loss_fn(torch.from_numpy(target_coeffs), torch.from_numpy(oopao_coeffs)).item()
