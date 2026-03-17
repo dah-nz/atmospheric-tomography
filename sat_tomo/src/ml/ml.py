@@ -1,9 +1,11 @@
 import torch
+import numpy as np
 
 import log
 
 from ml import models, runner
 from tomography import beacon, tomography
+from basis import zernike
 
 logger = log.get_logger(__name__)
 log.setup_logger(logger, to_console=True)
@@ -32,6 +34,7 @@ class Trainer():
 
         self.regime = cfg.regime
         self.target = beacon.Beacon(0, 0)
+        self.K_zz = np.array(zernike.covar(cfg.num_modes)  * ((cfg.diameter/cfg.r0) ** (5/3)), dtype=np.float32)
 
         self.runners = []
         self.trainers = []
@@ -53,12 +56,17 @@ class Trainer():
                     trainer_class = runner.SingleModeRunner
                 elif model.model_type == "pseudo_lsq":
                     trainer_class = runner.PseudoLSQRunner
+                elif model.model_type == "pseudo_mmse":
+                    trainer_class = runner.PseudoMMSERunner
                 else:
                     trainer_class = runner.ModelRunner
             except AttributeError:
                 trainer_class = runner.ModelRunner
 
-            self.trainers.append(trainer_class(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+            if model.model_type != "pseudo_mmse":
+                self.trainers.append(trainer_class(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
+            else:
+                self.trainers.append(trainer_class(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip, K_zz=self.K_zz))
             
 
         if len(cfg.tomo_methods) > 0:
@@ -66,7 +74,7 @@ class Trainer():
             self.tomo = {}
             for t, opts in cfg.tomo_methods.items():
                 if opts['run']:
-                    self.tomo[t] = eval(f"tomography.{t}(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size, mode_skip=cfg.mode_skip)")
+                    self.tomo[t] = eval(f"tomography.{t}(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size, mode_skip=cfg.mode_skip, r0=cfg.r0)")
             for k, algo in self.tomo.items():
                 self.runners.append(runner.TomoRunner(algo, self.loss_fn, self.target, cfg.basis, skip_lsq=skip_lsq))
 

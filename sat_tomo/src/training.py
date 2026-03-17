@@ -95,12 +95,6 @@ def run(cfg):
 
     mask = cfg.basis.get_mask(cfg.aperture_size)
 
-    # fixed_bias_c = []
-    # fixed_bias_r = []
-
-    # var_bias_c = []
-    # var_bias_r = []
-
     asterisms.LIMITING_ANGLE = cfg.limiting_angle
     asterism_sets = ['Variable']
     if not cfg.sample_set_off:
@@ -244,43 +238,11 @@ def verification(cfg, log, asterism_sets, trainers, mask, shwfs, results):
         log.info(f"Running verification test for {asterism_set}")
         # N = 16
 
-        atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+        atmosphere = phase_screen.Atmosphere(cfg.verification_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
 
-        for n, asterism in tqdm(enumerate(verification_asterism)):
+        dt = data.TomographyData(cfg.verification_size, verification_asterism, atmosphere, cfg.basis, wfs=shwfs)
+        out = trainer.test(dt)
 
-            # max([g._gamma_arcsec*2 for g in asterism])
-            oopao_tomo = oopao.OOPAO_Tomo(asterism, cfg.r0, cfg.num_modes, cfg.altitudes, cfg.diameter, fov=2*(cfg.limiting_angle+1), res=cfg.aperture_size, n_subaps=10, seed=n)
-            
-            atm = [getattr(oopao_tomo.atm, f'layer_{i+1}') for i in range(len(cfg.altitudes))]
-            atm_D = [s.D_fov for s in atm]
-            # screen = [s.OPD / (2 * np.pi) for s in atm]
-            screen = [s.OPD * ((1/3)**0.5) for s in atm]
-            screen = [s - np.mean(s) for s in screen]
-            
-            atmosphere.screens = [[s] for s in screen]
-
-            target_screen = np.array(target.total_cutout(cfg.diameter, cfg.altitudes, atmosphere[0], atm_D))
-            
-            oopao_base, oopao_resid = oopao_tomo.run()
-            oopao_base = oopao_base - np.mean(oopao_base, where=np.array(mask, dtype=bool))
-            oopao_resid = oopao_resid - np.mean(oopao_resid, where=np.array(mask, dtype=bool))
-            oopao_rec = oopao_base - oopao_resid
-            oopao_rec = oopao_rec - np.mean(oopao_rec, where=np.array(mask, dtype=bool))
-
-            target_coeffs = np.array(cfg.basis.decompose(target_screen))
-            oopao_coeffs = np.array(cfg.basis.decompose(oopao_rec))
-
-            dt = data.TomographyData(1, [asterism], atmosphere, cfg.basis, wfs=shwfs)
-            out = trainer.test(dt)
-
-            oopao_coeff_res = trainer.loss_fn(torch.from_numpy(target_coeffs), torch.from_numpy(oopao_coeffs)).item()
-            oopao_rec_res = trainer.loss_fn(torch.from_numpy(target_screen), torch.from_numpy(oopao_rec)).item()
-
-            out['OOPAO'] = {
-                "Coefficients": [np.mean(oopao_coeff_res)],
-                "Reconstruction": [np.mean(oopao_rec_res)],
-            }
-            log.info(f"OOPAO loss {out['OOPAO']['Coefficients'][0]}, recon: {out['OOPAO']['Reconstruction'][0]}")
-            append_results(results, cfg.epochs, "Verification", cfg.verification_size, asterism_set, out)
+        append_results(results, cfg.epochs, "Verification", cfg.verification_size, asterism_set, out)
 
     return results

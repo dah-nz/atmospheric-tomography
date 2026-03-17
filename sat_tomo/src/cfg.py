@@ -77,6 +77,7 @@ class Config():
         parser.add_argument('--lsq_off', action='store_true', help='Turn off Least Squares tomography comparison')
         parser.add_argument('--glao_off', action='store_true', help='Turn off GLAO tomography comparison')
         parser.add_argument('--ao_off', action='store_true', help="Turn off adaptive optics comparison")
+        parser.add_argument('--mmse_off', action='store_true', help="Turn off MMSE tomography comparison")
         parser.add_argument('--sample_set_off', action='store_true', help='Turn off set of static asterisms sampled from dataset used for model generation')
         parser.add_argument('--sample_seed', action='store', default=31415, help='Seed used for selecting sample of static asterisms')
 
@@ -150,6 +151,7 @@ class Config():
             "LeastSquares":     {'run': True , 'fixed_only': True },
             "GLAO":             {'run': True , 'fixed_only': False },
             "AO":               {'run': True , 'fixed_only': False },
+            "MMSE":             {'run': True , 'fixed_only': True },
             }
 
         if self.lsq_off:
@@ -158,6 +160,8 @@ class Config():
             self.tomo_methods["GLAO"]['run'] = False
         if self.ao_off:
             self.tomo_methods["AO"]['run'] = False
+        if self.mmse_off:
+            self.tomo_methods["MMSE"]['run'] = False
                 
         self.basis = basis.select(self.basis_function, self.num_modes)
         

@@ -2,6 +2,7 @@ import numpy as np
 
 from functools import lru_cache
 from sklearn.linear_model import RidgeCV
+from scipy.linalg import block_diag
 
 from tomography import beacon, projection
 from basis import zernike
@@ -10,16 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 import util
 
-proj_data = {
-    "cond_cc": [],
-    "cond_p": [],
-    "cond_b": [],
-    "altitude": [],
-    "theta": [],
-    "gamma": [],
-    "layer_size": [],
-    "layer_pixels": []
-}
+global_cache = {}
 
 class Tomography():
     """
@@ -31,7 +23,7 @@ class Tomography():
     run:
         runs tomographic algorithm using beacon coefficients, and positions of guide beacons and target
     """
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3, fixed_only=False):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3, fixed_only=False, r0=None):
         """
         Parameters
         ---------
@@ -48,6 +40,7 @@ class Tomography():
         aperture_size:
             size of telescope aperture in pixels 
         """
+        global global_cache
         self.basis = basis
         self.n_modes = n_modes
         self.mode_skip = mode_skip
@@ -55,6 +48,8 @@ class Tomography():
         self.aperture_size = aperture_size
         self.altitudes = altitudes
         self.limit_star = beacon.Beacon(0, 121) # max angle of beacons
+        
+        self.cache = global_cache
 
         self.name = self.__class__.__name__
 
@@ -69,7 +64,6 @@ class Tomography():
     
     @lru_cache(maxsize=256)
     def projection_matrix(self, theta, gamma, altitude, layer_size, layer_pixels, grid_not_pix=False, display=False):
-        global proj_data
         # split beacon into theta and gamma to make the caching a bit easier
         b = beacon.Beacon(theta, gamma, aperture_mask=util.circle(self.aperture_size))
         p = (layer_pixels, layer_pixels)
@@ -158,7 +152,6 @@ class LeastSquares(Tomography):
         self._last_ast = None
         self._last_tgt = None
 
-        self.cache = {}
 
         self.epsilons    = []
 
@@ -201,14 +194,14 @@ class LeastSquares(Tomography):
             T = self.cache[h]['T']
 
         else:
-            if self._last_ast != beacons:
+            if self._last_ast is not beacons:
                 A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
                 self.A = A
                 self._last_ast = beacons
             else:
                 A = self.A
 
-            if self._last_tgt != target:
+            if self._last_tgt is not target:
                 T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
                 self.T = T
                 self._last_tgt = target
@@ -315,10 +308,103 @@ class LeastSquares(Tomography):
         alts = self.altitudes
         T = concat([proj(tgt.theta, tgt._gamma_arcsec, a, s, p, grid, display) for a, s, p in zip(alts, szs, pxs)], 1)
         return T
-    
+
+class MMSE(LeastSquares):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, eps=1e-6, r0=0.07, proj_grid=False, display=False, mode_skip=3, k=0.1):
+        super().__init__(basis, diameter, n_modes, altitudes, aperture_size, mode_skip=mode_skip)
+        """
+        proj_grid:
+            use Tokovonin grid to generate projection matrices, else use phase screen pixel-based approach.
+        display:
+            will output internal values and matrices
+            
+        """
+
+        self.eps = eps
+        self.C = zernike.covar(n_modes)[self.mode_skip:, self.mode_skip:] * ((diameter/r0) ** (5/3))
+        self.C_diag = np.diag(self.C)
+
+        self.proj_grid   = proj_grid
+        self.display     = display
+
+        self._last_ast = None
+        self._last_tgt = None
+
+        self.Kzz = self.C
+        self.Knn = k * np.identity(n_modes - mode_skip)
+
+        self.epsilons    = []
+
+        self.A = None
+        self.T = None
+
+        self.sv = None
+
+    def run(self, beacons, target, beacon_coeffs, ptt=[]):
+        """
+        Runs least squares tomography algorithm
+
+        Parameters
+        ----------
+        beacons:
+            list of AltAz objects that provide positions of beacons
+        target:
+            an object that provides target position
+        beacon_coeffs:
+            list of coefficient arrays for each beacon that are used for calculating the target basis function coefficients
+        ptt:        
+            Lower order Zernike modes to concatenate onto output. (The length of this must be equal to mode_skip value)
+
+        Returns
+        -------
+        target_coeffs:
+            array of coefficients for target/science object
+        """
+        if self.mode_skip != len(ptt):
+            raise ValueError(f"Length of provided replacement lower order modes ({len(ptt)}) is not equal to mode_skip ({self.mode_skip})")
+
+        layers_sizes, layer_pixels = self.get_layer_shapes(beacons)
+
+        L = np.array(beacon_coeffs[:, self.mode_skip:].flatten())
+
+        h = hash(tuple([(b.theta, b.gamma) for b in beacons]))
+
+        if h in self.cache.keys():
+            A = self.cache[h]['A']
+            T = self.cache[h]['T']
+
+        else:
+            if self._last_ast != beacons:
+                A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
+                self.A = A
+                self._last_ast = beacons
+            else:
+                A = self.A
+
+            if self._last_tgt != target:
+                T = self.t_mat(target, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
+                self.T = T
+                self._last_tgt = target
+            else:
+                T = self.T
+
+            self.cache[h] = {'A': A, 'T': T}
+
+        self.sv = None
+        pinv = np.linalg.pinv
+
+        M = A @ pinv(T)
+
+        Knn = block_diag(self.Knn, self.Knn, self.Knn)
+        Kzz = self.Kzz
+
+        W_T = pinv(pinv(Kzz) + M.T @ pinv(Knn) @ M) @ M.T @ pinv(Knn) @ L
+
+        return np.concatenate([ptt, W_T])
+
   
 class AO(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3, r0=None):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size, mode_skip=mode_skip)
 
     def run(self, beacons, target, beacon_coeffs, ptt=[]):
@@ -354,7 +440,7 @@ class AO(Tomography):
         return target_coeffs
     
 class GLAO(Tomography):
-    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3):
+    def __init__(self, basis, diameter, n_modes, altitudes, aperture_size=256, mode_skip=3, r0=None):
         super().__init__(basis, diameter, n_modes, altitudes, aperture_size, mode_skip=mode_skip)
 
     def run(self, beacons, target, beacon_coeffs, ptt=[]):

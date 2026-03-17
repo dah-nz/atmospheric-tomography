@@ -611,6 +611,30 @@ class GuideStarEmbed_pseudo_lsq(Network):
         x = self.linear_relu_stack(x)
         return reshape(x, (-1, self.n_features, 3*self.n_features))
     
+class GuideStarEmbed_pseudo_mmse(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.model_type="pseudo_mmse"
+        self.flatten = nn.Flatten()
+        self.k = nn.Parameter(torch.ones(1))
+        self.embed = GuidestarEmbed(cfg)
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.embed.size, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1024, 4096),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+        )
+    def forward(self, gs):
+        x = self.flatten(self.embed(gs))
+        x = self.linear_relu_stack(x)
+        return reshape(x, (-1, 3*self.n_features, self.n_features)), self.k
+    
 class GuideStarEmbed_internal_pseudo_lsq(Network):
     def __init__(self, cfg):
         super().__init__(cfg)

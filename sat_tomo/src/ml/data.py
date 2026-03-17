@@ -185,7 +185,7 @@ class TomographyData(Dataset):
                     np.array(gs, dtype=np.float32),
                     np.array(target_coeffs - glao_coeffs, dtype=np.float32)
             )
-        else:
+        else: # default
             X = self.pack(asterism_coeffs, asterism)
             extra = -1
         

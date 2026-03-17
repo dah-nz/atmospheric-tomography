@@ -45,7 +45,7 @@ from torch.utils.data import TensorDataset, DataLoader
 
 # import modules for application specific tomography functions
 from tomography import asterisms, beacon, phase_screen, strehl
-from tomography.tomography import GLAO, LeastSquares, get_coeffs_for_asterism, AO
+from tomography.tomography import GLAO, LeastSquares, get_coeffs_for_asterism, AO, MMSE
 from basis import zernike
 import util
 
@@ -121,7 +121,7 @@ class AsterismConfig():
         self.ap_pixels = [100]
 
         # Different data points to compute while running each asterism
-        self.tomo_methods = ['glao', 'ao', 'lsq', 'open_loop', 'fitting']
+        # self.tomo_methods = ['glao', 'ao', 'lsq', 'open_loop', 'fitting', 'MMSE']
 
         return # END AsterismConfig.__init__
 
@@ -146,7 +146,8 @@ def asterism_test_worker(cfg, atm_gens):
             tomo_cfg['mask'][ap] =  util.circle(atm.aperture_size)
             tomo_cfg['glao'][ap] =  GLAO(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size)
             tomo_cfg['ao'][ap] =    AO(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size)
-            tomo_cfg['lsq'][ap] =   LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='Tinv')
+            tomo_cfg['lsq'][ap] =   LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='Tinv'),
+            tomo_cfg['mmse'][ap] =   MMSE(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0),
             
         while not asterism_data_queue.empty(): # Asterism Queue
             group_id, asterism_id, asterism = asterism_data_queue.get()

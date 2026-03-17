@@ -44,10 +44,10 @@ class TomoRunner(Runner):
             "Reconstruction Bias": []
         }
 
-        if type(self.tomography).__name__ == "LeastSquares" and self.skip_lsq:
+        if self.skip_lsq and (type(self.tomography).__name__ == "LeastSquares" or type(self.tomography).__name__ == "MMSE"):
             return {}
 
-        if type(self.tomography).__name__ == "LeastSquares":
+        if type(self.tomography).__name__ == "LeastSquares" or type(self.tomography).__name__ == "MMSE":
             range_fn = trange
         else:
             range_fn = range
@@ -163,28 +163,33 @@ class FittingErrorRunner(Runner):
         return output
 
 class DeltaModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
-        self.position_ignore = False
+        self.data_option = "glao_offset"
 
     def train(self, data):
         self.model.train()
+        return self._runner(data)
 
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
         output = {
             "Coefficients": [],
             "Reconstruction": [],
             "Coefficient Bias": [],
             "Reconstruction Bias": []
         }
+        data = data.get_dataloader(option=self.data_option)
 
-        train_data = data.get_dataloader(option="glao_offset")
-
-        mask = None
-
-        for X, glao_y, scr, delta_y in train_data:
+        for X, glao_y, scr, delta_y in data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -202,17 +207,14 @@ class DeltaModelRunner(Runner):
 
             pred = self.model(X)
 
-            # prediction = pred + glao_y.to(ml.device)
-            # actual = delta_y + glao_y.to(ml.device)
-            # loss = self.loss_fn(prediction, actual)
-
             loss = self.loss_fn(pred, delta_y)
 
-            output['Coefficients'].append(loss.item())
+            output["Coefficients"].append(loss.item())
 
-            loss.backward()
-            self.optimiser.step()
-            self.optimiser.zero_grad()
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
 
             prediction = pred.to("cpu").detach() # + glao_y
             del_y = delta_y.to("cpu").detach()
@@ -228,113 +230,66 @@ class DeltaModelRunner(Runner):
                 output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
                 output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
 
-        logger.info(f" -> {self.name} training loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
-    
-    def test(self, data):
-        self.model.eval()
 
-        output = {
-            "Coefficients": [],
-            "Reconstruction": [],
-            "Coefficient Bias": [],
-            "Reconstruction Bias": []
-        }
-
-        test_data = data.get_dataloader(option="glao_offset")
-        mask = None
-
-        with torch.no_grad():
-            for X, glao_y, scr, delta_y in test_data:
-
-                if mask is None:
-                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-
-                if self.mode_skip > 0:
-                    ptt_y = delta_y[:, :self.mode_skip]
-                    delta_y = delta_y[:, self.mode_skip:]
-                    X = X[:, :, self.mode_skip:, :]
-
-                if self.position_ignore:
-                    X[:, :, :, 1:] = 0
-
-                X, delta_y = X.to(ml.device), delta_y.to(ml.device)
-
-                pred = self.model(X)
-                loss = self.loss_fn(pred, delta_y).item()
-
-                output["Coefficients"].append(loss)
-
-                prediction = pred.to("cpu").detach()
-                del_y = delta_y.to("cpu").detach()
-                output["Coefficient Bias"].append(np.mean(del_y.numpy()-prediction.numpy()))
-
-                for pred, ptt, glao, screen in zip(prediction, ptt_y, glao_y, scr):
-                    screen = screen.numpy() * mask
-                    pred = pred.numpy()
-                    res = np.zeros_like(glao)
-                    np.concatenate((ptt, pred), out=res)
-                    res = res + glao.numpy()
-                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
-
-        logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
-
-        return output
-    
 class ImageModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
+        self.data_option = "shwfs_spots"
 
     def train(self, data):
         self.model.train()
+        return self._runner(data)
 
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
         output = {
             "Coefficients": [],
             "Reconstruction": [],
             "Coefficient Bias": [],
             "Reconstruction Bias": []
         }
+        data = data.get_dataloader(option=self.data_option)
 
-        train_data = data.get_dataloader(option="shwfs_spots")
-
-        mask = None
-
-        for X, y, scr, _ in train_data:
+        for X, y, scr, _ in data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-
+                
             sz = np.zeros_like(y[0])
 
             if self.mode_skip > 0:
                 ptt_y = y[:, :self.mode_skip]
                 y = y[:, self.mode_skip:]
-                X = X[:, :, self.mode_skip:, :]
+                X = X[:, :, self.mode_skip:]
 
             X, y = X.to(ml.device), y.to(ml.device)
 
             pred = self.model(X)
 
-            # if self.mode_skip > 0:
-            #     pred[:, :self.mode_skip] = y[:, :self.mode_skip]    # For each item in batch, replace the first three coefficients
-            
             loss = self.loss_fn(pred, y)
 
             output["Coefficients"].append(loss.item())
 
-            loss.backward()
-            self.optimiser.step()
-            self.optimiser.zero_grad()
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
 
             prediction = pred.to("cpu").detach()
             y = y.to("cpu").detach()
-            output["Coefficient Bias"].append(np.mean(y.numpy()-prediction.numpy()))
+            output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
 
             for pred, ptt, screen in zip(prediction, ptt_y, scr):
                 screen = screen.numpy() * mask
@@ -345,83 +300,39 @@ class ImageModelRunner(Runner):
                 output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
                 output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
 
-        logger.info(f" -> {self.name} training loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
 
-    def test(self, data):
-        self.model.eval()
-        output = {
-            "Coefficients": [],
-            "Reconstruction": [],
-            "Coefficient Bias": [],
-            "Reconstruction Bias": []
-        }
-
-        test_data = data.get_dataloader(option="shwfs_spots")
-        mask = None
-
-        with torch.no_grad():
-            for X, y, scr, _ in test_data:
-
-                if mask is None:
-                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-
-                sz = np.zeros_like(y[0])
-
-                if self.mode_skip > 0:
-                    ptt_y = y[:, :self.mode_skip]
-                    y = y[:, self.mode_skip:]
-                    X = X[:, :, self.mode_skip:, :]
-
-                X, y = X.to(ml.device), y.to(ml.device)
-                pred = self.model(X)
-
-                if self.mode_skip:
-                    pred[:, :self.mode_skip] = y[:, :self.mode_skip]     # For each item in batch, replace the first three coefficients
-
-                loss = self.loss_fn(pred, y).item()
-
-                output["Coefficients"].append(loss)
-
-                prediction = pred.to("cpu").detach()
-                y = y.to("cpu").detach()
-                output["Coefficient Bias"].append(np.mean(y.numpy()-prediction.numpy()))
-
-                for pred, ptt, screen in zip(prediction, ptt_y, scr):
-                    screen = screen.numpy() * mask
-                    pred = pred.numpy()
-                    res = np.zeros_like(sz)
-                    np.concatenate((ptt, pred), out=res)
-                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
-
-        logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
-
-        return output
-    
 class ModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
+        self.data_option = "default"
 
     def train(self, data):
         self.model.train()
+        return self._runner(data)
+
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
         output = {
             "Coefficients": [],
             "Reconstruction": [],
             "Coefficient Bias": [],
             "Reconstruction Bias": []
         }
+        data = data.get_dataloader(option=self.data_option)
 
-        train_data = data.get_dataloader()
-
-        mask = None
-
-        for X, y, scr, _ in train_data:
+        for X, y, scr, _ in data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -431,26 +342,24 @@ class ModelRunner(Runner):
             if self.mode_skip > 0:
                 ptt_y = y[:, :self.mode_skip]
                 y = y[:, self.mode_skip:]
-                X = X[:, :, self.mode_skip:, :]
+                X = X[:, :, self.mode_skip:]
 
             X, y = X.to(ml.device), y.to(ml.device)
 
             pred = self.model(X)
 
-            # if self.mode_skip:
-            #     pred[:, :self.mode_skip] = y[:, :self.mode_skip]    # For each item in batch, replace the first three coefficients
-            
             loss = self.loss_fn(pred, y)
 
             output["Coefficients"].append(loss.item())
 
-            loss.backward()
-            self.optimiser.step()
-            self.optimiser.zero_grad()
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
 
             prediction = pred.to("cpu").detach()
             y = y.to("cpu").detach()
-            output["Coefficient Bias"].append(np.mean(y.numpy()-prediction.numpy()))
+            output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
 
             for pred, ptt, screen in zip(prediction, ptt_y, scr):
                 screen = screen.numpy() * mask
@@ -461,69 +370,18 @@ class ModelRunner(Runner):
                 output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
                 output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
 
-        logger.info(f" -> {self.name} training loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
 
-    def test(self, data):
-        self.model.eval()
-
-        output = {
-            "Coefficients": [],
-            "Reconstruction": [],
-            "Coefficient Bias": [],
-            "Reconstruction Bias": []
-        }
-
-        test_data = data.get_dataloader()
-        mask = None
-
-        with torch.no_grad():
-            for X, y, scr, _ in test_data:
-
-                if mask is None:
-                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-                
-                sz = np.zeros_like(y[0])
-
-                if self.mode_skip > 0:
-                    ptt_y = y[:, :self.mode_skip]
-                    y = y[:, self.mode_skip:]
-                    X = X[:, :, self.mode_skip:, :]
-
-                X, y = X.to(ml.device), y.to(ml.device)
-                pred = self.model(X)
-
-                # if self.mode_skip:
-                #     pred[:, :self.mode_skip] = y[:, :self.mode_skip]    # For each item in batch, replace the first three coefficients
-
-                loss = self.loss_fn(pred, y).item()
-
-                output["Coefficients"].append(loss)
-
-                prediction = pred.to("cpu").detach()
-                y = y.to("cpu").detach()
-                output["Coefficient Bias"].append(np.mean(y.numpy()-prediction.numpy()))
-
-                for pred, ptt, screen in zip(prediction, ptt_y, scr):
-                    screen = screen.numpy() * mask
-                    pred = pred.numpy()
-                    res = np.zeros_like(sz)
-                    np.concatenate((ptt, pred), out=res)
-                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
-
-        logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
-
-        return output
-    
 class SeparateGuidestarModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
-        # self.optimiser = optimiser
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
+        self.data_option = "gs_separate"
         self.position_ignore = False
 
         self.opt_shared = optimiser(
@@ -544,7 +402,15 @@ class SeparateGuidestarModelRunner(Runner):
 
     def train(self, data):
         self.model.train()
+        return self._runner(data)
 
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
         output = {
             "Coefficients": [],
             "Reconstruction": [],
@@ -552,12 +418,9 @@ class SeparateGuidestarModelRunner(Runner):
             "Reconstruction Bias": [],
             "Guidestar Loss": []
         }
+        data = data.get_dataloader(option=self.data_option)
 
-        train_data = data.get_dataloader(option="gs_separate")
-
-        mask = None
-
-        for X_modes, X_gs, y_mode, y_gs, scr in train_data:
+        for X_modes, X_gs, y_mode, y_gs, scr in data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -579,18 +442,19 @@ class SeparateGuidestarModelRunner(Runner):
             output["Coefficients"].append(loss_mode.item())
             output["Guidestar Loss"].append(loss_gs.item())
 
-            self.opt_shared.zero_grad()
-            self.opt_decoder.zero_grad()    
+            if train:
+                self.opt_shared.zero_grad()
+                self.opt_decoder.zero_grad()    
 
-            loss_mode.backward(retain_graph=True)
-            loss_gs.backward()
+                loss_mode.backward(retain_graph=True)
+                loss_gs.backward()
 
-            self.opt_shared.step()
-            self.opt_decoder.step()
+                self.opt_shared.step()
+                self.opt_decoder.step()
 
-            prediction = pred_mode.to("cpu").detach() # + glao_y
+            prediction = pred.to("cpu").detach()
             y_act = y_mode.to("cpu").detach()
-            output["Coefficient Bias"].append(np.mean(y_act.numpy()-prediction.numpy()))
+            output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
 
             for pred, ptt, y, screen in zip(prediction, ptt_y, y_act, scr):
                 screen = screen.numpy() * mask
@@ -600,92 +464,39 @@ class SeparateGuidestarModelRunner(Runner):
                 output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
                 output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
 
-        logger.info(f" -> {self.name} training loss (modes): {np.mean(output['Coefficients']):>7f}, loss (gs): {np.mean(output['Guidestar Loss']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
 
-    def test(self, data):
-        self.model.eval()
-
-        output = {
-            "Coefficients": [],
-            "Reconstruction": [],
-            "Coefficient Bias": [],
-            "Reconstruction Bias": [],
-            "Guidestar Loss": []
-        }
-        test_data = data.get_dataloader(option="gs_separate")
-        mask = None
-
-        with torch.no_grad():
-            for X_modes, X_gs, y_mode, y_gs, scr in test_data:
-
-                if mask is None:
-                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-
-            if self.mode_skip > 0:
-                ptt_y = y_mode[:, :self.mode_skip]
-                y_mode = y_mode[:, self.mode_skip:]
-                X_modes = X_modes[:, :, self.mode_skip:]
-
-                X_modes, y_mode = X_modes.to(ml.device), y_mode.to(ml.device)
-                X_gs, y_gs = X_gs.to(ml.device), y_gs.to(ml.device)
-                y_gs = torch.flatten(y_gs, start_dim=1)
-
-                pred_mode, pred_gs = self.model(X_modes, X_gs)
-
-                loss_mode = self.loss_fn(pred_mode, y_mode)
-                loss_gs = self.loss_fn(pred_gs, y_gs)
-
-                output["Coefficients"].append(loss_mode.item())
-                output["Guidestar Loss"].append(loss_gs.item())
-
-                prediction = pred_mode.to("cpu").detach()
-                y_act = y_mode.to("cpu").detach()
-                output["Coefficient Bias"].append(np.mean(y_act.numpy()-prediction.numpy()))
-
-                for pred, ptt, y, screen in zip(prediction, ptt_y, y_act, scr):
-                    screen = screen.numpy() * mask
-                    pred = pred.numpy()
-                    # res = np.zeros_like(y)
-                    res = np.concatenate((ptt, pred))
-                    # res = res + y.numpy()
-                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
-
-
-                # for p0, s0 in zip(prediction, scr):
-                #     s0 = s0.numpy() * mask
-                #     p0 = p0.numpy()
-                    # recon = torch.from_numpy(self.basis.compose(s0.shape, p0))
-                    # recon_data.append(self.loss_fn(torch.from_numpy(s0), recon).item())
-                    # recon_bias.append(s0-recon.numpy())
-
-        logger.info(f" -> {self.name} testing loss (modes): {np.mean(output['Coefficients']):>7f}, loss (gs): {np.mean(output['Guidestar Loss']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
-
-        return output
-    
 class DeepModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
+        self.data_option = "deep"
 
     def train(self, data):
         self.model.train()
+        return self._runner(data)
+
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
         output = {
             "Coefficients": [],
             "Reconstruction": [],
             "Coefficient Bias": [],
             "Reconstruction Bias": []
         }
-        train_data = data.get_dataloader(option="deep")
+        data = data.get_dataloader(option=self.data_option)
 
-        mask = None
-
-        for X, y, scr, gs in train_data:
+        for X, y, scr, gs in data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -705,9 +516,10 @@ class DeepModelRunner(Runner):
 
             output["Coefficients"].append(loss.item())
 
-            loss.backward()
-            self.optimiser.step()
-            self.optimiser.zero_grad()
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
 
             prediction = pred.to("cpu").detach()
             y = y.to("cpu").detach()
@@ -722,82 +534,39 @@ class DeepModelRunner(Runner):
                 output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
                 output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
 
-        logger.info(f" -> {self.name} training loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
 
-    def test(self, data):
-        self.model.eval()
-        output = {
-            "Coefficients": [],
-            "Reconstruction": [],
-            "Coefficient Bias": [],
-            "Reconstruction Bias": []
-        }
-
-        test_data = data.get_dataloader(option="deep")
-        mask = None
-
-        with torch.no_grad():
-            for X, y, scr, gs in test_data:
-
-                if mask is None:
-                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-                
-                sz = np.zeros_like(y[0])
-
-                if self.mode_skip > 0:
-                    ptt_y = y[:, :self.mode_skip]
-                    y = y[:, self.mode_skip:]
-                    X = X[:, :, self.mode_skip:]
-
-                X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
-                pred = self.model(X, gs)
-
-                # if self.mode_skip:
-                #     pred[:, :self.mode_skip] = y[:, :self.mode_skip]    # For each item in batch, replace the first three coefficients
-
-                loss = self.loss_fn(pred, y).item()
-
-                output["Coefficients"].append(loss)
-
-                prediction = pred.to("cpu").detach()
-                y = y.to("cpu").detach()
-                output["Coefficient Bias"].append(np.mean(y.numpy()-prediction.numpy()))
-
-                for pred, ptt, screen in zip(prediction, ptt_y, scr):
-                    screen = screen.numpy() * mask
-                    pred = pred.numpy()
-                    res = np.zeros_like(sz)
-                    np.concatenate((ptt, pred), out=res)
-                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
-
-        logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
-
-        return output
-    
 class DeepGLAORunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
+        self.data_option = "deep_glao"
 
     def train(self, data):
         self.model.train()
+        return self._runner(data)
+
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
         output = {
             "Coefficients": [],
             "Reconstruction": [],
             "Coefficient Bias": [],
             "Reconstruction Bias": []
         }
-        train_data = data.get_dataloader(option="deep_glao")
+        data = data.get_dataloader(option=self.data_option)
 
-        mask = None
-
-        for X, glao_y, scr, gs, delta_y in train_data:
+        for X, glao_y, scr, gs, delta_y in data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -815,9 +584,10 @@ class DeepGLAORunner(Runner):
 
             output["Coefficients"].append(loss.item())
 
-            loss.backward()
-            self.optimiser.step()
-            self.optimiser.zero_grad()
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
 
             prediction = pred.to("cpu").detach()
             dely = dely.to("cpu").detach()
@@ -833,78 +603,39 @@ class DeepGLAORunner(Runner):
                 output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
                 output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
 
-        logger.info(f" -> {self.name} training loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
 
-    def test(self, data):
-        self.model.eval()
-        output = {
-            "Coefficients": [],
-            "Reconstruction": [],
-            "Coefficient Bias": [],
-            "Reconstruction Bias": []
-        }
-
-        test_data = data.get_dataloader(option="deep_glao")
-        mask = None
-
-        with torch.no_grad():
-            for X, glao_y, scr, gs, delta_y in test_data:
-
-                if mask is None:
-                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-                
-                if self.mode_skip > 0:
-                    ptt_y = delta_y[:, :self.mode_skip]
-                    dely = delta_y[:, self.mode_skip:]
-                    X = X[:, :, self.mode_skip:]
-
-                X, dely, gs = X.to(ml.device), dely.to(ml.device), gs.to(ml.device)
-
-                pred = self.model(X, gs)
-                loss = self.loss_fn(pred, dely).item()
-
-                output["Coefficients"].append(loss)
-
-                prediction = pred.to("cpu").detach()
-                dely = dely.to("cpu").detach()
-                output["Coefficient Bias"].append(np.mean(dely.numpy()-prediction.numpy()))
-
-                for pred, ptt, glao, screen in zip(prediction, ptt_y, glao_y, scr):
-                    screen = screen.numpy() * mask
-                    pred = pred.numpy()
-                    res = np.zeros_like(glao)
-                    np.concatenate((ptt, pred), out=res)
-                    res = res + glao.numpy()
-                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
-
-        logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
-
-        return output
-    
 class SingleModeRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
+        self.data_option = "deep"
 
     def train(self, data):
         self.model.train()
+        return self._runner(data)
+
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
         output = {
             "Coefficients": [],
             "Reconstruction": [],
             "Coefficient Bias": [],
             "Reconstruction Bias": []
         }
-        train_data = data.get_dataloader(option="deep")
+        data = data.get_dataloader(option=self.data_option)
 
-        mask = None
-
-        for X, y, scr, gs in train_data:
+        for X, y, scr, gs in data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -931,142 +662,16 @@ class SingleModeRunner(Runner):
                 pred_y[:, m] = pred_i
 
                 loss_i = self.loss_fn(pred_i, target)
-                loss_i.backward()
+                if train:
+                    loss_i.backward()
 
                 total_loss += loss_i.item()
 
             output["Coefficients"].append(total_loss / N)
 
-            self.optimiser.step()
-            self.optimiser.zero_grad()
-
-            prediction = pred_y.to("cpu").detach()
-            y = y.to("cpu").detach()
-            output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
-
-            for pred, ptt, screen in zip(prediction, ptt_y, scr):
-                screen = screen.numpy() * mask
-                pred = pred.numpy()
-                res = np.zeros_like(sz)
-                np.concatenate((ptt, pred), out=res)
-                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
-
-        logger.info(f" -> {self.name} training loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
-
-        return output
-
-    def test(self, data):
-        self.model.eval()
-        output = {
-            "Coefficients": [],
-            "Reconstruction": [],
-            "Coefficient Bias": [],
-            "Reconstruction Bias": []
-        }
-
-        test_data = data.get_dataloader(option="deep")
-        mask = None
-
-        with torch.no_grad():
-            for X, y, scr, gs in test_data:
-
-                if mask is None:
-                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-                
-                sz = np.zeros_like(y[0])
-
-                if self.mode_skip > 0:
-                    ptt_y = y[:, :self.mode_skip]
-                    y = y[:, self.mode_skip:]
-                    X = X[:, :, self.mode_skip:]
-
-                pred_y = torch.zeros(y.shape, device=ml.device)
-                B, N = y.shape
-                total_loss = 0.0
-
-                for m in range(N):
-                    mode_selector = torch.zeros(B, N, device=ml.device)
-                    mode_selector[:, m] = 1.0
-                    X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
-
-                    pred_i = self.model(X, gs, mode_selector)
-                    target = y[:, m]
-                    pred_y[:, m] = pred_i
-
-                    loss_i = self.loss_fn(pred_i, target)
-
-                    total_loss += loss_i.item()
-
-                output["Coefficients"].append(total_loss / N)
-
-                prediction = pred_y.to("cpu").detach()
-                y = y.to("cpu").detach()
-                output["Coefficient Bias"].append(np.mean(y.numpy()-prediction.numpy()))
-
-                for pred, ptt, screen in zip(prediction, ptt_y, scr):
-                    screen = screen.numpy() * mask
-                    pred = pred.numpy()
-                    res = np.zeros_like(sz)
-                    np.concatenate((ptt, pred), out=res)
-                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
-
-        logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
-
-        return output
-    
-class PseudoLSQRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
-        super().__init__(type(model).__name__, loss_fn, basis)
-        self.model = model
-        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
-        self.mode_skip = mode_skip
-
-    def train(self, data):
-        self.model.train()
-        output = {
-            "Coefficients": [],
-            "Reconstruction": [],
-            "Coefficient Bias": [],
-            "Reconstruction Bias": []
-        }
-        train_data = data.get_dataloader(option="deep")
-
-        mask = None
-
-        for X, y, scr, gs in train_data:
-
-            if mask is None:
-                mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-                
-            sz = np.zeros_like(y[0])
-
-            if self.mode_skip > 0:
-                ptt_y = y[:, :self.mode_skip]
-                y = y[:, self.mode_skip:]
-                X = X[:, :, self.mode_skip:]
-
-            X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
-
-            pred_A = self.model(gs)
-
-            X = torch.flatten(X, start_dim=1)
-            # X = torch.unsqueeze(X, 2)
-
-            pred = torch.einsum("bnm,bm->bn", pred_A, X)
-
-            # pred = torch.squeeze(torch.matmul(pred_A, X))
-
-            loss = self.loss_fn(pred, y)
-
-            output["Coefficients"].append(loss.item())
-
-            loss.backward()
-            self.optimiser.step()
-            self.optimiser.zero_grad()
+            if train:
+                self.optimiser.step()
+                self.optimiser.zero_grad()
 
             prediction = pred.to("cpu").detach()
             y = y.to("cpu").detach()
@@ -1081,87 +686,113 @@ class PseudoLSQRunner(Runner):
                 output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
                 output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
 
-        logger.info(f" -> {self.name} training loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
 
+class PseudoLSQRunner(Runner):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
+        super().__init__(type(model).__name__, loss_fn, basis)
+        self.model = model
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
+        self.mode_skip = mode_skip
+        self.data_option = "deep"
+
+    def train(self, data):
+        self.model.train()
+        return self._runner(data)
+
     def test(self, data):
         self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
         output = {
             "Coefficients": [],
             "Reconstruction": [],
             "Coefficient Bias": [],
             "Reconstruction Bias": []
         }
+        data = data.get_dataloader(option=self.data_option)
 
-        test_data = data.get_dataloader(option="deep")
-        mask = None
+        for X, y, scr, gs in data:
 
-        with torch.no_grad():
-            for X, y, scr, gs in test_data:
-
-                if mask is None:
-                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+            if mask is None:
+                mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
                 
-                sz = np.zeros_like(y[0])
+            sz = np.zeros_like(y[0])
 
-                if self.mode_skip > 0:
-                    ptt_y = y[:, :self.mode_skip]
-                    y = y[:, self.mode_skip:]
-                    X = X[:, :, self.mode_skip:]
+            if self.mode_skip > 0:
+                ptt_y = y[:, :self.mode_skip]
+                y = y[:, self.mode_skip:]
+                X = X[:, :, self.mode_skip:]
 
-                X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
-                pred_A = self.model(gs)
+            X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
 
-                X = torch.flatten(X, start_dim=1)
-                # X = torch.unsqueeze(X, 2)
-                
-                pred = torch.einsum("bnm,bm->bn", pred_A, X)
+            pred_A = self.model(gs)
+            X = torch.flatten(X, start_dim=1)
+            pred = torch.einsum("bnm,bm->bn", pred_A, X)
 
-                # pred = torch.squeeze(torch.matmul(pred_A, X))
+            loss = self.loss_fn(pred, y)
 
-                loss = self.loss_fn(pred, y).item()
+            output["Coefficients"].append(loss.item())
 
-                output["Coefficients"].append(loss)
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
 
-                prediction = pred.to("cpu").detach()
-                y = y.to("cpu").detach()
-                output["Coefficient Bias"].append(np.mean(y.numpy()-prediction.numpy()))
+            prediction = pred.to("cpu").detach()
+            y = y.to("cpu").detach()
+            output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
 
-                for pred, ptt, screen in zip(prediction, ptt_y, scr):
-                    screen = screen.numpy() * mask
-                    pred = pred.numpy()
-                    res = np.zeros_like(sz)
-                    np.concatenate((ptt, pred), out=res)
-                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
+            for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.zeros_like(sz)
+                np.concatenate((ptt, pred), out=res)
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
 
-        logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
-    
 
 class PseudoMMSERunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
         super().__init__(type(model).__name__, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
+        self.data_option = "deep"
+        self.K_zz = torch.from_numpy(K_zz[mode_skip:, mode_skip:]).to(ml.device)
+        self.K_nn = torch.from_numpy(np.identity(3*self.model.n_features, dtype=np.float32)).to(ml.device)
 
     def train(self, data):
         self.model.train()
+        return self._runner(data)
+
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
         output = {
             "Coefficients": [],
             "Reconstruction": [],
             "Coefficient Bias": [],
             "Reconstruction Bias": []
         }
-        train_data = data.get_dataloader(option="deep")
+        data = data.get_dataloader(option=self.data_option)
 
-        mask = None
-
-        for X, y, scr, gs in train_data:
+        for X, y, scr, gs in data:
 
             if mask is None:
                 mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
@@ -1175,22 +806,26 @@ class PseudoMMSERunner(Runner):
 
             X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
 
-            pred_A = self.model(gs)
+            pred_A, k = self.model(gs)
+
+            K_nn = torch.linalg.pinv(k * self.K_nn)
+            K_zz = torch.linalg.pinv(self.K_zz)
 
             X = torch.flatten(X, start_dim=1)
-            # X = torch.unsqueeze(X, 2)
+        
+            M = torch.linalg.pinv(K_zz + torch.einsum("bam,mm,bmn->ban", torch.transpose(pred_A, 1, 2), K_nn, pred_A))
+            A = torch.einsum("ban,bnc,cm->bam", M, torch.transpose(pred_A, 1, 2), K_nn)
 
-            pred = torch.einsum("bnm,bm->bn", pred_A, X)
-
-            # pred = torch.squeeze(torch.matmul(pred_A, X))
+            pred = torch.einsum("bnm,bm->bn", A, X)
 
             loss = self.loss_fn(pred, y)
 
             output["Coefficients"].append(loss.item())
 
-            loss.backward()
-            self.optimiser.step()
-            self.optimiser.zero_grad()
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
 
             prediction = pred.to("cpu").detach()
             y = y.to("cpu").detach()
@@ -1205,62 +840,7 @@ class PseudoMMSERunner(Runner):
                 output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
                 output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
 
-        logger.info(f" -> {self.name} training loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
-
-        return output
-
-    def test(self, data):
-        self.model.eval()
-        output = {
-            "Coefficients": [],
-            "Reconstruction": [],
-            "Coefficient Bias": [],
-            "Reconstruction Bias": []
-        }
-
-        test_data = data.get_dataloader(option="deep")
-        mask = None
-
-        with torch.no_grad():
-            for X, y, scr, gs in test_data:
-
-                if mask is None:
-                    mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
-                
-                sz = np.zeros_like(y[0])
-
-                if self.mode_skip > 0:
-                    ptt_y = y[:, :self.mode_skip]
-                    y = y[:, self.mode_skip:]
-                    X = X[:, :, self.mode_skip:]
-
-                X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
-                pred_A = self.model(gs)
-
-                X = torch.flatten(X, start_dim=1)
-                # X = torch.unsqueeze(X, 2)
-                
-                pred = torch.einsum("bnm,bm->bn", pred_A, X)
-
-                # pred = torch.squeeze(torch.matmul(pred_A, X))
-
-                loss = self.loss_fn(pred, y).item()
-
-                output["Coefficients"].append(loss)
-
-                prediction = pred.to("cpu").detach()
-                y = y.to("cpu").detach()
-                output["Coefficient Bias"].append(np.mean(y.numpy()-prediction.numpy()))
-
-                for pred, ptt, screen in zip(prediction, ptt_y, scr):
-                    screen = screen.numpy() * mask
-                    pred = pred.numpy()
-                    res = np.zeros_like(sz)
-                    np.concatenate((ptt, pred), out=res)
-                    recon = torch.from_numpy(self.basis.compose(screen.shape, res))
-                    output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
-                    output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
-
-        logger.info(f" -> {self.name} testing loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
 
         return output
