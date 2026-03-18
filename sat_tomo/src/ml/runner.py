@@ -673,7 +673,7 @@ class SingleModeRunner(Runner):
                 self.optimiser.step()
                 self.optimiser.zero_grad()
 
-            prediction = pred.to("cpu").detach()
+            prediction = pred_y.to("cpu").detach()
             y = y.to("cpu").detach()
             output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
 
@@ -817,6 +817,268 @@ class PseudoMMSERunner(Runner):
             A = torch.einsum("ban,bnc,cm->bam", M, torch.transpose(pred_A, 1, 2), K_nn)
 
             pred = torch.einsum("bnm,bm->bn", A, X)
+
+            loss = self.loss_fn(pred, y)
+
+            output["Coefficients"].append(loss.item())
+
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
+
+            prediction = pred.to("cpu").detach()
+            y = y.to("cpu").detach()
+            output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
+
+            for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.zeros_like(sz)
+                np.concatenate((ptt, pred), out=res)
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
+
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+
+        return output
+
+class IterativeMMSE_GLAO_Runner(Runner):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
+        super().__init__(type(model).__name__, loss_fn, basis)
+        self.model = model
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
+        self.mode_skip = mode_skip
+        self.data_option = "deep"
+        self.K_zz = torch.from_numpy(K_zz[mode_skip:, mode_skip:]).to(ml.device)
+        self.K_nn = torch.from_numpy(np.identity(3*self.model.n_features, dtype=np.float32)).to(ml.device)
+
+    def batch_glao(self, batch):
+        return batch.mean(dim=1)
+
+    def train(self, data):
+        self.model.train()
+        return self._runner(data)
+
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
+        output = {
+            "Coefficients": [],
+            "Reconstruction": [],
+            "Coefficient Bias": [],
+            "Reconstruction Bias": []
+        }
+        data = data.get_dataloader(option=self.data_option)
+
+        for X, y, scr, gs in data:
+
+            if mask is None:
+                mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+                
+            sz = np.zeros_like(y[0])
+
+            if self.mode_skip > 0:
+                ptt_y = y[:, :self.mode_skip]
+                y = y[:, self.mode_skip:]
+                X = X[:, :, self.mode_skip:]
+
+            X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
+            glao = self.batch_glao(X)
+
+            pred_A, k = self.model(gs)
+
+            K_nn = torch.linalg.pinv(k * self.K_nn)
+            K_zz = self.K_zz
+
+            X = torch.flatten(X, start_dim=1)
+        
+            LTW = X - torch.einsum("bam,bm->ba", pred_A, glao)
+            KTK = torch.einsum("mm,bmn,nn->bmn", K_zz, torch.transpose(pred_A, 1, 2), K_nn)
+            p1 = torch.einsum("bna,ba->bn", KTK, LTW)
+
+            LTW = X - torch.einsum("bam,bm->ba", pred_A, p1)
+            KTK = torch.einsum("mm,bmn,nn->bmn", K_zz, torch.transpose(pred_A, 1, 2), K_nn)
+            pred = torch.einsum("bna,ba->bn", KTK, LTW)
+
+            loss = self.loss_fn(pred, y)
+
+            output["Coefficients"].append(loss.item())
+
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
+
+            prediction = pred.to("cpu").detach()
+            y = y.to("cpu").detach()
+            output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
+
+            for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.zeros_like(sz)
+                np.concatenate((ptt, pred), out=res)
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
+
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+
+        return output
+    
+class IterativeMMSE_Model_Runner(Runner):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
+        super().__init__(type(model).__name__, loss_fn, basis)
+        self.model = model
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
+        self.mode_skip = mode_skip
+        self.data_option = "deep"
+        self.K_zz = torch.from_numpy(K_zz[mode_skip:, mode_skip:]).to(ml.device)
+        self.K_nn = torch.from_numpy(np.identity(3*self.model.n_features, dtype=np.float32)).to(ml.device)
+
+    def batch_glao(self, batch):
+        return batch.mean(dim=1)
+
+    def train(self, data):
+        self.model.train()
+        return self._runner(data)
+
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
+        output = {
+            "Coefficients": [],
+            "Reconstruction": [],
+            "Coefficient Bias": [],
+            "Reconstruction Bias": []
+        }
+        data = data.get_dataloader(option=self.data_option)
+
+        for X, y, scr, gs in data:
+
+            if mask is None:
+                mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+                
+            sz = np.zeros_like(y[0])
+
+            if self.mode_skip > 0:
+                ptt_y = y[:, :self.mode_skip]
+                y = y[:, self.mode_skip:]
+                X = X[:, :, self.mode_skip:]
+
+            X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
+
+            pred_A, pred_W, k = self.model(X, gs)
+
+            K_nn = torch.linalg.pinv(k * self.K_nn)
+            K_zz = self.K_zz
+
+            X = torch.flatten(X, start_dim=1)
+        
+            LTW = X - torch.einsum("bam,bm->ba", pred_A, pred_W)
+            KTK = torch.einsum("mm,bmn,nn->bmn", K_zz, torch.transpose(pred_A, 1, 2), K_nn)
+            p1 = torch.einsum("bna,ba->bn", KTK, LTW)
+
+            LTW = X - torch.einsum("bam,bm->ba", pred_A, p1)
+            KTK = torch.einsum("mm,bmn,nn->bmn", K_zz, torch.transpose(pred_A, 1, 2), K_nn)
+            pred = torch.einsum("bna,ba->bn", KTK, LTW)
+
+            loss = self.loss_fn(pred, y)
+
+            output["Coefficients"].append(loss.item())
+
+            if train:
+                loss.backward()
+                self.optimiser.step()
+                self.optimiser.zero_grad()
+
+            prediction = pred.to("cpu").detach()
+            y = y.to("cpu").detach()
+            output['Coefficient Bias'].append(np.mean(y.numpy()-prediction.numpy()))
+
+            for pred, ptt, screen in zip(prediction, ptt_y, scr):
+                screen = screen.numpy() * mask
+                pred = pred.numpy()
+                res = np.zeros_like(sz)
+                np.concatenate((ptt, pred), out=res)
+                recon = torch.from_numpy(self.basis.compose(screen.shape, res))
+                output["Reconstruction"].append(self.loss_fn(torch.from_numpy(screen), recon).item())
+                output["Reconstruction Bias"].append(np.mean(screen-recon.numpy()))
+
+        loss_type = "training" if train else "testing"
+        logger.info(f" -> {self.name} {loss_type} loss: {np.mean(output['Coefficients']):>7f}, recon: {np.mean(output['Reconstruction']):>7f}")
+
+        return output
+    
+class NoInverseKzz_Runner(Runner):
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
+        super().__init__(type(model).__name__, loss_fn, basis)
+        self.model = model
+        self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
+        self.mode_skip = mode_skip
+        self.data_option = "deep"
+        self.K_zz = torch.from_numpy(K_zz[mode_skip:, mode_skip:]).to(ml.device)
+        self.K_nn = torch.from_numpy(np.identity(3*self.model.n_features, dtype=np.float32)).to(ml.device)
+
+    def batch_glao(self, batch):
+        return batch.mean(dim=1)
+
+    def train(self, data):
+        self.model.train()
+        return self._runner(data)
+
+    def test(self, data):
+        self.model.eval()
+        with torch.no_grad():
+            return self._runner(data, train=False)
+
+    def _runner(self, data, train=True):
+        mask = None
+        output = {
+            "Coefficients": [],
+            "Reconstruction": [],
+            "Coefficient Bias": [],
+            "Reconstruction Bias": []
+        }
+        data = data.get_dataloader(option=self.data_option)
+
+        for X, y, scr, gs in data:
+
+            if mask is None:
+                mask = circle(scr.shape[-1]) # Use last instead of first, as first could be the batch size
+                
+            sz = np.zeros_like(y[0])
+
+            if self.mode_skip > 0:
+                ptt_y = y[:, :self.mode_skip]
+                y = y[:, self.mode_skip:]
+                X = X[:, :, self.mode_skip:]
+
+            X, y, gs = X.to(ml.device), y.to(ml.device), gs.to(ml.device)
+
+            Phi, Theta, k = self.model(gs)
+
+            K_nn = torch.linalg.pinv(k * self.K_nn)
+            K_zz = self.K_zz
+
+            L = torch.flatten(X, start_dim=1)
+
+            KP = torch.einsum("mm,bmn->bmn", K_zz, Phi)
+            KT = torch.einsum("bnm,mm->bnm", Theta, K_nn)
+        
+            pred = torch.einsum("bmn,bn->bm", KP+KT, L)
 
             loss = self.loss_fn(pred, y)
 

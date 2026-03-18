@@ -465,7 +465,7 @@ class GLAO(Tomography):
         target_coeffs[:self.mode_skip] = ptt
 
         return target_coeffs
-        
+
 def get_metapupil_diameters(altitudes, beacons, diameter):
     """
     Calculate diameters of metapupil at each predefined layer altitude 

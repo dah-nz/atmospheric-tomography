@@ -58,15 +58,18 @@ class Trainer():
                     trainer_class = runner.PseudoLSQRunner
                 elif model.model_type == "pseudo_mmse":
                     trainer_class = runner.PseudoMMSERunner
+                elif model.model_type == "iterative_mmse_glao":
+                    trainer_class = runner.IterativeMMSE_GLAO_Runner
+                elif model.model_type == "iterative_mmse_model":
+                    trainer_class = runner.IterativeMMSE_Model_Runner
+                elif model.model_type == "no_inverse_kzz":
+                    trainer_class = runner.NoInverseKzz_Runner
                 else:
                     trainer_class = runner.ModelRunner
             except AttributeError:
                 trainer_class = runner.ModelRunner
 
-            if model.model_type != "pseudo_mmse":
-                self.trainers.append(trainer_class(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip))
-            else:
-                self.trainers.append(trainer_class(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip, K_zz=self.K_zz))
+            self.trainers.append(trainer_class(model, self.loss_fn, opti, cfg.basis, mode_skip=cfg.mode_skip, K_zz=self.K_zz))
             
 
         if len(cfg.tomo_methods) > 0:

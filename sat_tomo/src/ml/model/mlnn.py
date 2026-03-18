@@ -82,6 +82,110 @@ class MLNN_pseudo_mmse(Network):
         x = self.linear_relu_stack(x)
         return reshape(x, (-1, 3*self.n_features, self.n_features)), self.k
 
+class MLNN_iterative_mmse_glao(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.model_type="iterative_mmse_glao"
+        self.flatten = nn.Flatten()
+        self.k = nn.Parameter(ones(1))
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.asterism_features, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1024, 4096),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+        )
+    def forward(self, gs):
+        x = self.flatten(gs)
+        x = self.linear_relu_stack(x)
+        return reshape(x, (-1, 3*self.n_features, self.n_features)), self.k
+    
+class MLNN_iterative_mmse_model(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.model_type="iterative_mmse_model"
+        self.flatten = nn.Flatten()
+        self.k = nn.Parameter(ones(1))
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.asterism_features, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1024, 4096),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+        )
+        self.linear_predictor = nn.Sequential(
+            nn.Linear(self.asterism_features + 3*self.n_features, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1024, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, (self.n_features)),
+        )
+    def forward(self, X, gs):
+        x = self.flatten(gs)
+        X = self.flatten(X)
+        wt = cat([x, X], dim=1)
+
+        x = self.linear_relu_stack(x)
+        wt = self.linear_predictor(wt)
+
+        return reshape(x, (-1, 3*self.n_features, self.n_features)), wt, self.k
+
+class MLNN_NoInverseKzz(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.model_type="no_inverse_kzz"
+        self.flatten = nn.Flatten()
+        self.k = nn.Parameter(ones(1))
+        self.linear_theta_stack = nn.Sequential(
+            nn.Linear(self.asterism_features, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1024, 4096),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+        )
+        self.linear_phi_stack = nn.Sequential(
+            nn.Linear(self.asterism_features, 256),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(256, 1024),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1024, 4096),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+        )
+    def forward(self, gs):
+        x = self.flatten(gs)
+        
+        theta = self.linear_theta_stack(x)
+        phi = self.linear_phi_stack(x)
+        
+        return reshape(phi, (-1, self.n_features, 3*self.n_features)),  \
+               reshape(theta, (-1, self.n_features, 3*self.n_features)), \
+                self.k
+
+
 class MLNN_tiny(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
