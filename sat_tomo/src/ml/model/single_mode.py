@@ -10,19 +10,50 @@ class MLNN_singlemode(Network):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
         self.model_type = "single_mode"
-        self.embed = GuidestarEmbed(cfg)
+        self.input_size = [(1, self.n_features*3), (1, self.asterism_features), (1, self.n_features)]
 
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.n_features*4 + self.embed.size, 512),
+            nn.Linear(self.n_features*4 + self.asterism_features, 952),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(512, 2048),
+            nn.Linear(952, 3328),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(2048, 512),
+            nn.Linear(3328, 3328),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(512, 1)
+            nn.Linear(3328, 2048),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 1)
+        )
+    def forward(self, x, gs, m):
+        x = self.flatten(x)
+        x = cat([x, gs, m], dim=-1)
+        return self.linear_relu_stack(x).squeeze(-1)
+
+class GuideStarEmbed_singlemode(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.flatten = nn.Flatten()
+        self.model_type = "single_mode"
+        self.embed = GuidestarEmbed(cfg)
+        self.input_size = [(1, self.n_features*3), (1, self.embed.input_size), (1, self.n_features)]
+
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.n_features*4 + self.embed.size, 952),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(952, 3328),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(3328, 3328),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(3328, 2048),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(2048, 1)
         )
     def forward(self, x, gs, m):
         x = self.flatten(x)

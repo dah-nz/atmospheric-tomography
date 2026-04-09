@@ -64,6 +64,7 @@ class ResNetEmbed(Network):
         self.model_type = "deep"
         self.embed = GuidestarEmbed(cfg)
         self.flatten = nn.Flatten()
+        self.input_size = [(1, 3, self.n_features), (1, self.embed.input_size)]
         
         block = ResidualBlock
         layers = [3, 4, 6, 3]
@@ -126,6 +127,7 @@ class ResNetEmbed(Network):
 class ResNet(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
+        self.input_size = (1, 3, 4, self.n_features)
         
         block = ResidualBlock
         layers = [3, 4, 6, 3]

@@ -21,17 +21,21 @@ class MLNN_baseline(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.flatten = nn.Flatten()
+    
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.n_features*3*4, 512),
+            nn.Linear(self.n_features*3*4, 1008),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(512, 2048),
+            nn.Linear(1008, 3264),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(2048, 512),
+            nn.Linear(3264, 3328),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(512, self.n_features)
+            nn.Linear(3328, 1984),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1984, self.n_features)
         )
     def forward(self, x):
         x = self.flatten(x)
@@ -41,18 +45,20 @@ class MLNN_pseudo_lsq(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="pseudo_lsq"
+        self.input_size = (1, self.asterism_features)
+
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.asterism_features, 256),
+            nn.Linear(self.asterism_features, 384),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(384, 1936),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1936, 3936),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(3936, (self.n_features) * (3*self.n_features)),
         )
     def forward(self, gs):
         x = self.flatten(gs)
@@ -63,19 +69,21 @@ class MLNN_pseudo_mmse(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="pseudo_mmse"
+        self.input_size = (1, self.asterism_features)
+
         self.flatten = nn.Flatten()
         self.k = nn.Parameter(ones(1))
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.asterism_features, 256),
+            nn.Linear(self.asterism_features, 384),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(384, 1936),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1936, 3936),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(3936, (self.n_features) * (3*self.n_features)),
         )
     def forward(self, gs):
         x = self.flatten(gs)
@@ -86,19 +94,21 @@ class MLNN_iterative_mmse_glao(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="iterative_mmse_glao"
+        self.input_size = (1, self.asterism_features)
         self.flatten = nn.Flatten()
+
         self.k = nn.Parameter(ones(1))
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.asterism_features, 256),
+            nn.Linear(self.asterism_features, 384),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(384, 1936),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1936, 3936),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(3936, (self.n_features) * (3*self.n_features)),
         )
     def forward(self, gs):
         x = self.flatten(gs)
@@ -109,19 +119,21 @@ class MLNN_iterative_mmse_model(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="iterative_mmse_model"
+        self.input_size = [(1, 3*self.n_features), (1, self.asterism_features)]
         self.flatten = nn.Flatten()
+
         self.k = nn.Parameter(ones(1))
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.asterism_features, 256),
+            nn.Linear(self.asterism_features, 384),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(384, 1920),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1920, 3840),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(3840, (self.n_features) * (3*self.n_features)),
         )
         self.linear_predictor = nn.Sequential(
             nn.Linear(self.asterism_features + 3*self.n_features, 256),
@@ -149,31 +161,33 @@ class MLNN_NoInverseKzz(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="no_inverse_kzz"
+        self.input_size = (1, self.asterism_features)
         self.flatten = nn.Flatten()
+
         self.k = nn.Parameter(ones(1))
         self.linear_theta_stack = nn.Sequential(
-            nn.Linear(self.asterism_features, 256),
+            nn.Linear(self.asterism_features, 496),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(496, 1536),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1536, 2048),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(2048, (self.n_features) * (3*self.n_features)),
         )
         self.linear_phi_stack = nn.Sequential(
-            nn.Linear(self.asterism_features, 256),
+            nn.Linear(self.asterism_features, 496),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(496, 1536),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1536, 2048),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(2048, (self.n_features) * (3*self.n_features)),
         )
     def forward(self, gs):
         x = self.flatten(gs)

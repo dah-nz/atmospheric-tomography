@@ -10,12 +10,15 @@
       "magnitude": 14,
       
       "train_models": ["ResNetEmbed",
+                       "MLNN_baseline",
                        "MLNN_singlemode",
                        "MLNN_pseudo_mmse",
                        "MLNN_pseudo_lsq",
                        "MLNN_iterative_mmse_glao",
                        "MLNN_iterative_mmse_model",
                        "MLNN_NoInverseKzz",
+                       "GuideStarEmbed_baseline",
+                       "GuideStarEmbed_singlemode",
                        "GuideStarEmbed_pseudo_lsq",
                        "GuideStarEmbed_pseudo_mmse",
                        "GuideStarEmbed_iterative_mmse_glao",
@@ -30,10 +33,10 @@
       "sample_set_off": true,
       "sample_seed": 123,
       
-      "epochs": 3,
+      "epochs": 1024,
       "training_size": 256,
       "testing_size": 256,
-      "verification_size": 3,
+      "verification_size": 256,
       "save_frequency": 256,
       "display_training": true,
       

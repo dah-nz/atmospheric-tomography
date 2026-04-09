@@ -41,6 +41,7 @@ class GuidestarEmbed1a(nn.Module):
         self.flatten = nn.Flatten()
 
         n = self.asterism_features
+        self.input_size = n
 
         self.W1 = nn.Parameter(torch.ones(n))
         self.W2 = nn.Parameter(torch.ones(n))
@@ -395,6 +396,35 @@ class GuidestarEmbed3(nn.Module):
 GuidestarEmbed = GuidestarEmbed1a
 
 # START Example usage
+class GuideStarEmbed_baseline(Network):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.model_type="deep"
+        self.input_size=[(1, self.n_features*3), (1, self.asterism_features)]
+        self.flatten = nn.Flatten()
+
+        self.embed = GuidestarEmbed(cfg)
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.n_features*3 + self.embed.size, 1088),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(1088, 3264),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(3264, 3264),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(3264, 2080),
+            nn.LeakyReLU(self.LRELU_grad, True),
+            nn.Dropout(self.do),
+            nn.Linear(2080, self.n_features)
+        )
+    def forward(self, x, gs):
+        x = self.flatten(x)
+        gs = self.embed(gs)
+        x = cat([x, gs], dim=1)
+        return self.linear_relu_stack(x)
+
 
 class GuideStarEmbed1_simple(Network):
     def __init__(self, cfg):
@@ -592,19 +622,21 @@ class GuideStarEmbed_pseudo_lsq(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="pseudo_lsq"
+        self.input_size = (1, self.asterism_features)
         self.flatten = nn.Flatten()
+
         self.embed = GuidestarEmbed(cfg)
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.embed.size, 256),
+            nn.Linear(self.embed.size, 384),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(384, 1920),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1920, 3936),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(3936, (self.n_features) * (3*self.n_features)),
         )
     def forward(self, gs):
         x = self.flatten(self.embed(gs))
@@ -615,20 +647,22 @@ class GuideStarEmbed_pseudo_mmse(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="pseudo_mmse"
+        self.input_size = (1, self.asterism_features)
         self.flatten = nn.Flatten()
+
         self.k = nn.Parameter(torch.ones(1))
         self.embed = GuidestarEmbed(cfg)
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.embed.size, 256),
+            nn.Linear(self.embed.size, 384),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(384, 1920),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1920, 3936),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(3936, (self.n_features) * (3*self.n_features)),
         )
     def forward(self, gs):
         x = self.flatten(self.embed(gs))
@@ -639,20 +673,22 @@ class GuideStarEmbed_iterative_mmse_glao(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="iterative_mmse_glao"
+        self.input_size = (1, self.asterism_features)
         self.flatten = nn.Flatten()
+
         self.k = nn.Parameter(torch.ones(1))
         self.embed = GuidestarEmbed(cfg)
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.embed.size, 256),
+            nn.Linear(self.embed.size, 384),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(384, 1920),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1920, 3936),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(3936, (self.n_features) * (3*self.n_features)),
         )
     def forward(self, gs):
         x = self.flatten(self.embed(gs))
@@ -663,20 +699,23 @@ class GuideStarEmbed_iterative_mmse_model(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="iterative_mmse_model"
+        self.input_size = [(1, 3*self.n_features), (1, self.asterism_features)]
+
         self.flatten = nn.Flatten()
+
         self.k = nn.Parameter(torch.ones(1))
         self.embed = GuidestarEmbed(cfg)
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.embed.size, 256),
+            nn.Linear(self.embed.size, 384),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(384, 1920),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1920, 3840),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(3840, (self.n_features) * (3*self.n_features)),
         )
         self.linear_predictor = nn.Sequential(
             nn.Linear(self.embed.size + 3*self.n_features, 256),
@@ -704,32 +743,34 @@ class GuideStarEmbed_NoInverseKzz(Network):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.model_type="no_inverse_kzz"
+        self.input_size = (1, self.asterism_features)
         self.flatten = nn.Flatten()
+
         self.k = nn.Parameter(torch.ones(1))
         self.embed = GuidestarEmbed(cfg)
         self.linear_theta_stack = nn.Sequential(
-            nn.Linear(self.embed.size, 256),
+            nn.Linear(self.embed.size, 496),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(496, 1536),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1536, 2048),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(2048, (self.n_features) * (3*self.n_features)),
         )
         self.linear_phi_stack = nn.Sequential(
-            nn.Linear(self.embed.size, 256),
+            nn.Linear(self.embed.size, 496),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(256, 1024),
+            nn.Linear(496, 1536),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(1024, 4096),
+            nn.Linear(1536, 2048),
             nn.LeakyReLU(self.LRELU_grad, True),
             nn.Dropout(self.do),
-            nn.Linear(4096, (self.n_features) * (3*self.n_features)),
+            nn.Linear(2048, (self.n_features) * (3*self.n_features)),
         )
     def forward(self, gs):
         x = self.flatten(self.embed(gs))

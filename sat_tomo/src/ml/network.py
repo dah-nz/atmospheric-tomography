@@ -21,6 +21,8 @@ class Network(nn.Module):
         self.asterism_features = 2 * config.asterism_size # theta, gamma and magnitude
         self.ast_size = config.asterism_size
 
+        self.input_size = (1, self.n_features*3*4) # For use in torchinfo summaries ((batch size, default size))
+
         print(f"Initiating model {self.name}; n_features={self.n_features}")
 
         logger.info(f"Initiating model {self.name}; n_features={self.n_features}")
