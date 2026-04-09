@@ -42,10 +42,17 @@ class PhaseScreenGenerator():
         self.mask = util.circle(self.size)
         # self.cache = {}
 
+        # raw_vars = []
+        # for _ in range(100):
+        #     raw_vars.append(np.var(self._get_raw()))
+
+        # print(np.mean(raw_vars))
+        # quit()
+
     def _at(self):
         return "{}_{}_{}".format(self.D, self.r0, self.size)
 
-    def generate(self, n, cut_out=None):
+    def generate(self, n, ap):
         """
         Generate a number of phase screens.
                 
@@ -55,19 +62,23 @@ class PhaseScreenGenerator():
             cut_out:        size of cut out to be used
                             calculates the scaling factor if not none
         """
+        v_tgt = self._expected_variance()
+
         screens = []
         for _ in range(n): #tqdm(range(n), desc="Generate atmospheres"):
-            screens.append(self._get_raw())
+            scr = self._get_raw()
 
-        if cut_out is not None:
-            self.k = self.find_scaling(cut_out, screens)
-        else:
-            self.k = 1
+            c = self.size // 2
+            half = ap // 2
+            sub = scr[c-half:c+half, c-half:c+half]
+            sub = sub - np.mean(sub)
+            v_sub = np.var(sub)
+
+            a = (v_tgt / v_sub) ** (1/2)
+            screens.append(a * scr)
         
-        screens = [scr - np.average(scr, weights=self.mask) * self.mask * self.k for scr in screens]
-        return [np.float32(scr) * self.k for scr in screens]
-
-
+        screens = [scr - np.average(scr, weights=self.mask) * self.mask for scr in screens]
+        return [np.float32(scr) for scr in screens]
 
     def _get_raw(self, seed=None):
         """
@@ -77,7 +88,10 @@ class PhaseScreenGenerator():
         if seed is None:
             seed = self.rng.integers(rng_min, rng_max)
 
-        screen = kolmogorov((self.size, self.size), self.D, self.r0, seed)
+        screen = kolmogorov((self.size, self.size), seed)
+
+        screen = np.sqrt(1/np.var(screen)) * screen     # Normalise to variance of 1.
+
         return screen
 
     def get(self, seed=None):
@@ -85,12 +99,16 @@ class PhaseScreenGenerator():
         Retrieve a single phase screen
         Scales the phase screen by scaling factor to get correct variance.
         """
-        return np.float32(self._get_raw(seed)) * self.k
+
+        # scr = self._get_raw(seed)
+
+        # return np.float32() * self.k
+        pass
 
     def find_scaling(self, cut_out_size, screens):
         """
         Estimates the scaling factor used for a set cut out size.
-        This scaling factor brings a set of phase screens to the correct sigma, as specified in Noll (1975)
+        This scaling factor brings a set of phase screens to the correct variance, as specified in Noll (1976)
 
         Parameters
         ----------
@@ -98,37 +116,39 @@ class PhaseScreenGenerator():
         
         Output
         ----------
-            k:              Scaling factor that scales phase screen variance to have the correct sigma
+            k:              Scaling factor that scales phase screen variance
         """
 
-        self._exp_sigma = self._expected_sigma()
-        self._est_sigma = self._estimated_sigma(cut_out_size, screens, min(len(screens), 20))
+        self._exp_var = self._expected_variance()
+        self._est_var = self._estimated_variance(cut_out_size, screens, N=1) #min(len(screens), 20))
 
-        self.k = np.sqrt(self._exp_sigma / self._est_sigma)
-        # print(self.k, self._exp_sigma, self._est_sigma)
+        self.k = np.sqrt(self._exp_var / self._est_var)
+
+        calc_r0 = self.D * (1.0299/(self.k**2 * self._est_var))**(3/5)
+
+        print(self.r0, self.k, self._exp_var, self._est_var, calc_r0)
         return self.k
 
-    def _expected_sigma(self):
+    def _expected_variance(self):
         """
-        Calculates the expected standard deviaton/sigma of all phase screens when corrected for piston only, based on the table in Noll (1975)
-        This is the root mean square residual error of a zero mean phase screen
+        Calculates the expected variance (sigma^2) of all phase screens when corrected for piston only, based on the table in Noll (1976)
+        This is the residual error of a zero mean phase screen
 
         Output
         ----------
-            sigma (rads)
+            variance (rads^2)
         """
-        # return np.sqrt(1.0299*(self.D/self.r0)**(5/3))
         return 1.0299*(self.D/self.r0)**(5/3)
 
-    def _estimated_sigma(self, cut_out_size, screens, N=20):
+    def _estimated_variance(self, cut_out_size, screens, N=20):
         """
-        Estimates the standard deviation/sigma of a set of phase screens
+        Estimates the variance of a set of phase screens
         This takes into account the cut outs of phase screens due to the telescope aperture projection (finite outer scale)
         This is the root mean square residual error of a zero mean phase screen
 
         Output
         ----------
-            sigma (rads)
+            variance (rads^2)
         """
         size = min(cut_out_size)
         mask = np.array(util.circle(size))
@@ -163,25 +183,28 @@ class Atmosphere():
         self.metapupil_diameters = m
         self.layer_shapes = l
         self.aperture_size = aperture_size
-        self.cut_out = (aperture_size, aperture_size)
+        # self.cut_out = (aperture_size, aperture_size)
         self.altitudes = layer_altitudes
         self.r0 = r0
-        if per_layer_r0:
-            self.layer_r0 = [r0 for _ in layer_altitudes]
+        if type(r0) is list:
+            self.layer_r0 = r0
         else:
-            self.layer_r0 = [r0 * (len(layer_altitudes) ** (1/2)) for _ in layer_altitudes]
+            if per_layer_r0:
+                    self.layer_r0 = [r0 for _ in layer_altitudes]
+            else:
+                self.layer_r0 = [r0 * (len(layer_altitudes) ** (1/2)) for _ in layer_altitudes]
         self.D = D
         self.rng = rng
         self.generators = [PhaseScreenGenerator(s, self.D, r0, self.rng) for s, r0 in zip(self.layer_shapes, self.layer_r0)]
         self.n = n
-        self.screens = [gen.generate(self.n, cut_out=self.cut_out) for gen in self.generators]
+        self.screens = [gen.generate(self.n, self.aperture_size) for gen in self.generators]
 
     def __len__(self):
         return self.n
     def __getitem__(self, idx):
         return [scr[idx] for scr in self.screens]
 
-def kolmogorov(size, D, r0, seed=None):
+def kolmogorov(size, seed=None):
     """
     Simulation of a phase screen with Kolmogorov Statistics.
     Starts from an exact 15 x 15 phase screen.
@@ -209,15 +232,15 @@ def kolmogorov(size, D, r0, seed=None):
     
     full_screen = generate_phase_screen(n_increases, seed)
     
-    chopped_screen = full_screen[:size[0], :size[1]]
+    screen = full_screen[:size[0], :size[1]]
 
     # Rescale screen for appropriate D_r0 after cropping
-    size_chopped = max(np.shape(chopped_screen))
-    size_full = np.shape(full_screen)[0]
-    scale = ((size_full - 1) / (size_chopped - 1)) ** (5/6)
-    scaled_screen = chopped_screen * scale
+    # size_chopped = max(np.shape(chopped_screen))
+    # size_full = np.shape(full_screen)[0]
+    # scale = ((size_full - 1) / (size_chopped - 1)) ** (5/6)
+    # screen = chopped_screen * scale
 
-    screen = scaled_screen * ((D/r0) ** (5/6))
+    # screen = scaled_screen * ((D/r0) ** (5/6))
     screen = np.array(screen, dtype=np.float32)
     # REMOVE DC OFFSET
     screen -= np.average(screen)
@@ -450,13 +473,16 @@ class vonKarmen():
 
         return phs
     
-def calculate_r0(screen, D):
+def calculate_r0(screen, D, mask=None):
         """
         Calculates the r0 of a phase screen
 
         Output
         ----------
-            sigma (rads)
+            r0 (m)
         """
         # return np.sqrt(1.0299*(self.D/self.r0)**(5/3))
-        return D * (1.0299/np.var(screen))**(3/5)
+        if mask is None:
+            return D * (1.0299/np.var(screen))**(3/5)
+        else:
+            return D * (1.0299/np.var(screen, where=mask > 0))**(3/5)

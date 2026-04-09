@@ -53,9 +53,9 @@ asterism_result_queue = None
 asterism_data_queue = None
 
 def run_tests():
-    mp.set_start_method('spawn')
+    # mp.set_start_method('spawn')
 
-    test_encoding()
+    # test_encoding()
     # test_show_asterisms()
 
     # visualise_angles()
@@ -63,7 +63,7 @@ def run_tests():
     # test_asterism_features()
 
     # test_asterism_generation()
-    # test_phase_variance()
+    test_phase_variance()
 
     # test_asterism_cross_entropy()
     
@@ -1562,34 +1562,35 @@ def test_asterism_generation():
 def test_phase_variance():
     cutout = 100
     phase = 120
-    n_modes = 21
+    n_modes = 36
     Z = zernike.Zernike(n_modes)
+    c = np.array([0]*n_modes)
 
-    for i in range(1, n_modes):
-        c = np.array([0]*n_modes)
-        c[i] = 1
-        s = Z.compose(cutout, c)
-        # print(np.var(s, where=util.circle(cutout) > 0))
+    # for i in range(1, n_modes):
+    #     c = np.array([0]*n_modes)
+    #     c[i] = 1
+    #     s = Z.compose(cutout, c)
+    #     # print(np.var(s, where=util.circle(cutout) > 0))
 
-        s = Z.compose(phase, c)
-        p_var = np.var(s, where=util.circle(phase) > 0)
-        # print(p_var)
+    #     s = Z.compose(phase, c)
+    #     p_var = np.var(s, where=util.circle(phase) > 0)
+    #     # print(p_var)
 
-        s2 = Z.compose(phase, c)
-        c0 = (phase - cutout) // 2
-        c1 = (phase + cutout) // 2
-        c_var = np.var(s2[c0:c1, c0:c1], where=util.circle(cutout) > 0)
-        # print(c_var)
+    #     s2 = Z.compose(phase, c)
+    #     c0 = (phase - cutout) // 2
+    #     c1 = (phase + cutout) // 2
+    #     c_var = np.var(s2[c0:c1, c0:c1], where=util.circle(cutout) > 0)
+    #     # print(c_var)
 
-        k = np.sqrt(p_var / c_var)
-        s2 = s2 * k
+    #     k = np.sqrt(p_var / c_var)
+    #     s2 = s2 * k
 
-        c_var2 = np.var(s2[c0:c1, c0:c1], where=util.circle(cutout) > 0)
-        # print(c_var2)
+    #     c_var2 = np.var(s2[c0:c1, c0:c1], where=util.circle(cutout) > 0)
+    #     # print(c_var2)
 
-        print(f"Mode: {i+1}\n\tPhase Size: {phase}\n\tCutout Size: {cutout}\n\tPhase Var: {p_var}\n\tCutout Var: {c_var}\n\tScaled Var: {c_var2}\n\tScaling Factor: {k}")
+    #     print(f"Mode: {i+1}\n\tPhase Size: {phase}\n\tCutout Size: {cutout}\n\tPhase Var: {p_var}\n\tCutout Var: {c_var}\n\tScaled Var: {c_var2}\n\tScaling Factor: {k}")
 
-    c = np.ones_like(c) * np.sqrt(1/20)
+    c = np.ones_like(c) * np.sqrt(1/35)
     s = Z.compose(phase, c)
     p_var = np.var(s, where=util.circle(phase) > 0)
     c0 = (phase - cutout) // 2
@@ -1608,7 +1609,7 @@ def test_phase_variance():
         p_vars = []
         c_vars = []
         scaled_vars = []
-        p_gen = phase_screen.PhaseScreenGenerator(phase, 1.8, 0.07)
+        p_gen = phase_screen.PhaseScreenGenerator(phase, 1.8, 0.25)
         screens = p_gen.generate(n_modes)
 
         for screen in screens:
