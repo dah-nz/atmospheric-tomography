@@ -63,21 +63,25 @@ class PhaseScreenGenerator():
                             calculates the scaling factor if not none
         """
         v_tgt = self._expected_variance()
+        ap_mask = util.circle(ap)
+        k = 1.0 # 1.5 #1.115524 # ** 2
 
         screens = []
         for _ in range(n): #tqdm(range(n), desc="Generate atmospheres"):
             scr = self._get_raw()
 
-            c = self.size // 2
-            half = ap // 2
-            sub = scr[c-half:c+half, c-half:c+half]
-            sub = sub - np.mean(sub)
-            v_sub = np.var(sub)
+            c = int((self.size - ap) / 2 + 0.5)
+
+            sub = scr[c:c+ap, c:c+ap]
+            sub = sub - np.mean(sub, where=ap_mask > 0)
+            v_sub = np.var(sub, where=ap_mask > 0)
 
             a = (v_tgt / v_sub) ** (1/2)
-            screens.append(a * scr)
+            screens.append(a * scr * k)
+            scr = a * scr * k
         
-        screens = [scr - np.average(scr, weights=self.mask) * self.mask for scr in screens]
+        screens = [(scr - np.average(scr, weights=self.mask)) * self.mask for scr in screens]
+
         return [np.float32(scr) for scr in screens]
 
     def _get_raw(self, seed=None):
