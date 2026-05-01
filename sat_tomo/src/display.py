@@ -80,15 +80,15 @@ def training(cfg, file_name="current/results.csv"):
 
     print(df_long.head())
 
-    # for comparison in ['ResNet']: #, 'MLNN']:
-    #     df = df_long[~df_long['Model'].str.contains(comparison)]
+    for comparison in ['GuideStarEmbed', 'MLNN']:
+        df = df_long[~df_long['Model'].str.contains(comparison)]
+        df = df[df['Asterism'] == "Variable"]
 
-    df = df_long[df_long['Asterism'] == "Variable"]
-    g = sns.relplot(data=df, kind='line', 
-                x='Epoch', y='Moving Average', row="Type",
-                style="Asterism", hue="Model",
-                facet_kws={'sharey': "row", 'sharex': True})
-    g.figure.subplots_adjust(top=0.9)
+        g = sns.relplot(data=df, kind='line', 
+                    x='Epoch', y='Moving Average', row="Type",
+                    style="Asterism", hue="Model",
+                    facet_kws={'sharey': "row", 'sharex': True})
+        g.figure.subplots_adjust(top=0.9)
     
     # Remove all but last verification results
     try:
@@ -98,20 +98,31 @@ def training(cfg, file_name="current/results.csv"):
     except KeyError:
         pass
 
+
     
-    fig, axs = plt.subplots(1, 1)
     df_v_recon = df_v.drop(df_v[df_v.Type != "Reconstruction"].index)
-    sns.boxplot(data=df_v_recon, x='Model', y='Loss', ax=axs)
-    axs.set_title("Reconstruction")
-    axs.tick_params(axis='x', rotation=30)
+
+    for comparison in ['GuideStarEmbed', 'MLNN']:
+        fig, axs = plt.subplots(1, 1)
+        df = df_v_recon[~df_v_recon['Model'].str.contains(comparison)]
+        df = df[~df['Model'].str.contains("_e")]
+        sns.boxplot(data=df, x='Model', y='Loss', ax=axs)
+        axs.set_title("Reconstruction")
+        axs.tick_params(axis='x', rotation=30)
     
     # df_v_coeff = df_v.drop(df_v[df_v.Type != "Coefficients"].index)
     # sns.boxplot(data=df_v_coeff, x='Model', y='Loss', ax=axs[1])
     # axs[1].set_title("Coefficients")
     # axs[1].tick_params(axis='x', rotation=30)
 
-    print("*** Reconstruction Statistics ***")
-    print(df_v_recon[["Model", "Loss"]].groupby("Model").describe())
+    for comparison in ['GuideStarEmbed', 'MLNN', 'Variable']:
+        if comparison == "Variable":
+            df = df_v_recon[~df_v_recon['Model'].str.contains(comparison)]
+        else:
+            df = df_v_recon[df_v_recon['Model'].str.contains(comparison)]
+
+        print("*** Reconstruction Statistics ***")
+        print(df[["Model", "Loss"]].groupby("Model").describe())
 
     # print("*** Coefficient Statistics ***")
     # print(df_v_coeff[["Model", "Loss"]].groupby("Model").describe())

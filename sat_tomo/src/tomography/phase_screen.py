@@ -8,6 +8,7 @@ import os
 import warnings
 
 from tomography import tomography, beacon
+from util import var_to_r0
 from tqdm import tqdm
 
 rng_min = 0
@@ -64,9 +65,11 @@ class PhaseScreenGenerator():
         """
         v_tgt = self._expected_variance()
         ap_mask = util.circle(ap)
-        k = 1.0 # 1.5 #1.115524 # ** 2
+        full_ap_mask = util.circle(self.size, ap // 2)
 
         screens = []
+        vars = []
+        r0s = []
         for _ in range(n): #tqdm(range(n), desc="Generate atmospheres"):
             scr = self._get_raw()
 
@@ -77,12 +80,21 @@ class PhaseScreenGenerator():
             v_sub = np.var(sub, where=ap_mask > 0)
 
             a = (v_tgt / v_sub) ** (1/2)
-            screens.append(a * scr * k)
-            scr = a * scr * k
-        
-        screens = [(scr - np.average(scr, weights=self.mask)) * self.mask for scr in screens]
 
-        return [np.float32(scr) for scr in screens]
+            scr = a * scr
+            scr = (scr - np.average(scr, weights=self.mask)) * self.mask
+            var = np.var(scr, where=full_ap_mask > 0)
+            r0 = var_to_r0(self.D, var)
+
+            screens.append(scr)
+            vars.append(var)
+            r0s.append(r0)
+        
+        self.screens = [np.float32(scr) for scr in screens]
+        self.screen_var = vars
+        self.screen_r0 = r0s
+
+        return
 
     def _get_raw(self, seed=None):
         """
@@ -180,7 +192,7 @@ class PhaseScreenGenerator():
         return np.mean(sigma)
 
 class Atmosphere():
-    def __init__(self, n, layer_altitudes, r0, D, aperture_size, limiting_angle=120, rng=None, per_layer_r0=False):
+    def __init__(self, n, layer_altitudes, r0, D, aperture_size, limiting_angle=120, rng=None):
         self.limit_star = [beacon.Beacon(0, limiting_angle+1, arcseconds=True)]            # add one to limiting angle to add a little leeway for numerical differences pushing bounds slightly over the edges
         self.limit_angle = limiting_angle
         m, l = tomography.get_layer_shapes(self.limit_star, layer_altitudes, D, aperture_size)
@@ -190,18 +202,15 @@ class Atmosphere():
         # self.cut_out = (aperture_size, aperture_size)
         self.altitudes = layer_altitudes
         self.r0 = r0
-        if type(r0) is list:
-            self.layer_r0 = r0
-        else:
-            if per_layer_r0:
-                    self.layer_r0 = [r0 for _ in layer_altitudes]
-            else:
-                self.layer_r0 = [r0 * (len(layer_altitudes) ** (1/2)) for _ in layer_altitudes]
+
         self.D = D
         self.rng = rng
-        self.generators = [PhaseScreenGenerator(s, self.D, r0, self.rng) for s, r0 in zip(self.layer_shapes, self.layer_r0)]
+        self.generators = [PhaseScreenGenerator(s, self.D, r0, self.rng) for s, r0 in zip(self.layer_shapes, self.r0)]
         self.n = n
-        self.screens = [gen.generate(self.n, self.aperture_size) for gen in self.generators]
+        for gen in self.generators:
+            gen.generate(self.n, self.aperture_size)
+        
+        self.screens = [gen.screens for gen in self.generators]
 
     def __len__(self):
         return self.n

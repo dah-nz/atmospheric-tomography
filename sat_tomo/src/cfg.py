@@ -1,6 +1,7 @@
 import argparse
 import os
 
+import numpy as np
 from torch import nn
 from basis import basis
 from datetime import datetime
@@ -13,6 +14,22 @@ class AltitudeExtendAction(argparse.Action):
         # Validate the number of provided arguments
         if len(values) != n_layers:
             raise argparse.ArgumentTypeError(f"--altitudes: Expected {n_layers} altitude values, but got {len(values)}.")
+
+        # Extend the list with the values
+        existing_values = getattr(namespace, self.dest, [])
+        if existing_values == None:
+            existing_values = []
+        existing_values.extend(map(float, values))
+        setattr(namespace, self.dest, existing_values)
+
+class R0ExtendAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        # Get the number of layers from the layers argument
+        n_layers = getattr(namespace, 'layers', None)
+        
+        # Validate the number of provided arguments
+        if len(values) != n_layers and len(values) != 1:
+            raise argparse.ArgumentTypeError(f"--r0: Expected 1 r0 values, or {n_layers} r0 values, but got {len(values)}.")
 
         # Extend the list with the values
         existing_values = getattr(namespace, self.dest, [])
@@ -42,7 +59,7 @@ class Config():
         parser.add_argument('-D', '--diameter', action='store', default=1.8, help="Set telescope diameter (m)")
         parser.add_argument('--directory', action='store', default='C:/Code/PhD/Data', help="Directory to save data to")
         parser.add_argument('--aperture_size', action='store', default=100, type=int, help="Set aperture size (pixels)")
-        parser.add_argument('--r0', action='store', default=0.07, help="Set total Fried parameter across all layers (m)")
+        parser.add_argument('--r0', action=R0ExtendAction, nargs="*", help="Fried parameter (m). Can be set as the total, or for each layer individually")
         parser.add_argument('--layers', action='store', default=3, type=int, help="Number of layers")
         parser.add_argument('--altitudes', action=AltitudeExtendAction, nargs="*", help="Layer altitudes")
         parser.add_argument('--training_size', action='store', default=256, type=int, help="Size of training batch")
@@ -81,7 +98,6 @@ class Config():
         parser.add_argument('--sample_set_off', action='store_true', help='Turn off set of static asterisms sampled from dataset used for model generation')
         parser.add_argument('--sample_seed', action='store', default=31415, help='Seed used for selecting sample of static asterisms')
 
-        parser.add_argument('--per_layer_r0', action='store_true', help="Set r0 value as each layer, rather than total across layers.")
         parser.add_argument('--fixed_theta_0_randomised', action="store_true", help="Randomise the starting angle for fixed asterisms (rotating the equally spaced guide-stars about the centre)")
         parser.add_argument('-l', '--load_previous', action='store_true', help="Load models from previous training run")
         parser.add_argument('-c', '--continue_training', action='store_true', help="Save results appended to previous training run")
@@ -113,9 +129,6 @@ class Config():
                 args.minimum_asterism_quality = float(args.minimum_asterism_quality)
         except ValueError:
              args.minimum_asterism_quality = None
-
-        if type(args.r0) is str:
-            args.r0 = float(args.r0)
 
         if type(args.fixed_asterism_angle) is str:
             args.fixed_asterism_angle = float(args.fixed_asterism_angle)
@@ -191,6 +204,13 @@ class Config():
             case _: #default
                 self.regime_settings = [(self.epochs, max_screens)]
 
+        if args.r0 is not None:
+            if len(args.r0) == 1:
+                self.total_r0 = args.r0[0]
+                self.r0 = [((self.total_r0 ** (-5/3)) / len(args.altitudes)) ** (-3/5) for _ in args.altitudes]
+            else:
+                self.total_r0 = np.sum([r0 ** (-5/3) for r0 in args.r0]) ** (-3/5)
+
 
         match self.loss_function:
             case _: #mse_loss
@@ -199,7 +219,7 @@ class Config():
         self.args = args
 
     def get_file_name(self, name):
-        return f"{name}_{type(self.basis).__name__}_{self.num_modes}_{self.r0}_{self.fixed_asterism_angle}_{self.diameter}"
+        return f"{name}_{type(self.basis).__name__}_{self.num_modes}_{self.total_r0}_{self.diameter}"
     
     def save(self, directory):
 

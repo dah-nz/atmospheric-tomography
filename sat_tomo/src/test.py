@@ -1,11 +1,11 @@
 
 if __name__ == "__main__":
 
-    # from tomography import test_asterisms
-    # test_asterisms.run_tests()
+    from tomography import test_asterisms
+    test_asterisms.run_tests()
 
-    from tomography import test_phase_screens
-    test_phase_screens.run_tests()
+    # from tomography import test_phase_screens
+    # test_phase_screens.run_tests()
 
     # from tomography import test_oopao
     # test_oopao.run_tests()

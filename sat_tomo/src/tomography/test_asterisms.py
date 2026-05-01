@@ -8,6 +8,7 @@ import joblib
 import math
 import ast
 import os
+import torch
 
 import pandas as pd
 import seaborn as sns
@@ -44,6 +45,7 @@ from tomography import asterisms, beacon, phase_screen, strehl
 from tomography.tomography import GLAO, LeastSquares, get_coeffs_for_asterism, AO
 from basis import zernike
 import util
+import cfg as config
 
 SENTINEL = 'STOP'
 DATA_FOLDER = 'C:/Code/PhD/Data'
@@ -56,14 +58,16 @@ def run_tests():
     # mp.set_start_method('spawn')
 
     # test_encoding()
+    # test_display_encoding()
     # test_show_asterisms()
+    test_show_heatmap()
 
     # visualise_angles()
 
     # test_asterism_features()
 
     # test_asterism_generation()
-    test_phase_variance()
+    # test_phase_variance()
 
     # test_asterism_cross_entropy()
     
@@ -462,7 +466,7 @@ def asterism_test_worker(cfg, atm_gens):
             tomo_cfg['glao'][ap] =  GLAO(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size)
             tomo_cfg['ao'][ap] =    AO(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size)
             # tomo_cfg['lsq'][ap] =   LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, start_angle=15, end_angle=45)
-            tomo_cfg['lsq'][ap] = LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='Tinv')
+            tomo_cfg['lsq'][ap] = LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.total_r0, method='Tinv')
             # tomo_cfg['lsq_K'][ap] = LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='K')
 
         # Covariance matrix for adding measurement noise
@@ -577,7 +581,8 @@ def asterism_test_worker(cfg, atm_gens):
 
                         if ast_spec['noise'] == 'measurement':
                             for i in range(len(ast_coeffs)):
-                                ast_coeffs[i, 3:] = ast_coeffs[i, 3:] + np.random.normal(scale=C_mat)
+                                pass
+                                # ast_coeffs[i, 3:] = ast_coeffs[i, 3:] + np.random.normal(scale=C_mat)
 
                         for tomo in cfg.tomo_methods:
 
@@ -2078,4 +2083,129 @@ def test_encoding():
     # plt.matshow(enc_corr * (enc_corr > 0.5))
     # plt.title("Thresholded Encoded Asterism data")
 
+def test_display_encoding():
+    from ml.models import GuideStarEmbed_NoInverseKzz
+    from ml.data import TomographyData
+
+    cfg = config.Config()
+
+    model = GuideStarEmbed_NoInverseKzz(cfg)
+
+    filepath = os.path.join(cfg.directory, "current/parameters/GuideStarEmbed_NoInverseKzz_Zernike_36_0.25_1.8__Variable_Final.mdl")
     
+    # model.load_state_dict(torch.load(filepath, weights_only=True))
+
+    X = np.linspace(0, 1, 256)
+    # atm = phase_screen.Atmosphere(1, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+    # asts = asterisms.generate_asterisms(1)
+    # data = TomographyData(1, asts, atm, cfg.basis)
+
+    # Y = np.linspace(0, 2*np.pi, 256)
+    
+    # Z_raw = []
+    # Z_sin = []
+    # Z_sin2 = []
+    # Z_sin4 = []
+    # Z_cos = []
+    # Z_cos2 = []
+    # Z_cos4 = []
+    # Z_exp = []
+
+    # for x in X:
+    #     for y in Y:
+    #         gs = np.array([x/120, y/(2*np.pi), 0, 0, 0, 0])
+    #         gs = torch.from_numpy(gs[np.newaxis, :])
+    #         embed = model.embed(gs)
+    #         embed = embed.detach().numpy().ravel()
+                
+    #         i = 0
+    #         Z_raw.append(embed[i]*embed[i+1])
+    #         Z_sin.append(embed[i+6]*embed[i+7])
+    #         Z_sin2.append(embed[i+12]*embed[i+13])
+    #         Z_sin4.append(embed[i+18]*embed[i+19])
+    #         Z_cos.append(embed[i+24]*embed[i+25])
+    #         Z_cos2.append(embed[i+30]*embed[i+31])
+    #         Z_cos4.append(embed[i+36]*embed[i+37])
+    #         Z_exp.append(embed[i+42]*embed[i+43])
+    
+    # for Z1 in [Z_raw, Z_sin, Z_sin2, Z_sin4, Z_cos, Z_cos2, Z_cos4, Z_exp]:
+    #     plt.figure()
+    #     xu = np.unique(X)
+    #     yu = np.unique(Y)
+    #     X, Y = np.meshgrid(xu, yu)
+    #     Z = np.array(Z1).reshape(len(yu), len(xu))
+    #     plt.imshow(Z, extent=[X.min(), X.max(), Y.min(), Y.max()], origin='lower', aspect='auto')
+
+    for i, title in enumerate([f"Input: {y}" for k in range(3) for y in (f"$\\theta_{k}$", f"$\\gamma_{k}$")]):
+        Z_sin = []
+        Z_sin2 = []
+        Z_sin4 = []
+        Z_cos = []
+        Z_cos2 = []
+        Z_cos4 = []
+        Z_exp = []
+        for x in X:
+            Z_sin.append(torch.sin(model.embed.W1[i] * x + model.embed.b1a[i]).detach())
+            Z_sin2.append(torch.sin(2*model.embed.W1[i] * x + model.embed.b1b[i]).detach())
+            Z_sin4.append(torch.sin(4*model.embed.W1[i] * x + model.embed.b1c[i]).detach())
+            Z_cos.append(torch.cos(model.embed.W2[i] * x + model.embed.b2a[i]).detach())
+            Z_cos2.append(torch.cos(2*model.embed.W2[i] * x + model.embed.b2b[i]).detach())
+            Z_cos4.append(torch.cos(4*model.embed.W2[i] * x + model.embed.b2c[i]).detach())
+            Z_exp.append(torch.exp(model.embed.W3[i] * x + model.embed.b3[i]).detach())
+
+        plt.figure()
+        plt.title(title)
+        plt.xlabel("Normalised input value")
+        plt.ylabel("Embedded output value")
+        plt.plot(X, X, label="Identity")
+        plt.plot(X, Z_sin, label="$sin(W_1x+a_1)$")
+        plt.plot(X, Z_sin2, label="$sin(2W_1x+b_1)$")
+        plt.plot(X, Z_sin4, label="$sin(4W_1x+c_1)$")
+        plt.plot(X, Z_cos, label="$cos(W_2x+a_2)$")
+        plt.plot(X, Z_cos2, label="$cos(2W_2x+b_2)$")
+        plt.plot(X, Z_cos4, label="$cos(4W_2x+c_2)$")
+        plt.plot(X, Z_exp, label="$exp(W_3x+a_3)$")
+        plt.legend()
+    
+    # print(model.embed.W1)
+    # print(model.embed.b1a)
+    # print(model.embed.b1b)
+    # print(model.embed.b1c)
+    # print(model.embed.W2)
+    # print(model.embed.b2a)
+    # print(model.embed.b2b)
+    # print(model.embed.b2c)
+    # print(model.embed.W3)
+    # print(model.embed.b3)
+
+def test_show_heatmap():
+
+    cfg = config.Config()
+    filepath = os.path.join(cfg.directory, "current/asterisms.csv")
+    df = pd.read_csv(filepath)
+
+    df["X"] = df['Gamma'] * np.cos(df['Theta'])
+    df["Y"] = df['Gamma'] * np.sin(df['Theta'])
+
+    df_v = df[df["Epoch"] != "Verification"]
+
+    X = df_v["X"]
+    Y = df_v["Y"]
+
+    tri_X = np.reshape(X, [-1, 3])
+    tri_Y = np.reshape(Y, [-1, 3])
+
+    centroid_x = tri_X.mean(axis=1)
+    centroid_y = tri_Y.mean(axis=1)
+
+    heatmap, xedges, yedges = np.histogram2d(X, Y, bins=50, density=True)
+    centroid_heatmap, xedges, yedges = np.histogram2d(centroid_x, centroid_y, bins=50, density=True)
+    tg_heatmap, xedges, yedges = np.histogram2d(df_v['Gamma'], df_v['Theta'], bins=50, density=True)
+
+    fig, ax = plt.subplots(1, 3)
+    ax[0].imshow(heatmap.T, origin='lower', extent=[X.min(), X.max(), Y.min(), Y.max()])
+    ax[1].imshow(centroid_heatmap.T, origin='lower', extent=[centroid_x.min(), centroid_x.max(), centroid_y.min(), centroid_y.max()])
+    ax[2].imshow(tg_heatmap.T, origin='lower', extent=[df_v['Gamma'].min(), df_v['Gamma'].max(), df_v['Theta'].min(), df_v['Theta'].max()], aspect='auto')
+    
+    plt.show()
+

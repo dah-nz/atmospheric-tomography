@@ -29,6 +29,7 @@ class MLNN_singlemode(Network):
         )
     def forward(self, x, gs, m):
         x = self.flatten(x)
+        gs = self.flatten(gs)
         x = cat([x, gs, m], dim=-1)
         return self.linear_relu_stack(x).squeeze(-1)
 

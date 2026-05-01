@@ -313,3 +313,9 @@ combs = list(combinations(range(3), 3))
 def mix3(thrupple, idx):
     comb = combs[idx % len(combs)]
     return [thrupple[comb[0]], thrupple[comb[1]], thrupple[comb[2]]]
+
+def var_to_r0(D, var):
+    return D * ((1.0299 / var) ** (3/5))
+
+def r0_to_var(D, r0):
+    return 1.0299 * ((D/r0)**(5/3))

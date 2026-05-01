@@ -1,0 +1,56 @@
+[
+    {
+      "directory": "D:/Data/2026/different_r0",
+      "num_modes": 36,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": [0.26948906, 2.0744267, 1.073163],
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+      
+      "train_models": ["ResNetEmbed",
+                       "MLNN_baseline",
+                       "MLNN_singlemode",
+                       "MLNN_pseudo_mmse",
+                       "MLNN_pseudo_lsq",
+                       "MLNN_iterative_mmse_glao",
+                       "MLNN_iterative_mmse_model",
+                       "MLNN_NoInverseKzz",
+                       "GuideStarEmbed_baseline",
+                       "GuideStarEmbed_singlemode",
+                       "GuideStarEmbed_pseudo_lsq",
+                       "GuideStarEmbed_pseudo_mmse",
+                       "GuideStarEmbed_iterative_mmse_glao",
+                       "GuideStarEmbed_iterative_mmse_model",
+                       "GuideStarEmbed_NoInverseKzz"
+                    ],
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      "mmse_off": false,
+
+      "sample_set_off": true,
+      "sample_seed": 123,
+      
+      "epochs": 1024,
+      "training_size": 256,
+      "testing_size": 256,
+      "verification_size": 256,
+      "save_frequency": 128,
+      "display_training": true,
+      
+      "shwfs": false,
+      "noise": false,
+      
+      "asterism_size": 3,
+      "asterism_quality_threshold": 0.04,
+      "minimum_asterism_quality": 0.00,
+      
+      "satellites": false,
+      "period": 72,
+
+      "load_previous": false,
+      "continue_training": false
+    }
+]

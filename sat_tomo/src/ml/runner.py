@@ -163,8 +163,10 @@ class FittingErrorRunner(Runner):
         return output
 
 class DeltaModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -236,8 +238,10 @@ class DeltaModelRunner(Runner):
         return output
 
 class ImageModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -306,8 +310,10 @@ class ImageModelRunner(Runner):
         return output
 
 class ModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -376,8 +382,10 @@ class ModelRunner(Runner):
         return output
 
 class SeparateGuidestarModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -470,8 +478,10 @@ class SeparateGuidestarModelRunner(Runner):
         return output
 
 class DeepModelRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -540,8 +550,10 @@ class DeepModelRunner(Runner):
         return output
 
 class DeepGLAORunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -609,8 +621,10 @@ class DeepGLAORunner(Runner):
         return output
 
 class SingleModeRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -692,8 +706,10 @@ class SingleModeRunner(Runner):
         return output
 
 class PseudoLSQRunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -764,8 +780,10 @@ class PseudoLSQRunner(Runner):
         return output
 
 class PseudoMMSERunner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -846,8 +864,10 @@ class PseudoMMSERunner(Runner):
         return output
 
 class IterativeMMSE_GLAO_Runner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -935,8 +955,10 @@ class IterativeMMSE_GLAO_Runner(Runner):
         return output
     
 class IterativeMMSE_Model_Runner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip
@@ -1023,8 +1045,10 @@ class IterativeMMSE_Model_Runner(Runner):
         return output
     
 class NoInverseKzz_Runner(Runner):
-    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None):
-        super().__init__(type(model).__name__, loss_fn, basis)
+    def __init__(self, model, loss_fn, optimiser, basis, mode_skip=3, K_zz=None, name=None):
+        if name is None:
+            name = type(model).__name__
+        super().__init__(name, loss_fn, basis)
         self.model = model
         self.optimiser = optimiser(self.model.parameters(), lr=self.model.learning_rate, weight_decay=self.model.weight_decay)
         self.mode_skip = mode_skip

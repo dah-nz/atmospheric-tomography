@@ -389,11 +389,49 @@ class GuidestarEmbed3(nn.Module):
 
         return self.flatten(cat([x, s, c, e, sc], dim=1))
 
+class GuidestarEmbed1n(nn.Module):
+    # Random initialisation of weights and biases
+    def __init__(self, config):
+        super().__init__()
 
+        self.asterism_features = 2 * config.asterism_size
+        self.size = self.asterism_features * 8
+        self.flatten = nn.Flatten()
+
+        n = self.asterism_features
+        self.input_size = n
+        weight_mean = 2.0
+        weight_std = 0.2
+        bias_mean = 0.0
+        bias_std = 0.2
+
+        self.W1 = nn.Parameter(torch.normal(weight_mean, weight_std, size=(n,)))
+        self.W2 = nn.Parameter(torch.normal(weight_mean, weight_std, size=(n,)))
+        self.W3 = nn.Parameter(torch.normal(weight_mean, weight_std, size=(n,)))
+
+        self.b1a = nn.Parameter(torch.normal(bias_mean, bias_std, size=(n,)))
+        self.b1b = nn.Parameter(torch.normal(bias_mean, bias_std, size=(n,)))
+        self.b1c = nn.Parameter(torch.normal(bias_mean, bias_std, size=(n,)))
+        self.b2a = nn.Parameter(torch.normal(bias_mean, bias_std, size=(n,)))
+        self.b2b = nn.Parameter(torch.normal(bias_mean, bias_std, size=(n,)))
+        self.b2c = nn.Parameter(torch.normal(bias_mean, bias_std, size=(n,)))
+        self.b3 = nn.Parameter(torch.normal(bias_mean, bias_std, size=(n,)))
+
+    def forward(self, x):
+        x = self.flatten(x)
+
+        return self.flatten(cat([x, 
+                    torch.sin(self.W1*x+self.b1a),
+                    torch.sin(2*self.W1*x+self.b1b),
+                    torch.sin(4*self.W1*x+self.b1c),
+                    torch.cos(self.W2*x+self.b2a),
+                    torch.cos(2*self.W2*x+self.b2b),
+                    torch.cos(4*self.W2*x+self.b2c),
+                    torch.exp(self.W3*x+self.b3)], dim=1))
 
 # END Guide star embedding classes
 
-GuidestarEmbed = GuidestarEmbed1a
+GuidestarEmbed = GuidestarEmbed1n
 
 # START Example usage
 class GuideStarEmbed_baseline(Network):

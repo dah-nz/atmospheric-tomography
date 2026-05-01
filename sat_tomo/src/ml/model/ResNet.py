@@ -131,25 +131,25 @@ class ResNet(Network):
         
         block = ResidualBlock
         layers = [3, 4, 6, 3]
-        self.inplanes = 63
+        self.inplanes = 64
         self.conv1 = nn.Sequential(
-                        nn.Conv2d(3, self.inplanes, kernel_size = 3, stride = 1, padding = 1, groups=3),
+                        nn.Conv2d(3, self.inplanes, kernel_size = 3, stride = 1, padding = 1),
                         nn.BatchNorm2d(self.inplanes),
                         nn.ReLU())
         self.maxpool = nn.MaxPool2d(kernel_size = 2, stride = 1, padding = 1)
         self.layer0 = self._make_layer(block, self.inplanes, layers[0], stride = 2)
-        self.layer1 = self._make_layer(block, 126, layers[1], stride = 2)
-        self.layer2 = self._make_layer(block, 255, layers[2], stride = 2)
-        self.layer3 = self._make_layer(block, 513, layers[3], stride = 2)
+        self.layer1 = self._make_layer(block, 128, layers[1], stride = 2)
+        self.layer2 = self._make_layer(block, 256, layers[2], stride = 2)
+        self.layer3 = self._make_layer(block, 512, layers[3], stride = 2)
         self.avgpool = nn.AvgPool2d(kernel_size=(2, 1), stride=1)
-        self.fc = nn.Linear(513, self.n_features)
+        self.fc = nn.Linear(1536, self.n_features)
         
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes:
             
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride, groups=3),
+                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride, groups=2),
                 nn.BatchNorm2d(planes),
             )
         layers = []
@@ -170,7 +170,7 @@ class ResNet(Network):
         x = self.layer2(x)
         x = self.layer3(x)
 
-        x = self.avgpool(x)
+        # x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 

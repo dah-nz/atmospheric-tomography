@@ -24,6 +24,6 @@ def run_tests():
             p0 = info.trainable_params
 
     for m, p, s in data:
-        print(f"{m},{p},{s:.2f},{(p/p0-1.0)*100.0:.4f}")
+        print(f"{m},{s:.2f},{p},{(p/p0-1.0)*100.0:.4f}")
         
     print("TEST")
