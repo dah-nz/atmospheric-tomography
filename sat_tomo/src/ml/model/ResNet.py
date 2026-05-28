@@ -64,7 +64,7 @@ class ResNetEmbed(Network):
         self.model_type = "deep"
         self.embed = GuidestarEmbed(cfg)
         self.flatten = nn.Flatten()
-        self.input_size = [(1, 3, self.n_features), (1, self.embed.input_size)]
+        self.input_size = [(1, 3, self.n_features), (1, cfg.asterism_size, 2)]
         
         block = ResidualBlock
         layers = [3, 4, 6, 3]
@@ -106,11 +106,16 @@ class ResNetEmbed(Network):
         x3 = self.fc_in(x[:, 2, :])
 
         x = cat([x1, x2, x3, gs], dim=1)
+        print(x.shape)
+        print(self.embed.size)
 
         a = int(self.embed.size/int(self.embed.size**0.5))
         b = int(self.embed.size/a)
+        while a * b != self.embed.size:
+            a += 1
+            b = int(self.embed.size/a)
         x = reshape(x, shape=(-1, 4, a, b))
-
+        
         x = self.conv1(x)
         x = self.maxpool(x)
         x = self.layer0(x)

@@ -1,9 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-r0_layers = np.array([0.1202, 0.7949, 0.7798])  # in meters
+r0_layers = np.array([0.0506, 0.3895, 0.2015])  # in meters
 
 r0_total = (np.sum(r0_layers**(-5/3)))**(-3/5)
+
+print(r0_total)
+quit()
 
 N = 1000
 D = 4
