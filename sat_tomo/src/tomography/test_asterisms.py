@@ -48,7 +48,7 @@ import util
 import cfg as config
 
 SENTINEL = 'STOP'
-DATA_FOLDER = 'C:/Code/PhD/Data'
+DATA_FOLDER = 'C:/Code/PhD/Data/2026'
 
 # global queues for different processes
 asterism_result_queue = None
@@ -60,7 +60,8 @@ def run_tests():
     # test_encoding()
     # test_display_encoding()
     # test_show_asterisms()
-    test_show_heatmap()
+    # test_show_heatmap()
+    test_show_heatmap_from_generation()
 
     # visualise_angles()
 
@@ -95,7 +96,7 @@ def run_tests():
     # test_asterism_quality()
     # test_generation()
 
-    plt.show()
+    # plt.show()
 
     return # END run_tests
 
@@ -2209,3 +2210,108 @@ def test_show_heatmap():
     
     plt.show()
 
+def test_show_heatmap_from_generation():
+    n = 10000
+    asterism_list, low_quality_list, high_quality_list, ao_regime_list, tomo_regime_list, raw_asterism_list = \
+        asterisms.generate_asterisms(n, 
+                                     quality_threshold=0.0,
+                                     quality_limit=0.0,
+                                     return_all=True,
+                                     model_location=os.path.join(DATA_FOLDER, "Models"),
+                                     quality_model="Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl")
+
+    asterism_list = np.array(asterism_list).flatten()
+    low_quality_list = np.array(low_quality_list).flatten()
+    high_quality_list = np.array(high_quality_list).flatten()
+    ao_regime_list = np.array(ao_regime_list).flatten()
+    tomo_regime_list = np.array(tomo_regime_list).flatten()
+    raw_asterism_list = np.array(raw_asterism_list).flatten()
+
+    # print(asterism_list[0])
+    # print(low_quality_list[0])
+    # print(high_quality_list[0])
+    # print(ao_regime_list[0])
+    # print(tomo_regime_list[0])
+    # print(raw_asterism_list[0])
+
+    # print(asterism_list.shape)
+    # print(low_quality_list.shape)
+    # print(high_quality_list.shape)
+    # print(ao_regime_list.shape)
+    # print(tomo_regime_list.shape)
+    # print(raw_asterism_list.shape)
+
+    # cfg = config.Config()
+    # filepath = os.path.join(cfg.directory, "current/asterisms.csv")
+    # df = pd.read_csv(filepath)
+
+    ast_dict = {
+        "All": raw_asterism_list,
+        "Selected": asterism_list,
+        "Low Quality": low_quality_list,
+        "High Quality": high_quality_list,
+        "AO Regime": ao_regime_list,
+        "Tomo Regime": tomo_regime_list,
+
+    }
+
+    for name, asts in ast_dict.items():
+        gf = lambda x: x.gamma
+        gamma = np.array(list(map(gf, asts)))
+
+        tf = lambda x: x.theta
+        theta = np.array(list(map(tf, asts)))
+
+        X = gamma * np.cos(theta)
+        Y = gamma * np.sin(theta)
+        gamma = util.rad2arcsec(gamma)
+
+        # G = np.histogram(gamma, bins=100)
+        # T = np.histogram(gamma, bins=100)
+
+        # xy_heatmap, xedges, yedges = np.histogram2d(X, Y, bins=50, density=True)
+        tg_heatmap, xedges, yedges = np.histogram2d(gamma, theta, bins=50, density=True)
+
+        fig, ax = plt.subplots(1, 1)
+        # fig.canvas.set_window_title(f'{name} asterisms')
+        fig.suptitle(f'{name} asterisms')
+        # ax[0].imshow(xy_heatmap.T, origin='lower', extent=[X.min(), X.max(), Y.min(), Y.max()])
+        ax.imshow(tg_heatmap.T, origin='lower', extent=[0, 120, 0, 2 * np.pi], aspect='auto')
+        ax.set_xlabel('Angle from centre (")')
+        ax.set_ylabel('Angle around aperture (rads)')
+
+        fig, ax = plt.subplots(2, 1)
+        # fig.canvas.set_window_title(f'{name} asterisms')
+        fig.suptitle(f'{name} asterisms')
+        # ax[0].imshow(xy_heatmap.T, origin='lower', extent=[X.min(), X.max(), Y.min(), Y.max()])
+        ax[0].hist(gamma, bins=50)
+        ax[1].hist(theta, bins=50)
+        ax[0].set_xlabel('Angle from centre (")')
+        ax[0].set_ylabel('Density')
+        ax[1].set_xlabel('Angle around aperture (rads)')
+        ax[1].set_ylabel('Density')
+
+    # df["X"] = df['Gamma'] * np.cos(df['Theta'])
+    # df["Y"] = df['Gamma'] * np.sin(df['Theta'])
+
+    # df_v = df[df["Epoch"] != "Verification"]
+
+    # X = df_v["X"]
+    # Y = df_v["Y"]
+
+    # tri_X = np.reshape(X, [-1, 3])
+    # tri_Y = np.reshape(Y, [-1, 3])
+
+    # centroid_x = tri_X.mean(axis=1)
+    # centroid_y = tri_Y.mean(axis=1)
+
+    # heatmap, xedges, yedges = np.histogram2d(X, Y, bins=50, density=True)
+    # centroid_heatmap, xedges, yedges = np.histogram2d(centroid_x, centroid_y, bins=50, density=True)
+    # tg_heatmap, xedges, yedges = np.histogram2d(df_v['Gamma'], df_v['Theta'], bins=50, density=True)
+
+    # fig, ax = plt.subplots(1, 3)
+    # ax[0].imshow(heatmap.T, origin='lower', extent=[X.min(), X.max(), Y.min(), Y.max()])
+    # ax[1].imshow(centroid_heatmap.T, origin='lower', extent=[centroid_x.min(), centroid_x.max(), centroid_y.min(), centroid_y.max()])
+    # ax[2].imshow(tg_heatmap.T, origin='lower', extent=[df_v['Gamma'].min(), df_v['Gamma'].max(), df_v['Theta'].min(), df_v['Theta'].max()], aspect='auto')
+    
+    plt.show()

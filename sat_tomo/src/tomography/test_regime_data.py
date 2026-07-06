@@ -50,48 +50,64 @@ from basis import zernike
 import util
 
 SENTINEL = 'STOP'
-DATA_FOLDER = 'C:/Code/PhD/Data'
-MODEL_FOLDER = 'C:/Code/PhD/Data/Models'
+DATA_FOLDER = 'C:/Code/PhD/Data/2026'
+MODEL_FOLDER = 'C:/Code/PhD/Data/2026/Models'
+N_MODES = 21
+N_TRAINING = 512
+N_VALIDATION = 256
+D_R0 = 30
 
 # global queues for different processes
 asterism_result_queue = None
 asterism_data_queue = None
+atmosphere_data = None
 
 def run_tests():
+    run_asterism_quality_and_regime_models()
+    # plt.show()
+
+    return # END run_tests
+
+def run_asterism_quality_and_regime_models():
     mp.set_start_method('spawn')
     
     cfg = AsterismConfig()
-    cfg.N = 35 # 8 radial degrees
-    cfg.r0 = 0.15
-    n_tests = 500
-    n_training = 200
+    D_r0 = D_R0
+    cfg.total_r0 = cfg.D / D_r0
+    cfg.r0 = util.total_r0_to_layer_r0(cfg.total_r0)
+    # n_tests = N_TRAINING
+    # n_valid = N_VALIDATION
 
     # for t in ['a', 'b']:
+    #     print(f"Running test {t}")
     #     cfg.n_asterisms = n_tests
     #     cfg.n_atm = n_tests
     #     run_asterism_comparison(cfg)
-    #     bulk_compile_asterism_data(f'regime_testing_data_35r015_rng_{t}')
+    #     bulk_compile_asterism_data(f'regime_training_data_{t}')
 
-    #     cfg.n_asterisms = n_training
-    #     cfg.n_atm = n_training
+    #     cfg.n_asterisms = n_valid
+    #     cfg.n_atm = n_valid
     #     run_asterism_comparison(cfg)
-    #     bulk_compile_asterism_data(f'regime_validation_data_35r015_rng_{t}')
+    #     bulk_compile_asterism_data(f'regime_validation_data_{t}')
 
     # transform_data(cfg)
     # convert_parquets_to_csv()
 
     files = glob.glob(os.path.join(DATA_FOLDER, "*_transformed.parquet"))
-    files = [f for f in files if 'rng' in f]
+    # files = [f for f in files if 'rng' in f]
     validation_files = [f for f in files if 'validation' in f]
-    test_files = [f for f in files if 'testing' in f]
+    test_files = [f for f in files if 'training' in f]
     train_models(test_files, validation_files)
 
-    plt.show()
+    from tomography import test_asterism_quality
+    test_asterism_quality.build_quality_models()
 
-    return # END run_tests
+    from tomography import test_asterisms
+    test_asterisms.test_show_heatmap_from_generation()
+
 
 def convert_parquets_to_csv():
-    files = glob.glob(os.path.join(DATA_FOLDER, '*.parquet'))
+    files = glob.glob(os.path.join(DATA_FOLDER, '*_transformed.parquet'))
     if len(files) > 0:
         for filepath in files:
             df0 = pd.read_parquet(filepath)
@@ -101,10 +117,7 @@ def convert_parquets_to_csv():
             print(f"Converted parquet file {filepath} to csv file {csvpath}")
 
 class AsterismConfig():
-    """
-    Class of filtering programs
-    Defines the main test functions
-    """
+
     def __init__(self):
         # Size of test set
         self.n_asterisms = 512
@@ -113,7 +126,7 @@ class AsterismConfig():
         self.rng = np.random.default_rng()
 
         # Atmospheric and tomography simulation paramters
-        self.N = 21
+        self.N = N_MODES
         self.Z = zernike.Zernike(self.N)
         self.D = 1.8
         self.r0 = 0.15
@@ -121,33 +134,35 @@ class AsterismConfig():
         self.ap_pixels = [100]
 
         # Different data points to compute while running each asterism
-        # self.tomo_methods = ['glao', 'ao', 'lsq', 'open_loop', 'fitting', 'MMSE']
+        self.tomo_methods = ['glao', 'ao', 'lsq', 'open_loop', 'fitting', 'mmse']
 
         return # END AsterismConfig.__init__
 
 
 # Global queue reference for workers
-def asterism_test_init(result_queue, asterism_queue):
+def asterism_test_init(result_queue, asterism_queue, atmospheres):
     global asterism_result_queue
     global asterism_data_queue
+    global atmosphere_data
 
     asterism_result_queue = result_queue
     asterism_data_queue = asterism_queue
+    atmosphere_data = atmospheres
 
-def asterism_test_worker(cfg, atm_gens):
+def asterism_test_worker(cfg):
     try:
         tstart = time.time()
         worker_id = os.getpid()
         print(f"[{worker_id:5} | Worker] Started")
 
-        tomo_cfg = { 'mask': {}, 'glao': {}, 'ao': {}, 'lsq': {} }
-        for atm in atm_gens:
+        tomo_cfg = { 'mask': {}, 'glao': {}, 'ao': {}, 'lsq': {}, 'mmse': {} }
+        for atm in atmosphere_data:
             ap = atm.aperture_size
             tomo_cfg['mask'][ap] =  util.circle(atm.aperture_size)
             tomo_cfg['glao'][ap] =  GLAO(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size)
             tomo_cfg['ao'][ap] =    AO(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size)
-            tomo_cfg['lsq'][ap] =   LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0, method='Tinv'),
-            tomo_cfg['mmse'][ap] =   MMSE(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.r0),
+            tomo_cfg['lsq'][ap] =   LeastSquares(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.total_r0)
+            tomo_cfg['mmse'][ap] =  MMSE(cfg.Z, cfg.D, cfg.N, cfg.alts, atm.aperture_size, r0=cfg.total_r0)
             
         while not asterism_data_queue.empty(): # Asterism Queue
             group_id, asterism_id, asterism = asterism_data_queue.get()
@@ -168,7 +183,7 @@ def asterism_test_worker(cfg, atm_gens):
             })
             
             for ast_spec in asterism_specs:
-                for atm in atm_gens:
+                for atm in atmosphere_data:
                     ap = atm.aperture_size
                     mask = tomo_cfg['mask'][ap]
                     target = beacon.Beacon(0, 0, 10, aperture_mask=mask)
@@ -205,8 +220,12 @@ def asterism_test_worker(cfg, atm_gens):
                             
                             recon = cfg.Z.compose(target_screen.shape, coeffs)
                             sr = strehl.ratio(recon-target_screen, mask=mask)
+                            srq = strehl.ratio_quick(recon-target_screen, mask=mask)
+                            mse = util.mse((recon-target_screen) * mask, np.zeros_like(mask))
 
                             data_point['strehl_ratio'] = sr
+                            data_point['sr_quick'] = srq
+                            data_point['mse'] = mse
 
                             asterism_result_queue.put(data_point)
 
@@ -265,6 +284,8 @@ def run_asterism_comparison(cfg):
     result_queue = manager.Queue()
     rng = np.random.default_rng()
     # all_asterisms = []
+    output_directory = os.path.join(DATA_FOLDER, 'batch')
+    os.makedirs(output_directory, exist_ok=True)
 
     print(f"Generating {cfg.n_asterisms} asterisms")
     groups = asterisms.get_base_asterisms(cfg.n_asterisms)
@@ -293,10 +314,10 @@ def run_asterism_comparison(cfg):
     with manager.Pool(
         processes=n_processes,
         initializer=asterism_test_init,
-        initargs=(result_queue, asterism_queue)
+        initargs=(result_queue, asterism_queue, atm_gens)
     ) as pool:
         for _ in range(n_processes):
-            pool.apply_async(asterism_test_worker, args=(cfg, atm_gens))
+            pool.apply_async(asterism_test_worker, args=(cfg,))
         
         pool.close()
         pool.join()
@@ -375,6 +396,7 @@ def transform_data(cfg):
         return data
 
     files = glob.glob(os.path.join(DATA_FOLDER, '*.parquet'))
+    files = [f for f in files if "merge" not in f]
     files = [f for f in files if "transformed" not in f]
     if len(files) == 0:
         return
@@ -421,6 +443,7 @@ def transform_data(cfg):
         for affix in ['ratio']: #, 'glao', 'ao']:
             df[f'strehl_{affix}_rel'] = df[f'strehl_{affix}'] / df[f'strehl_baseline']
             df[f'strehl_{affix}_rel_log'] = (df[f'strehl_{affix}'] / df[f'strehl_baseline']).apply(np.log)
+            df[f'strehl_{affix}_log'] = (df[f'strehl_{affix}']).apply(np.log)
 
 
 
@@ -428,7 +451,8 @@ def transform_data(cfg):
 
         # Aggregate results along the atmosphere column.
         result_columns = ['strehl_ratio', 'strehl_glao', 'strehl_ao']
-        result_col_rel = [f'{col}_rel{t}' for col in ['strehl_ratio'] for t in ['', '_log']]
+        result_col_rel = [f'{col}{t}' for col in ['strehl_ratio'] for t in ['_rel', '_rel_log', '_log']]
+        # result_col_rel = [f'{col}_rel{t}' for col in ['strehl_ratio'] for t in ['', '_log']]
 
         id_factors = ['group_id', 'asterism_id', 'tomo_method'] + star_cols
 
@@ -459,7 +483,7 @@ def transform_data(cfg):
 
         df.to_parquet(savepath, index=False)
 
-def train_models(files, validation_files, data_dir=DATA_FOLDER):
+def train_models(files, validation_files, data_dir=DATA_FOLDER, regime='not_ao'):
 
     test_df = pd.DataFrame()
     valid_df = pd.DataFrame()
@@ -508,8 +532,18 @@ def train_models(files, validation_files, data_dir=DATA_FOLDER):
 
     print(test_df.columns)
     print(test_df['regime'].unique())
-    test_df['tomo_regime'] = test_df['regime'] == 'tomo'
-    valid_df['tomo_regime'] = valid_df['regime'] == 'tomo'
+
+    # Regime is not ao - all places where (glao > ao), and where (lsq > ao and lsq > glao)
+    if regime == 'not_ao':
+        test_df['tomo_regime'] = test_df['regime'] != 'ao'
+        valid_df['tomo_regime'] = valid_df['regime'] != 'ao'
+
+    # Regime is tomo - all places where (lsq > ao and lsq > glao).
+    else:
+        test_df['tomo_regime'] = test_df['regime'] == 'tomo'
+        valid_df['tomo_regime'] = valid_df['regime'] == 'tomo'
+
+
     print(test_df['tomo_regime'].value_counts())
     print(valid_df['tomo_regime'].value_counts())
 
@@ -520,9 +554,11 @@ def train_models(files, validation_files, data_dir=DATA_FOLDER):
     y_test = valid_df['tomo_regime']
 
     data = (X_train, X_test, y_train, y_test)
+    os.makedirs(MODEL_FOLDER, exist_ok=True)
 
     for name, model in tqdm(models.items()):
         results, trained_model, scaler = run_classification(data, model, name, scale=True)
+        
         filename = os.path.join(MODEL_FOLDER, f'{name}_tomo_regime.pkl')
         print(results)
         with open(filename, 'wb') as f:

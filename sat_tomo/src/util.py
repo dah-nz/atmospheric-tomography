@@ -319,3 +319,12 @@ def var_to_r0(D, var):
 
 def r0_to_var(D, r0):
     return 1.0299 * ((D/r0)**(5/3))
+
+def total_r0_to_layer_r0(total_r0, n_layers=3, percentages=None):
+    if percentages is not None:
+        raise NotImplementedError
+    else:
+        return [((total_r0 ** (-5/3)) / n_layers) ** (-3/5) for _ in range(n_layers)]
+
+def layer_r0_to_total_r0(layer_r0):
+    return np.sum([r0 ** (-5/3) for r0 in layer_r0]) ** (-3/5)

@@ -127,3 +127,156 @@ def training(cfg, file_name="current/results.csv"):
     # print("*** Coefficient Statistics ***")
     # print(df_v_coeff[["Model", "Loss"]].groupby("Model").describe())
     
+def main():
+    file_name = "current/results.csv"
+    r0_type = ["constant"]
+    Dr0_values = [10, 20, 30, 40]
+
+    dfs = []
+
+    for r0 in r0_type:
+        for Dr0 in Dr0_values:
+            directory = f"D:/Data/2026/{r0}_r0_Dr0{Dr0}"
+
+            with open(os.path.join(directory, file_name), "r") as f:
+                df0 = pd.read_csv(f)
+                df0["r0_Type"] = r0
+                df0["D_r0"] = Dr0
+                dfs.append(df0)
+
+    df = pd.concat(dfs, ignore_index=True)
+    df = df.sort_values(by=["Epoch"])
+
+    window_size = 10
+
+    df[f'Moving Average'] = (
+        df.groupby(['Type', 'Model', 'Stage', 'Asterism', 'r0_Type', 'D_r0'])['Loss']
+        .transform(lambda x: x.rolling(window=window_size, min_periods=1).mean())
+    )
+
+    print(df.columns)
+
+    print(df['Stage'].unique())
+    print(df['Model'].unique())
+    print(df['Screens'].unique())
+    print(df['Asterism'].unique())
+    print(df['Type'].unique())
+    print(df['TrainingSet'].unique())
+    print(df['r0_Type'].unique())
+    print(df['D_r0'].unique())
+
+    df["Embed"] = "No"
+    df.loc[df['Model'].str.contains("Embed"), "Embed"] = "Yes"
+    df.loc[df['Model'].isin(['Open Loop', 'LeastSquares', 'MMSE', "Fitting Error", 'GLAO', 'AO']), "Embed"] = "NA"
+    print(df['Embed'].unique())
+
+    df["Size"] = "Standardised"
+    df.loc[df['Model'].str.contains("smol"), "Size"] = "Small"
+    print(df['Size'].unique())
+
+
+    df["Model"] = df["Model"].replace(r'(?:^GuideStarEmbed|Embed)_?', '', regex=True)
+    df["Model"] = df["Model"].replace(r'smol_', '', regex=True)
+    df["Model"] = df["Model"].replace(r'MLNN_', '', regex=True)
+    df["Model"] = df["Model"].replace(r'ResNet(?!_|$)', 'ResNet_', regex=True)
+    df["Save_Epoch"] = df["Model"].str.extract(r'_e(\d+)').fillna("Final")
+    #  = np.where(extracted.notna(), extracted, "Final")
+    print(df["Save_Epoch"].unique())
+    df["Model"] = df["Model"].replace(r'_Variable.*', '', regex=True)
+    df["Model"] = df["Model"].replace(r'_smol', '', regex=True)
+
+    df["Model"] = df["Model"].map({
+        'baseline': "Baseline",
+        'singlemode': "Single Mode",
+        'pseudo_mmse': "Pseudo MMSE",
+        'pseudo_lsq': "Pseudo Least Squares",
+        'NoInverseKzz': "Pseudo MMSE (No Inverse)",
+        'LeastSquares': "Least Squares"
+    }).fillna(df["Model"])
+
+    print(df['Model'].unique())
+
+    # df['Model'] = pd.Categorical(df['Model'], categories=df['Model'].unique())
+    # df['Model'] = df['Model'].cat.reorder_categories(['Fitting Error', 
+    #                 'AO',
+    #                 'GLAO', 
+    #                 'Least Squares',
+    #                 'MMSE',
+    #                 'Baseline',
+    #                 'Pseudo Least Square',
+    #                 'Pseudo MMSE',
+    #                 'Pseudo MMSE (No Inverse)',
+    #                 'ResNet',
+    #                 'Single Mode',
+    #                 'Open Loop'],
+    #                 ordered=True)
+    
+    for D_r0 in df["D_r0"].unique():
+        for r0_Type in df["r0_Type"].unique():
+            df0 = df[(df["Save_Epoch"] == "Final") 
+                    & (df["Size"] == "Standardised") 
+                    & (df["Type"] == "Reconstruction")
+                    & (df["Stage"] == "Train")
+                    & (df["D_r0"] == D_r0)
+                    & (df["r0_Type"] == r0_Type)
+                    & (df["Embed"] != "No")
+                    & (df["Model"].isin(['GLAO', 'Single Mode', 'Baseline', 'ResNet', 'Pseudo Least Squares']))]
+            # df0['Model'] = df0['Model'].cat.remove_unused_categories()
+            df0 = df0.sort_values(by=["Model"])
+            g = sns.relplot(data=df0, kind='line', 
+                x='Epoch', y='Moving Average', hue="Model",
+                facet_kws={'sharey': "row", 'sharex': True})
+            g.set(yscale='log', ylabel="Moving Average Loss (rads$^2$)")
+            g.figure.suptitle(f"D/r0 = {D_r0}")
+            # g.figure.tight_layout()
+            g.figure.subplots_adjust(top=0.9)
+
+    for D_r0 in df["D_r0"].unique():
+        for r0_Type in df["r0_Type"].unique():
+            df0 = df[(df["Save_Epoch"] == "Final") 
+                & (df["Size"] == "Standardised") 
+                & (df["Type"] == "Reconstruction")
+                & (df["Stage"] == "Verification")
+                & (df["D_r0"] == D_r0)
+                & (df["r0_Type"] == r0_Type)
+                & (df["Embed"] != "No")]
+            order = (
+                df0.groupby('Model')['Loss']
+                .mean()
+                .sort_values()
+                .index
+            )
+            # df0 = df0.sort_values(by=["Model"])
+            fig, axs = plt.subplots(1, 1)
+            sns.boxplot(data=df0, x='Model', y='Loss', ax=axs, log_scale=True, order=order)
+            axs.set_title(f"D/r0 = {D_r0}")
+            axs.tick_params(axis='x', rotation=30)
+            axs.set_ylabel("Loss (rads$^2$)")
+
+    fig, axs = plt.subplots(1, 1)
+    df0 = df[(df["Save_Epoch"] == "Final") 
+        & (df["Size"] == "Standardised") 
+        & (df["Type"] == "Reconstruction")
+        & (df["Stage"] == "Verification")
+        & (df['Embed'] != "No")]
+    sns.lineplot(data=df,
+                 x='D_r0',
+                 y='Loss',
+                 hue='Model',
+                 estimator='mean',
+                 ax=axs)
+    
+    for D_r0 in Dr0_values:
+        df1 = df[(df["Save_Epoch"] == "Final") 
+            & (df["Size"] == "Standardised") 
+            & (df["Type"] == "Reconstruction")
+            & (df["Stage"] == "Verification")
+            & (df["D_r0"] == D_r0)]
+
+        print(f"*** Reconstruction Statistics: D/r0: {D_r0} ***")
+        print(df1.groupby(["Model", "Embed"])["Loss"].describe())
+
+    plt.show()
+
+if __name__ == "__main__":
+    main()

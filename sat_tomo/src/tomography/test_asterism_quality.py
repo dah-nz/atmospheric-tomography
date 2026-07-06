@@ -1,4 +1,5 @@
 import os
+import glob
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -22,224 +23,53 @@ from sklearn.svm import SVR
 
 import util
 
-DATA_FOLDER = 'C:/Code/PhD/Data'
-MODEL_FOLDER = 'C:/Code/PhD/Data/Models'
+DATA_FOLDER = 'C:/Code/PhD/Data/2026'
+MODEL_FOLDER = 'C:/Code/PhD/Data/2026/Models'
 
-METHODS = ['lsq_T'] # ['glao', 'lsq_T', 'lsq_K']
+METHODS = ['lsq'] # ['glao', 'lsq_T', 'lsq_K']
 
 ALTITUDES = [1000, 5000, 10000]
 
 def run_tests():
-    test_overlap_percentage()
-    return
+    # test_overlap_percentage()
+    # return
 
-    # dfa = pd.read_parquet(os.path.join(DATA_FOLDER, f'testing_data_21r015a_none_noise.parquet'))
-    # dfa['file_id'] = 'a'
-    # dfb = pd.read_parquet(os.path.join(DATA_FOLDER, f'testing_data_21r015b_none_noise.parquet'))
-    # dfb['file_id'] = 'b'
-    # df = pd.concat((dfa, dfb))
-    # df.to_parquet(os.path.join(DATA_FOLDER, f'testing_data_21r015_merge_none_noise.parquet'), index=False)
+    # This is set up for the results from test_regime_data (2026-06-26)
+    build_quality_models()
 
-    # dfa = pd.read_parquet(os.path.join(DATA_FOLDER, f'validation_data_21r015a_none_noise.parquet'))
-    # dfa['file_id'] = 'a'
-    # dfb = pd.read_parquet(os.path.join(DATA_FOLDER, f'validation_data_21r015b_none_noise.parquet'))
-    # dfb['file_id'] = 'b'
-    # df = pd.concat((dfa, dfb))
-    # df.to_parquet(os.path.join(DATA_FOLDER, f'validation_data_21r015_merge_none_noise.parquet'), index=False)
+    # plt.show()
 
-    # dfa = pd.read_parquet(os.path.join(DATA_FOLDER, f'validation_data_66_none_noise.parquet'))
-    # dfa['file_id'] = '66a'
-    # dfb = pd.read_parquet(os.path.join(DATA_FOLDER, f'testing_data_66_none_noise.parquet'))
-    # dfb['file_id'] = '66b'
-    # df = pd.concat((dfa, dfb))
-    # df.to_parquet(os.path.join(DATA_FOLDER, f'data_66_merge_none_noise.parquet'), index=False)
+def build_quality_models():
+    files = glob.glob(os.path.join(DATA_FOLDER, '*transformed.parquet'))
 
-    # files = ['testing_data_21r015_merge', 'validation_data_21r015_merge']
+    training_file = 'training_data_merge'
+    validation_file = 'validation_data_merge'
 
-    # noise_types = ['none'] #, 'measurement', 'position']
-    # for file in [files[-1]]:
-    #     for noise_type in noise_types:
-    #         print(f"Cleaning data in file: {file}_{noise_type}_noise")
-    #         clean_data(file, noise_type)
-    
-    # print("Analysing results")
-    # analyse_results(files[0], files[1])
-    # plot_results(files[0])
+    test_df = pd.DataFrame()
+    test_files = [f for f in files if 'training' in f]
+    for n, file in enumerate(test_files):
+        tdf = pd.read_parquet(os.path.join(DATA_FOLDER, file))
+        tdf['file_id'] = f'test_{n}'
 
-    # analyse_asterisms(files[0], files[1])
+        test_df = pd.concat((test_df, tdf))
+    test_df.to_parquet(os.path.join(DATA_FOLDER, training_file + '.parquet'), index=False)
 
-    # data_correlations(files[1])
+    valid_df = pd.DataFrame()
+    validation_files = [f for f in files if 'validation' in f]
+    for n, file in enumerate(validation_files):
+        vdf = pd.read_parquet(os.path.join(DATA_FOLDER, file))
+        vdf['file_id'] = f'test_{n}'
 
-    plt.show()
+        valid_df = pd.concat((valid_df, vdf))
+    valid_df.to_parquet(os.path.join(DATA_FOLDER, validation_file + '.parquet'), index=False)
 
-def clean_data(file, noise_type):
+    print("Analysing results")
+    analyse_results(training_file, validation_file)
 
-    df = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_noise.parquet'))
+    # plot_results(training_file)
+    # analyse_asterisms(training_file, validation_file)
+    # data_correlations(validation_file)
 
-    def compute_asterism_features(row):
-        a = [beacon.Beacon.from_tuple(row[f'star_{i}']) for i in range(3)]
-        # b = [beacon.Beacon.from_tuple(row[f'star_{i}_baseline']) for i in range(3)]
-
-        data = {
-            'f_distance_0': a[0]._gamma_arcsec,
-            'f_distance_1': a[1]._gamma_arcsec,
-            'f_distance_2': a[2]._gamma_arcsec,
-            'f_angle_0':    a[0].theta,
-            'f_angle_1':    a[1].theta,
-            'f_angle_2':    a[2].theta,
-            'f_mean_distance': asterisms.ave_distance(a),
-            'f_min_distance' : asterisms.min_distance(a),
-            'f_max_distance' : asterisms.max_distance(a),
-            'f_area' : asterisms.area(a),
-            'f_centroid_distance' : asterisms.centroid_distance(a),
-            'f_circumcentre_distance' : asterisms.circumcentre_distance(a),
-            'f_circumcircle_radius' : asterisms.circumcircle_radius(a),
-            'f_length_ratio' : asterisms.length_ratio(a),
-            'f_average_side_length' : asterisms.average_side_length(a),
-            'f_minimum_side_length' : asterisms.minimum_side_length(a),
-            'f_maximum_side_length' : asterisms.maximum_side_length(a),
-            'f_incentre_distance' : asterisms.incentre_distance(a),
-            'f_incircle_radius' : asterisms.incircle_radius(a),
-            'f_perimeter_area_ratio' : asterisms.perimeter_area_ratio(a),
-            'f_closest_furthest_side_length' : asterisms.closest_furthest_side_length(a),
-            'f_distance_to_closest_edge_obsolete' : asterisms.distance_to_closest_line(a),
-            'f_perimeter' : asterisms.perimeter(a),
-            'f_min_interior_angle' : asterisms.min_angle(a),
-            'f_maximum_interior_angle' : asterisms.max_angle(a),
-            'f_gaussian_area_within_triangle' : asterisms.gaussian_area_within_triangle(a),
-            'f_overlap' : asterisms.overlap(a, ALTITUDES),
-            'f_signed_distance_function' : asterisms.is_target_in_triangle(a),
-            'f_distance_to_closest_line' : np.abs(asterisms.is_target_in_triangle(a)),
-        }
-
-        for i in range(3):
-            data[f'star_{i}'] = row[f'star_{i}']
-
-        return data
-    
-    ###
-    print("Select correct noise profile results")
-    ###
-    df = df[(df['noise'] == noise_type)]
-    
-    ###
-    print("Drop perturbation data")
-    ###
-    df = df[(df['perturbation_type'] == 'none')]
-    perturbation_columns = df.columns[df.columns.str.contains('perturbation_')]
-    df = df.drop(columns=perturbation_columns)
-    df = df.drop(columns=['aperture_pixels'])
-    
-    
-    # To compare to r0=25cm situation with more modes and less asterisms
-    # df = df[(df['group_id'] < 100) & (df['atmosphere_id'] < 100)]
-
-
-    # ###
-    # print("Strehl ratio for different asterism and atmospheres for sanity checking")
-    # ###
-    # df = df[df['tomo_method'].isin(['fitting', 'open_loop', 'lsq_T', 'glao'])]
-    # df = df[df['asterism_type'].str.contains('raw')]
-    # id_factors = ['group_id', 'asterism_id', 'atmosphere_id', 'tomo_method']
-    # agg_dict = {
-    #     'strehl_ratio': 'mean'
-    # }
-
-    # df = df.groupby(id_factors)[['strehl_ratio']].agg(agg_dict).reset_index()
-    # df.columns = ['_'.join(col).rstrip('_') if isinstance(col, tuple) else col for col in df.columns]
-    # df = df.pivot(index=['atmosphere_id', 'group_id', 'asterism_id'], columns='tomo_method', values='strehl_ratio').reset_index()
-    # df = df.sample(100000)
-    # df.to_csv(os.path.join(DATA_FOLDER, file + f'_fitting_data.csv'), index=False)
-    # quit()
-
-    ###
-    print("Drop unused results")
-    ###
-    result_columns = ['recon_rmse', 'strehl_ratio']
-    # df = df.drop(columns='strehl_ratio')
-
-    ###
-    print("Calculate performance relative to baseline (open loop) performance")
-    ###
-    id_factors = ['file_id', 'group_id', 'asterism_id', 'tomo_method', 'asterism_type']
-
-    star_df = df[id_factors + ['star_0', 'star_1', 'star_2']]
-    star_df = star_df.drop_duplicates(subset=id_factors)
-
-    baseline_factors = ['file_id', 'group_id', 'asterism_id', 'atmosphere_id', 'asterism_type']
-    baseline = df[df['tomo_method'] == 'open_loop'].copy()
-    baseline = baseline.rename(columns={col: f"{col}_baseline" for col in result_columns})
-    baseline = baseline.drop(columns=['tomo_method', 'star_0', 'star_1', 'star_2'])  # to allow joining on all ID columns
-    df = df.merge(baseline, on=baseline_factors)
-
-    for col in result_columns:
-        df[f'{col}_rel'] = df[col] / df[f'{col}_baseline']
-        df[f'{col}_rel_log'] = (df[col] / df[f'{col}_baseline']).apply(np.log)
-        df[f'{col}_log'] = (df[col]).apply(np.log)
-
-    result_col_rel = [f'{col}{t}' for col in result_columns for t in ['_rel', '_rel_log', '_log']]
-
-    agg_dict = {
-        col: ['mean', 'std', 'median', 'sem'] for col in result_col_rel + result_columns
-    }
-
-    df0 = df.groupby(id_factors)[result_col_rel + result_columns].agg(agg_dict).reset_index()
-    df0.columns = ['_'.join(col).rstrip('_') if isinstance(col, tuple) else col for col in df0.columns]
-    df = df0.merge(star_df, on=id_factors)
-
-    ###
-    print("Drop extraneous testing methods (open loop, AO, fitting error, etc)")
-    ###
-
-    df = df[df['tomo_method'].isin(METHODS)]
-
-    # ###
-    # print("Aggregate results along the atmosphere column, finding results for different numbers of atmospheres")
-    # ###
-    # id_factors = ['group_id', 'asterism_id', 'tomo_method', 'asterism_type'] #,'star_0', 'star_1', 'star_2']
-    # sample_ids = df['atmosphere_id'].dropna().unique()
-    # agged_dfs = []
-    # print(f"Total atmosphere IDs: {len(sample_ids)}")
-    # df = pd.concat(agged_dfs, ignore_index=True)
-    
-    ###
-    print("Find unique asterisms")
-    ###
-    for i in range(3):
-        df[f'star_{i}'] = df[f'star_{i}'].apply(tuple)
-
-    ast_df = df[['file_id', 'group_id', 'asterism_id', 'asterism_type','star_0', 'star_1', 'star_2']].copy()
-    ast_df = ast_df.drop_duplicates(subset=['star_0', 'star_1', 'star_2'])
-    star_cols = [f'star_{i}' for i in range(3)]
-
-    ###
-    print("Compute features of unique asterisms")
-    ###
-    df0 = ast_df.apply(compute_asterism_features, axis=1)
-    df0 = pd.DataFrame(df0.tolist(), index=df0.index)
-    df = df.merge(df0, on=star_cols, how='inner')
-
-    ###
-    print("Group asterism types into different groups, and augmented status")
-    ###
-    asterism_group = {f'star_{i}_circular': 'Single Star Circular' for i in range(5)}
-    augmented = {f'star_{i}_circular': 'Yes' for i in range(5)}
-    for i in range(10):
-        asterism_group[f'sg{i}_raw'] = 'Raw'
-        asterism_group[f'sg{i}_equal_angle'] = 'Equal Angle'
-        asterism_group[f'sg{i}_mean_dist'] = 'Mean Distance'
-        asterism_group[f'sg{i}_mean_circular'] = 'Mean Circular'
-
-        augmented[f'sg{i}_raw'] = 'No'
-        augmented[f'sg{i}_equal_angle'] = 'Yes'
-        augmented[f'sg{i}_mean_dist'] = 'Yes'
-        augmented[f'sg{i}_mean_circular'] = 'Yes'
-
-    df['asterism_group'] = df['asterism_type'].map(asterism_group)
-    df['asterism_augmented'] = df['asterism_type'].map(augmented)
-
-    df.to_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_noise_CLEAN.parquet'), index=False)
-    df.to_csv(os.path.join(DATA_FOLDER, file + f'_{noise_type}_noise_CLEAN.csv'), index=False)
 
 # Perform regression on a particular model
 def run_reg(data, model, name, scale=False):
@@ -303,10 +133,9 @@ def analyse_asterisms(file, validation_file):
 
     os.makedirs('./img/asterisms', exist_ok=True)
 
-    noise_type = 'none'
-    df_r = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_prediction_results.parquet'))
+    df_r = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_prediction_results.parquet'))
     # df = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_noise_CLEAN.parquet'))
-    v_df = pd.read_parquet(os.path.join(DATA_FOLDER, validation_file + f'_{noise_type}_noise_CLEAN.parquet'))
+    v_df = pd.read_parquet(os.path.join(DATA_FOLDER, validation_file + f'.parquet'))
 
     plt.rcParams.update({
         "pgf.texsystem": "pdflatex",  # or "lualatex", "xelatex"
@@ -334,93 +163,94 @@ def analyse_asterisms(file, validation_file):
     n_samples = 200000
 
     for min_distance, TOP_N in zip([0, 20], [16, 8]):
-        for augmented in ['No']: # 'All', 
-            if augmented != 'All':
-                df_r1 = df_r[(df_r['Augmented'] == augmented) & (df_r['Method'] == 'lsq_T')]
-                v_df1 = v_df[(v_df['asterism_augmented'] == augmented) & (v_df['tomo_method'] == 'lsq_T')]
-            else:
-                df_r1 = df_r[(df_r['Method'] == 'lsq_T')]
-                v_df1 = v_df[(v_df['tomo_method'] == 'lsq_T')]
+        df_r1 = df_r[(df_r['Method'] == 'lsq')]
+        v_df1 = v_df[(v_df['tomo_method'] == 'lsq')]
 
-            v_df1 = v_df1[(v_df1['f_distance_0'] >= min_distance) & (v_df1['f_distance_1'] >= min_distance) & (v_df1['f_distance_2'] >= min_distance)]
-            v_df1 = v_df1[['file_id', 'group_id', 'asterism_id', 'star_0', 'star_1', 'star_2']]
+        v_df1 = v_df1[(v_df1['f_distance_0'] >= min_distance) & (v_df1['f_distance_1'] >= min_distance) & (v_df1['f_distance_2'] >= min_distance)]
+        print(v_df1.columns)
+        columns = ['file_id', 'group_id', 'asterism_id']
+        for i in range(3):
+            columns.append(f'star_{i}_gamma')
+            columns.append(f'star_{i}_theta')
+            columns.append(f'star_{i}_mag')
+        v_df1 = v_df1[columns]
 
-            try:
-                df_r1 = df_r1.sample(n_samples)
-            except ValueError:
-                pass
+        try:
+            df_r1 = df_r1.sample(n_samples)
+        except ValueError:
+            pass
 
-            # df0 = pd.concat([df1, v_df1])
+        # df0 = pd.concat([df1, v_df1])
 
-            for test_var, ascending in test_variables.items():
+        for test_var, ascending in test_variables.items():
 
-                top_test_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Test', ascending=ascending).drop_duplicates(subset='Test Group ID', keep='first')
-                top_test_asterisms = top_test_asterisms.merge(v_df1, left_on=['Test File ID', 'Test Group ID', 'Test Asterism ID'], right_on=['file_id', 'group_id', 'asterism_id'], how='inner')
-                top_test_asterisms = top_test_asterisms.head(TOP_N)
-                top_test_asterisms = top_test_asterisms.drop(columns=['file_id', 'group_id', 'asterism_id'])
+            top_test_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Test', ascending=ascending).drop_duplicates(subset='Test Group ID', keep='first')
+            top_test_asterisms = top_test_asterisms.merge(v_df1, left_on=['Test File ID', 'Test Group ID', 'Test Asterism ID'], right_on=['file_id', 'group_id', 'asterism_id'], how='inner')
+            top_test_asterisms = top_test_asterisms.head(TOP_N)
+            top_test_asterisms = top_test_asterisms.drop(columns=['file_id', 'group_id', 'asterism_id'])
 
-                bottom_test_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Test', ascending=(not ascending)).drop_duplicates(subset='Test Group ID', keep='first')
-                bottom_test_asterisms = bottom_test_asterisms.merge(v_df1, left_on=['Test File ID', 'Test Group ID', 'Test Asterism ID'], right_on=['file_id', 'group_id', 'asterism_id'], how='inner')
-                bottom_test_asterisms = bottom_test_asterisms.head(TOP_N)
-                bottom_test_asterisms = bottom_test_asterisms.drop(columns=['file_id', 'group_id', 'asterism_id'])
+            bottom_test_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Test', ascending=(not ascending)).drop_duplicates(subset='Test Group ID', keep='first')
+            bottom_test_asterisms = bottom_test_asterisms.merge(v_df1, left_on=['Test File ID', 'Test Group ID', 'Test Asterism ID'], right_on=['file_id', 'group_id', 'asterism_id'], how='inner')
+            bottom_test_asterisms = bottom_test_asterisms.head(TOP_N)
+            bottom_test_asterisms = bottom_test_asterisms.drop(columns=['file_id', 'group_id', 'asterism_id'])
 
-                top_pred_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Predictions', ascending=ascending).drop_duplicates(subset='Test Group ID', keep='first')
-                top_pred_asterisms = top_pred_asterisms.merge(v_df1, left_on=['Test File ID', 'Test Group ID', 'Test Asterism ID'], right_on=['file_id', 'group_id', 'asterism_id'], how='inner')
-                top_pred_asterisms = top_pred_asterisms.head(TOP_N)
-                top_pred_asterisms = top_pred_asterisms.drop(columns=['file_id', 'group_id', 'asterism_id'])
+            top_pred_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Predictions', ascending=ascending).drop_duplicates(subset='Test Group ID', keep='first')
+            top_pred_asterisms = top_pred_asterisms.merge(v_df1, left_on=['Test File ID', 'Test Group ID', 'Test Asterism ID'], right_on=['file_id', 'group_id', 'asterism_id'], how='inner')
+            top_pred_asterisms = top_pred_asterisms.head(TOP_N)
+            top_pred_asterisms = top_pred_asterisms.drop(columns=['file_id', 'group_id', 'asterism_id'])
 
-                bottom_pred_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Predictions', ascending=(not ascending)).drop_duplicates(subset='Test Group ID', keep='first')
-                bottom_pred_asterisms = bottom_pred_asterisms.merge(v_df1, left_on=['Test File ID', 'Test Group ID', 'Test Asterism ID'], right_on=['file_id', 'group_id', 'asterism_id'], how='inner')
-                bottom_pred_asterisms = bottom_pred_asterisms.head(TOP_N)
-                bottom_pred_asterisms = bottom_pred_asterisms.drop(columns=['file_id', 'group_id', 'asterism_id'])
+            bottom_pred_asterisms = df_r1[df_r1['Metric'] == test_var].sort_values(by='Predictions', ascending=(not ascending)).drop_duplicates(subset='Test Group ID', keep='first')
+            bottom_pred_asterisms = bottom_pred_asterisms.merge(v_df1, left_on=['Test File ID', 'Test Group ID', 'Test Asterism ID'], right_on=['file_id', 'group_id', 'asterism_id'], how='inner')
+            bottom_pred_asterisms = bottom_pred_asterisms.head(TOP_N)
+            bottom_pred_asterisms = bottom_pred_asterisms.drop(columns=['file_id', 'group_id', 'asterism_id'])
 
 
-                # mean_val = df0[test_var].mean()
-                # mid_asterisms = df0.assign(diff=np.abs(df0[test_var] - mean_val)).sort_values(by='diff').head(TOP_N)
+            # mean_val = df0[test_var].mean()
+            # mid_asterisms = df0.assign(diff=np.abs(df0[test_var] - mean_val)).sort_values(by='diff').head(TOP_N)
 
-                def recreate_asterism(row):
-                    return [beacon.Beacon.from_tuple(row[f'star_{i}']) for i in range(3)]
+            def recreate_asterism(row):
+                return [beacon.Beacon(row[f'star_{i}_theta'], row[f'star_{i}_gamma'], row[f'star_{i}_mag']) for i in range(3)]
 
-                def plot_circ(ax):
-                    theta = np.linspace(0, 2*np.pi, 100, endpoint=True)
-                    rho = np.ones_like(theta) * 120
-                    x, y = util.pol2cart(rho, theta)
+            def plot_circ(ax):
+                theta = np.linspace(0, 2*np.pi, 100, endpoint=True)
+                rho = np.ones_like(theta) * 120
+                x, y = util.pol2cart(rho, theta)
 
-                    ax.plot(x, y, "k--", alpha=0.2)
+                ax.plot(x, y, "k--", alpha=0.2)
 
-                fig_data = [
-                    ("best_test", top_test_asterisms),
-                    ("worst_test", bottom_test_asterisms),
-                    ("best_pred", top_pred_asterisms),
-                    ("worst_pred", bottom_pred_asterisms),
-                ]
+            fig_data = [
+                ("best_test", top_test_asterisms),
+                ("worst_test", bottom_test_asterisms),
+                ("best_pred", top_pred_asterisms),
+                ("worst_pred", bottom_pred_asterisms),
+            ]
 
-                for label, data in fig_data:
-                    fig, ax = plt.subplots()
-                    asts = data.apply(recreate_asterism, axis=1)
+            for label, data in fig_data:
+                fig, ax = plt.subplots()
+                asts = data.apply(recreate_asterism, axis=1)
 
-                    ax.plot([0], [0], 'ko')
-                    for a in asts:
-                        x = [b.position_arcsec()[0] for b in a]
-                        y = [b.position_arcsec()[1] for b in a]
-                        ax.plot(x, y, '+:', alpha=0.5)
+                ax.plot([0], [0], 'ko')
+                for a in asts:
+                    x = [b.position_arcsec()[0] for b in a]
+                    y = [b.position_arcsec()[1] for b in a]
+                    ax.plot(x, y, '+:', alpha=0.5)
 
-                    if label == "best_pred" and min_distance == 0:
-                        test_psfs(asts[0], label)
+                if label == "best_pred" and min_distance == 0:
+                    test_psfs(asts[0], label)
 
-                    plot_circ(ax)
-                    # ax.set_xticks([-120, 0, 120])
-                    # ax.set_yticks([-120, 0, 120])
-                    # if 'worst' in label:
-                    #     ax.set_xlabel('Position (")')
-                    # if 'test' in label:
-                    #     ax.set_ylabel('Position (")')
-                    ax.set_aspect('equal')
-                    ax.axis('off')
-                    fig.tight_layout()
-                    fig.savefig(f"./img/asterisms/{test_var}_{label}_min{min_distance}.pgf", bbox_inches='tight')
-                    fig.savefig(f"./img/asterisms/{test_var}_{label}_min{min_distance}.pdf", bbox_inches='tight')
-                    plt.close(fig)
+                plot_circ(ax)
+                # ax.set_xticks([-120, 0, 120])
+                # ax.set_yticks([-120, 0, 120])
+                # if 'worst' in label:
+                #     ax.set_xlabel('Position (")')
+                # if 'test' in label:
+                #     ax.set_ylabel('Position (")')
+                ax.set_aspect('equal')
+                ax.axis('off')
+                fig.tight_layout()
+                fig.savefig(f"./img/asterisms/{test_var}_{label}_min{min_distance}.pgf", bbox_inches='tight')
+                fig.savefig(f"./img/asterisms/{test_var}_{label}_min{min_distance}.pdf", bbox_inches='tight')
+                plt.close(fig)
 
     return
 
@@ -434,8 +264,9 @@ def test_psfs(asterism, label):
     A = [1000, 5000, 10000]
     ap = 256
     N = 21
-    r0 = 0.25
-    atm = phase_screen.Atmosphere(1, A, r0=r0, D=D, aperture_size=ap)
+    total_r0 = 0.15
+    layer_r0 = util.total_r0_to_layer_r0(0.15, 3)
+    atm = phase_screen.Atmosphere(1, A, r0=layer_r0, D=D, aperture_size=ap)
 
     target = beacon.Beacon(0, 0, 10)
     screen = target.total_cutout(D, A, atm[0], atm.metapupil_diameters)
@@ -454,7 +285,7 @@ def test_psfs(asterism, label):
     z_psf = psf.psf(zresid)
     z_psf = np.log10(z_psf / z_psf.max())
 
-    lsq = tomography.LeastSquares(z, D, N, A, ap, r0=r0, method='Tinv')
+    lsq = tomography.LeastSquares(z, D, N, A, ap, r0=total_r0, method='Tinv')
     tcoeffs = tomography.get_coeffs_for_asterism(asterism, z, D, atm[0], A, atm.metapupil_diameters)
     
     lsq_coeffs = lsq.run(asterism, target, tcoeffs, ptt=zcoeffs[:3])
@@ -544,10 +375,9 @@ def test_psfs(asterism, label):
 
     return
 
-def analyse_results(file, validation_file):
-    noise_type = 'none'
-    df = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_noise_CLEAN.parquet'))
-    v_df = pd.read_parquet(os.path.join(DATA_FOLDER, validation_file + f'_{noise_type}_noise_CLEAN.parquet'))
+def analyse_results(training_file, validation_file):
+    df = pd.read_parquet(os.path.join(DATA_FOLDER, training_file + '.parquet'))
+    v_df = pd.read_parquet(os.path.join(DATA_FOLDER, validation_file + '.parquet'))
 
     # Find regression models for different sets of features
     test_variables = [
@@ -562,12 +392,12 @@ def analyse_results(file, validation_file):
     ]
 
     feature_groups = {
-        'Geometry Only': ['f_distance_0',
-                     'f_distance_1',
-                     'f_distance_2',
-                     'f_angle_0',
-                     'f_angle_1',
-                     'f_angle_2'],
+        # 'Geometry Only': ['f_distance_0',
+        #              'f_distance_1',
+        #              'f_distance_2',
+        #              'f_angle_0',
+        #              'f_angle_1',
+        #              'f_angle_2'],
         # 'Geometry + Overlap': 
         #             ['f_distance_0',
         #              'f_distance_1',
@@ -593,24 +423,24 @@ def analyse_results(file, validation_file):
             'f_incentre_distance',
             'f_incircle_radius',
             ],
-        'All Features':
-        [
-            'f_distance_0',
-            'f_distance_1',
-            'f_distance_2',
-            'f_angle_0',
-            'f_angle_1',
-            'f_angle_2',
-            'f_perimeter',
-            'f_area',
-            'f_mean_distance',
-            'f_signed_distance_function',
-            'f_distance_to_closest_line',
-            'f_centroid_distance',
-            'f_incentre_distance',
-            'f_incircle_radius',
-            'f_overlap'
-            ]
+        # 'All Features':
+        # [
+        #     'f_distance_0',
+        #     'f_distance_1',
+        #     'f_distance_2',
+        #     'f_angle_0',
+        #     'f_angle_1',
+        #     'f_angle_2',
+        #     'f_perimeter',
+        #     'f_area',
+        #     'f_mean_distance',
+        #     'f_signed_distance_function',
+        #     'f_distance_to_closest_line',
+        #     'f_centroid_distance',
+        #     'f_incentre_distance',
+        #     'f_incircle_radius',
+        #     'f_overlap'
+        #     ]
     }
 
     from torch import nn
@@ -623,7 +453,7 @@ def analyse_results(file, validation_file):
         "Ridge": (Ridge(alpha=1.0), False),
         "Lasso": (Lasso(alpha=1.0), False),
         # "SVR (Linear)": (SVR(kernel='linear', C=1.0, epsilon=0.1), False),
-        "SVR (Poly)": (SVR(kernel='poly', C=C, epsilon=eps), True),
+        # "SVR (Poly)": (SVR(kernel='poly', C=C, epsilon=eps), True),
         "SVR (RBF)": (SVR(kernel='rbf', C=C, epsilon=eps), True),
         # "SVR (Poly) [Scaled Inputs]": (SVR(kernel='poly', C=C, epsilon=eps), True),
         # "SVR (RBF) [Scaled Inputs]": (SVR(kernel='rbf', C=C, epsilon=eps), True),
@@ -635,62 +465,53 @@ def analyse_results(file, validation_file):
 
     results = []
 
-    for augmented in ['No']: #, 'All']:
-        if augmented != "All":
-            df2 = df[df['asterism_augmented'] == augmented]
-            # v_df2 = v_df[v_df['asterism_augmented'] == augmented]
-        else:
-            df2 = df
-            # v_df2 = v_df
-        for method in ['lsq_T']:
-            df0 = df2[df2['tomo_method'] == method]
-            v_df0 = v_df[v_df['tomo_method'] == method]
-            
-            for test_column in test_variables:
-                for feature_group, feature_columns in feature_groups.items(): 
-                    df_train = df0
-                    df_test = v_df0
+    for method in ['lsq']:
+        df0 = df[df['tomo_method'] == method]
+        v_df0 = v_df[v_df['tomo_method'] == method]
+        
+        for test_column in test_variables:
+            for feature_group, feature_columns in feature_groups.items(): 
+                df_train = df0
+                df_test = v_df0
 
-                    X_test = df_test[feature_columns + star_columns]
-                    X_train = df_train[feature_columns + star_columns]
+                X_test = df_test[feature_columns + star_columns]
+                X_train = df_train[feature_columns + star_columns]
 
-                    y_test = df_test[test_column]
-                    y_train = df_train[test_column]
+                y_test = df_test[test_column]
+                y_train = df_train[test_column]
 
-                    data = (X_train, X_test, y_train, y_test)
+                data = (X_train, X_test, y_train, y_test)
+                
+                for name, (model, scale) in models.items():
+                    label = f"{name}, {method}, {test_column}, {feature_group}"
+                    print(label)
+                    test_results, trained_model, scaler = run_reg(data, model, name, scale)
+                    for tr in test_results:
+                        tr['Method'] = method
+                        tr['Metric'] = test_column
+                        tr["Feature Group"] = feature_group
+                    results += test_results
 
-                    for name, (model, scale) in models.items():
-                        label = f"{name}, {method}, {test_column}, {feature_group}"
-                        print(label)
-                        test_results, trained_model, scaler = run_reg(data, model, name, scale)
-                        for tr in test_results:
-                            tr['Method'] = method
-                            tr['Metric'] = test_column
-                            tr["Feature Group"] = feature_group
-                            tr["Augmented"] = augmented
-                        results += test_results
-
-                        name = name.replace('(', '').replace(')', '').replace(' ', '_')
-                        filename = os.path.join(MODEL_FOLDER, f'{name}_{method}_{test_column}_{feature_group}.pkl')
-                        with open(filename, 'wb') as f:
-                            pickle.dump((trained_model, scaler), f)
+                    name = name.replace('(', '').replace(')', '').replace(' ', '_')
+                    filename = os.path.join(MODEL_FOLDER, f'{name}_{method}_{test_column}_{feature_group}.pkl')
+                    with open(filename, 'wb') as f:
+                        pickle.dump((trained_model, scaler), f)
 
     print("Finishing analysis, displaying plots")
     df_r = pd.DataFrame(results)
     # df_rs = df_r.drop(columns=['Model Data'])
-    df_r.to_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_prediction_results.parquet'))
+
+    df_r.to_parquet(os.path.join(DATA_FOLDER, training_file + '_prediction_results.parquet'))
 
     df_summary = df_r.drop(columns=['idx', 'Predictions', 'Test', 'Features', 'Test Asterism ID', 'Test Group ID', 'Train Asterism ID', 'Train Group ID'])
-    df_summary = df_summary.drop_duplicates(subset=['Model', 'Metric', 'Feature Group', 'Augmented', 'Method'])
+    df_summary = df_summary.drop_duplicates(subset=['Model', 'Metric', 'Feature Group', 'Method'])
     
-    df_summary.to_csv(os.path.join(DATA_FOLDER, file + f'_{noise_type}_R2_summary_results.csv'))
+    df_summary.to_csv(os.path.join(DATA_FOLDER, training_file + f'_R2_summary_results.csv'))
 
 def plot_results(file):
-    noise_type = 'none'
-
     os.makedirs(f'./img/{file}', exist_ok=True)
 
-    df_r = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_prediction_results.parquet'))
+    df_r = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_prediction_results.parquet'))
     fig_idx = 1
 
     plt.rcParams.update({
@@ -705,18 +526,18 @@ def plot_results(file):
     rmse = ["Reconstruction RMSE", "Log (Reconstruction RMSE)", "Reconstruction RMSE / Open Loop RMSE", "Log(Reconstruction RMSE / Open Loop RMSE)"]
 
     metric_labels = {
-        "recon_rmse_mean": rmse[0],
-        "recon_rmse_log_mean": rmse[1],
-        "recon_rmse_rel_mean": rmse[2],
-        "recon_rmse_rel_log_mean": rmse[3],
+        # "recon_rmse_mean": rmse[0],
+        # "recon_rmse_log_mean": rmse[1],
+        # "recon_rmse_rel_mean": rmse[2],
+        # "recon_rmse_rel_log_mean": rmse[3],
         "strehl_ratio_mean": strehl[0],
         "strehl_ratio_log_mean": strehl[1],
         "strehl_ratio_rel_mean": strehl[2],
         "strehl_ratio_rel_log_mean": strehl[3],
-        "Recon Rmse Mean": rmse[0],
-        "Recon Rmse Log Mean": rmse[1],
-        "Recon Rmse Rel Mean": rmse[2],
-        "Recon Rmse Rel Log Mean": rmse[3],
+        # "Recon Rmse Mean": rmse[0],
+        # "Recon Rmse Log Mean": rmse[1],
+        # "Recon Rmse Rel Mean": rmse[2],
+        # "Recon Rmse Rel Log Mean": rmse[3],
         "Strehl Ratio Mean": strehl[0],
         "Strehl Ratio Log Mean": strehl[1],
         "Strehl Ratio Rel Mean": strehl[2],
@@ -736,85 +557,84 @@ def plot_results(file):
 
     for metric in metrics:
         hist_of_test_variable = True
-        for augmented in ['No']:
-            for method in df_r['Method'].unique():
-                for feature_group in ['Geometry Only', 'All without Overlap', 'All Features']:
-                    for model in df_r['Model'].unique():
+        
+        for method in df_r['Method'].unique():
+            for feature_group in ['Geometry Only', 'All without Overlap', 'All Features']:
+                for model in df_r['Model'].unique():
 
-                        df_plot = df_r[(df_r['Method'] == method) 
-                                        & (df_r['Metric'] == metric) 
-                                        & (df_r['Feature Group'] == feature_group) 
-                                        & (df_r['Augmented'] == augmented)
-                                        & (df_r['Model'] == model)]
-                        
-                        fig_name = f"_{method}_{metric}_{model}_{feature_group}_aug_{augmented}"
-                        replacements = {
-                            '/': '',
-                            ' ': '_',
-                            '(': '_',
-                            ')': '',
-                        }
+                    df_plot = df_r[(df_r['Method'] == method) 
+                                    & (df_r['Metric'] == metric) 
+                                    & (df_r['Feature Group'] == feature_group)
+                                    & (df_r['Model'] == model)]
+                    
+                    fig_name = f"_{method}_{metric}_{model}_{feature_group}"
+                    replacements = {
+                        '/': '',
+                        ' ': '_',
+                        '(': '_',
+                        ')': '',
+                    }
 
-                        for i, n in replacements.items():
-                            fig_name = fig_name.replace(i, n)
-                        
-                        if hist_of_test_variable:
-                            fig, axs = plt.subplots(1, 1)
-                            axs.hist(x=df_plot['Test'], bins=50)
-                            axs.set_xlabel(metric)
-                                
-                            hist_of_test_variable = False
-                            fig.tight_layout()
-                            fig.savefig(f"./img/{file}/fig{fig_idx}_histogram_{fig_name}.pgf", bbox_inches='tight')
-                            fig.savefig(f"./img/{file}/fig{fig_idx}_histogram_{fig_name}.pdf", bbox_inches='tight')
-                            print(f"Figure {fig_idx}: Histogram of test variables for metric {metric}")
-                            fig_idx += 1
-
-                        fig, axs = plt.subplots(1, 1, figsize=(3, 3))
-                        n_samples = 500
-                        df_sampled = df_plot.sample(n_samples)
-                        y_test = df_sampled['Test']
-                        y_pred = df_sampled['Predictions']
-                        axs.scatter(y_test, y_pred, marker='x', alpha=0.8)
-                        max_extent = min(df_plot['Test'].max(), df_plot['Predictions'].max())
-                        k = 1.03
-                        max_extent = max_extent * k if max_extent > 0.0 else max_extent / k
-                        min_extent = max(df_plot['Test'].min(), df_plot['Predictions'].min())
-                        min_extent = min_extent / k if min_extent > 0.0 else min_extent * k
-                        axs.plot([min_extent, max_extent], [min_extent, max_extent], 'k--', linewidth=0.7)
-                        axs.set_xlabel(metric_labels[metric])
-                        axs.set_ylabel(f"Predictions of {model}")
-                        # axs.grid(color='gray', linestyle='--', linewidth=0.5)
-                        # axs.spines['top'].set_visible(False)
-                        # axs.spines['right'].set_visible(False)
-                        # axs.spines['bottom'].set_visible(False)
-                        # axs.spines['left'].set_visible(False)
-
-                        # axs[1].hist(x=df_plot['Test'], bins=50)
-                        # axs[1].set_xlabel(metric)
-
-                        # axs[2].hist(x=df_plot['Predictions'], bins=50)
-                        # axs[2].set_xlabel(model)
-                        # # g = sns.lmplot(df_plot, x=metric, y='Model Prediction', palette='dark', markers='+', hue='Model')
-                        print(f"Figure {fig_idx}: {method}, {metric}, {model} and {feature_group}. Augmented: {augmented}")
-
+                    for i, n in replacements.items():
+                        fig_name = fig_name.replace(i, n)
+                    
+                    if hist_of_test_variable:
+                        fig, axs = plt.subplots(1, 1)
+                        axs.hist(x=df_plot['Test'], bins=50)
+                        axs.set_xlabel(metric)
+                            
+                        hist_of_test_variable = False
                         fig.tight_layout()
-                        fig.savefig(f"./img/{file}/fig{fig_idx}_{fig_name}.pgf", bbox_inches='tight')
-                        fig.savefig(f"./img/{file}/fig{fig_idx}_{fig_name}.pdf", bbox_inches='tight')
-
+                        fig.savefig(f"./img/{file}/fig{fig_idx}_histogram_{fig_name}.pgf", bbox_inches='tight')
+                        fig.savefig(f"./img/{file}/fig{fig_idx}_histogram_{fig_name}.pdf", bbox_inches='tight')
+                        print(f"Figure {fig_idx}: Histogram of test variables for metric {metric}")
                         fig_idx += 1
-                        plt.close()
-                        # plt.show()
+
+                    fig, axs = plt.subplots(1, 1, figsize=(3, 3))
+                    n_samples = 500
+                    df_sampled = df_plot.sample(n_samples, replace=True)
+                    y_test = df_sampled['Test']
+                    y_pred = df_sampled['Predictions']
+                    axs.scatter(y_test, y_pred, marker='x', alpha=0.8)
+                    max_extent = min(df_plot['Test'].max(), df_plot['Predictions'].max())
+                    k = 1.03
+                    max_extent = max_extent * k if max_extent > 0.0 else max_extent / k
+                    min_extent = max(df_plot['Test'].min(), df_plot['Predictions'].min())
+                    min_extent = min_extent / k if min_extent > 0.0 else min_extent * k
+                    axs.plot([min_extent, max_extent], [min_extent, max_extent], 'k--', linewidth=0.7)
+                    axs.set_xlabel(metric_labels[metric])
+                    axs.set_ylabel(f"Predictions of {model}")
+                    # axs.grid(color='gray', linestyle='--', linewidth=0.5)
+                    # axs.spines['top'].set_visible(False)
+                    # axs.spines['right'].set_visible(False)
+                    # axs.spines['bottom'].set_visible(False)
+                    # axs.spines['left'].set_visible(False)
+
+                    # axs[1].hist(x=df_plot['Test'], bins=50)
+                    # axs[1].set_xlabel(metric)
+
+                    # axs[2].hist(x=df_plot['Predictions'], bins=50)
+                    # axs[2].set_xlabel(model)
+                    # # g = sns.lmplot(df_plot, x=metric, y='Model Prediction', palette='dark', markers='+', hue='Model')
+                    print(f"Figure {fig_idx}: {method}, {metric}, {model} and {feature_group}")
+
+                    fig.tight_layout()
+                    fig.savefig(f"./img/{file}/fig{fig_idx}_{fig_name}.pgf", bbox_inches='tight')
+                    fig.savefig(f"./img/{file}/fig{fig_idx}_{fig_name}.pdf", bbox_inches='tight')
+
+                    fig_idx += 1
+                    plt.close()
+                    # plt.show()
     return
 
  
-def data_correlations(file, noise_type='none'):
+def data_correlations(file):
 
     test_variables = [
-        "recon_rmse_mean",
-        "recon_rmse_log_mean",
-        "recon_rmse_rel_mean",
-        "recon_rmse_rel_log_mean",
+        # "recon_rmse_mean",
+        # "recon_rmse_log_mean",
+        # "recon_rmse_rel_mean",
+        # "recon_rmse_rel_log_mean",
         "strehl_ratio_mean",
         "strehl_ratio_log_mean",
         "strehl_ratio_rel_mean",
@@ -853,7 +673,7 @@ def data_correlations(file, noise_type='none'):
             # 'f_gaussian_area_within_triangle' : asterisms.gaussian_area_within_triangle(a),
     ]
 
-    df = pd.read_parquet(os.path.join(DATA_FOLDER, file + f'_{noise_type}_noise_CLEAN.parquet'))
+    df = pd.read_parquet(os.path.join(DATA_FOLDER, file + '.parquet'))
     # df0 = df.filter(regex='^f_.*')
     # feature_columns = list(df0.columns)
 
@@ -869,7 +689,7 @@ def data_correlations(file, noise_type='none'):
     correlations = df[test_variables + feature_columns].corr().loc[test_variables, feature_columns]
     sns.heatmap(correlations, ax=ax, annot=True)
 
-    correlations.to_csv(os.path.join(DATA_FOLDER, file + f'_{noise_type}_correlations.csv'))
+    correlations.to_csv(os.path.join(DATA_FOLDER, file + f'_correlations.csv'))
     print(correlations)
 
     fig.savefig(f"./img/correlations_heatmap.pgf", bbox_inches='tight')

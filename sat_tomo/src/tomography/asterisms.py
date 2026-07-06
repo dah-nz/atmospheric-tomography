@@ -87,12 +87,20 @@ def generate_asterisms(n,
                        quality_model="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl",
                        regime_model="NN_tomo_regime.pkl",
                        include_quality=False,
-                       use_regime_model=True):
+                       use_regime_model=True,
+                       return_all=False):
     logger.info(f"Generating {n} variable asterisms")
 
     if rng is None:
         rng = np.random.default_rng()
     asterism_list = []
+    if return_all:
+        raw_asterism_list = []
+        low_quality_list = []
+        high_quality_list = []
+        tomo_regime_list = []
+        ao_regime_list = []
+    
     quality_list = []
 
     get_angle = lambda x: x.theta
@@ -109,13 +117,17 @@ def generate_asterisms(n,
         asterism_data = asterisms.load_data(magnitude, n=n, limit=limiting_angle, rng=rng, quick_load=True, asterism_size=group_size)
         # asterism_data = [[(g+1, t, rng.normal()) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for g in range(0, n)]
 
-        groups = [[beacon.Beacon(t, g, m, aperture_mask=mask) for g, t, m in stars] for stars in asterism_data]
+        t_offset = rng.uniform(0, 2*np.pi, asterism_data.shape[0])
+        groups = [[beacon.Beacon(np.mod(t + t_o, 2*np.pi), g, m, aperture_mask=mask) for g, t, m in stars] for stars, t_o in zip(asterism_data, t_offset)]
 
         for group in groups:
             subgroups = combinations(group, asterism_size)
             for subgroup in subgroups:
                 raw = [s.copy() for s in subgroup]
                 raw = sorted(raw, key=get_angle)
+
+                if return_all:
+                    raw_asterism_list.append(raw)
 
                 p = rng.uniform()
 
@@ -127,6 +139,12 @@ def generate_asterisms(n,
                     tomographic = regime_model.predict(X1)
 
                     t = float(tomographic[0])
+                    if return_all:
+                        if t < 0.5:
+                            ao_regime_list.append(raw)
+                        else:
+                            tomo_regime_list.append(raw)
+
                 else:
                     t = 1.0
             
@@ -136,8 +154,12 @@ def generate_asterisms(n,
                     
                     q = model.predict(X)
                     if q >= quality_threshold:
+                        if return_all:
+                            high_quality_list.append(raw)
                         l = 1.0
                     elif q <= quality_limit:
+                        if return_all:
+                            low_quality_list.append(raw)
                         l = 0.0
                     else:
                         l = (q - quality_limit) / (quality_threshold - quality_limit)
@@ -158,7 +180,10 @@ def generate_asterisms(n,
     # rng.shuffle(asterism_list)
     # print(n_tomo, n_total)
     
-    return rng.choice(asterism_list, n) #[:n]
+    if return_all:
+        return rng.choice(asterism_list, n), low_quality_list, high_quality_list, ao_regime_list, tomo_regime_list, raw_asterism_list
+    else:
+        return rng.choice(asterism_list, n) #[:n]
 
 def asterism_features(a):
 

@@ -40,11 +40,11 @@
       "sample_set_off": true,
       "sample_seed": 123,
       
-      "epochs": 1024,
+      "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
-      "verification_size": 256,
-      "save_frequency": 128,
+      "verification_size": 250,
+      "save_frequency": 100,
       "display_training": false,
       
       "shwfs": false,
@@ -101,11 +101,11 @@
       "sample_set_off": true,
       "sample_seed": 123,
       
-      "epochs": 1024,
+      "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
-      "verification_size": 256,
-      "save_frequency": 128,
+      "verification_size": 250,
+      "save_frequency": 100,
       "display_training": false,
       
       "shwfs": false,
@@ -162,11 +162,11 @@
       "sample_set_off": true,
       "sample_seed": 123,
       
-      "epochs": 1024,
+      "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
-      "verification_size": 256,
-      "save_frequency": 128,
+      "verification_size": 250,
+      "save_frequency": 100,
       "display_training": false,
       
       "shwfs": false,
@@ -223,11 +223,11 @@
       "sample_set_off": true,
       "sample_seed": 123,
       
-      "epochs": 1024,
+      "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
-      "verification_size": 256,
-      "save_frequency": 128,
+      "verification_size": 250,
+      "save_frequency": 100,
       "display_training": false,
       
       "shwfs": false,
@@ -287,7 +287,7 @@
       "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
-      "verification_size": 256,
+      "verification_size": 250,
       "save_frequency": 100,
       "display_training": false,
       
@@ -348,7 +348,7 @@
       "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
-      "verification_size": 256,
+      "verification_size": 250,
       "save_frequency": 100,
       "display_training": false,
       
@@ -409,7 +409,7 @@
       "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
-      "verification_size": 256,
+      "verification_size": 250,
       "save_frequency": 100,
       "display_training": false,
       
@@ -470,7 +470,7 @@
       "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
-      "verification_size": 256,
+      "verification_size": 250,
       "save_frequency": 100,
       "display_training": false,
       

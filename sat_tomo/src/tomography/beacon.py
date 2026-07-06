@@ -26,7 +26,7 @@ class Beacon():
         self.arcseconds = arcseconds
         self.set_gamma(gamma, arcseconds=arcseconds)
 
-        self.theta = theta
+        self.theta = np.mod(theta, 2*np.pi)
         self.aperture_mask = aperture_mask
         self.magnitude = magnitude
 
