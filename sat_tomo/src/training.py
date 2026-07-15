@@ -151,12 +151,20 @@ def run(cfg):
                 phase_data["Variance"].append(var)
                 
 
-            log.info(f"Loading asterism groups. Training: {cfg.training_size}. Testing: {cfg.testing_size}")
+            log.info(f"Loading asterism groups. Training size: {cfg.training_size}")
 
             for asterism_set in asterism_sets:
                 print(asterism_set)
                 if asterism_set == "Variable":
-                    training_asterisms = asterisms.generate_asterisms(cfg.training_size, cfg.magnitude, mask=mask, quality_threshold=cfg.asterism_quality_threshold, quality_limit=cfg.minimum_asterism_quality, use_regime_model=use_regime_model)
+                    training_asterisms = asterisms.generate_asterisms(cfg.training_size, 
+                                                                      cfg.magnitude,
+                                                                      mask=mask,
+                                                                      quality_threshold=cfg.asterism_quality_threshold,
+                                                                      quality_limit=cfg.minimum_asterism_quality,
+                                                                      use_regime_model=use_regime_model,
+                                                                      model_location=cfg.asterism_model_location,
+                                                                      quality_model=cfg.quality_model,
+                                                                      regime_model=cfg.regime_model)
                     trainer = variable_trainer
                 else:
                     training_asterisms = asterisms.sample_asterisms(cfg.training_size, mask=mask, seed=cfg.sample_seed)

@@ -40,11 +40,11 @@
       "sample_set_off": true,
       "sample_seed": 123,
       
-      "epochs": 1024,
+      "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
       "verification_size": 256,
-      "save_frequency": 128,
+      "save_frequency": 100,
       "display_training": false,
       
       "shwfs": false,
@@ -54,11 +54,15 @@
       "asterism_quality_threshold": 0.04,
       "minimum_asterism_quality": 0.00,
       
-      "satellites": true,
+      "satellites": false,
       "period": 72,
 
       "load_previous": false,
-      "continue_training": false
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
     },
     {
       "directory": "D:/Data/2026/constant_r0_Dr030",
@@ -101,11 +105,11 @@
       "sample_set_off": true,
       "sample_seed": 123,
       
-      "epochs": 1024,
+      "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
       "verification_size": 256,
-      "save_frequency": 128,
+      "save_frequency": 100,
       "display_training": false,
       
       "shwfs": false,
@@ -115,11 +119,15 @@
       "asterism_quality_threshold": 0.04,
       "minimum_asterism_quality": 0.00,
       
-      "satellites": true,
+      "satellites": false,
       "period": 72,
 
       "load_previous": false,
-      "continue_training": false
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
     },
     {
       "directory": "D:/Data/2026/constant_r0_Dr020",
@@ -162,11 +170,11 @@
       "sample_set_off": true,
       "sample_seed": 123,
       
-      "epochs": 1024,
+      "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
       "verification_size": 256,
-      "save_frequency": 128,
+      "save_frequency": 100,
       "display_training": false,
       
       "shwfs": false,
@@ -176,11 +184,15 @@
       "asterism_quality_threshold": 0.04,
       "minimum_asterism_quality": 0.00,
       
-      "satellites": true,
+      "satellites": false,
       "period": 72,
 
       "load_previous": false,
-      "continue_training": false
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
     },
     {
       "directory": "D:/Data/2026/constant_r0_Dr010",
@@ -223,11 +235,11 @@
       "sample_set_off": true,
       "sample_seed": 123,
       
-      "epochs": 1024,
+      "epochs": 1000,
       "training_size": 256,
       "testing_size": 256,
       "verification_size": 256,
-      "save_frequency": 128,
+      "save_frequency": 100,
       "display_training": false,
       
       "shwfs": false,
@@ -237,10 +249,14 @@
       "asterism_quality_threshold": 0.04,
       "minimum_asterism_quality": 0.00,
       
-      "satellites": true,
+      "satellites": false,
       "period": 72,
 
       "load_previous": false,
-      "continue_training": false
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
     }
 ]

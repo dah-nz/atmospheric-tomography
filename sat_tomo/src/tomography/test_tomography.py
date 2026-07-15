@@ -32,20 +32,22 @@ def run_tests():
     # test_atmospheres()
     # test_leastsquares()
     # test_least_squares_asterisms()
-    display_leastsquares_results()
+    # display_leastsquares_results()
     # test_asterisms()
     # projection.test_projection()
 
     # test_intra_phase_screen()
 
-    C = zernike.covar(36)
-    D = 1.8
-    r0 = 0.15
-    C = C * (D / r0) ** (5/3)
-    plt.figure()
-    plt.imshow(C[3:, 3:])
+    display_models_over_different_Dr0()
 
-    plt.show()
+    # C = zernike.covar(36)
+    # D = 1.8
+    # r0 = 0.15
+    # C = C * (D / r0) ** (5/3)
+    # plt.figure()
+    # plt.imshow(C[3:, 3:])
+
+    # plt.show()
 
 def test_psfs():
     cmap = 'inferno'
@@ -832,3 +834,6 @@ def test_strehl():
     axs[1, 2].imshow(np.log10(recon_psf+eps), cmap='inferno', vmin=vm, vmax=0)
     axs[0, 3].imshow(ps-recon_screen, cmap='inferno')
     axs[1, 3].imshow(np.log10(diff_psf+eps), cmap='inferno', vmin=vm, vmax=0)
+
+def display_models_over_different_Dr0():
+    pass

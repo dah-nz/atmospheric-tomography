@@ -58,7 +58,11 @@
       "period": 72,
 
       "load_previous": false,
-      "continue_training": false
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
     },
     {
       "directory": "D:/Data/2026/different_r0_Dr030",
@@ -119,7 +123,11 @@
       "period": 72,
 
       "load_previous": false,
-      "continue_training": false
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
     },
     {
       "directory": "D:/Data/2026/different_r0_Dr020",
@@ -180,7 +188,11 @@
       "period": 72,
 
       "load_previous": false,
-      "continue_training": false
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
     },
     {
       "directory": "D:/Data/2026/different_r0_Dr010",
@@ -241,6 +253,10 @@
       "period": 72,
 
       "load_previous": false,
-      "continue_training": false
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
     }
 ]

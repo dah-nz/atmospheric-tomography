@@ -129,7 +129,7 @@ def training(cfg, file_name="current/results.csv"):
     
 def main():
     file_name = "current/results.csv"
-    r0_type = ["constant"]
+    r0_type = ["different"]
     Dr0_values = [10, 20, 30, 40]
 
     dfs = []
@@ -165,6 +165,9 @@ def main():
     print(df['r0_Type'].unique())
     print(df['D_r0'].unique())
 
+
+
+
     df["Embed"] = "No"
     df.loc[df['Model'].str.contains("Embed"), "Embed"] = "Yes"
     df.loc[df['Model'].isin(['Open Loop', 'LeastSquares', 'MMSE', "Fitting Error", 'GLAO', 'AO']), "Embed"] = "NA"
@@ -185,12 +188,13 @@ def main():
     df["Model"] = df["Model"].replace(r'_Variable.*', '', regex=True)
     df["Model"] = df["Model"].replace(r'_smol', '', regex=True)
 
+    df = df[df['Model'] != 'singlemode']
+
     df["Model"] = df["Model"].map({
-        'baseline': "Baseline",
-        'singlemode': "Single Mode",
-        'pseudo_mmse': "Pseudo MMSE",
-        'pseudo_lsq': "Pseudo Least Squares",
-        'NoInverseKzz': "Pseudo MMSE (No Inverse)",
+        'baseline': "Direct MLNN",
+        'pseudo_lsq': "Pseudo-LS",
+        'pseudo_mmse': "Pseudo-MMSE",
+        'NoInverseKzz': "PQ",
         'LeastSquares': "Least Squares"
     }).fillna(df["Model"])
 
@@ -220,11 +224,30 @@ def main():
                     & (df["D_r0"] == D_r0)
                     & (df["r0_Type"] == r0_Type)
                     & (df["Embed"] != "No")
-                    & (df["Model"].isin(['GLAO', 'Single Mode', 'Baseline', 'ResNet', 'Pseudo Least Squares']))]
+                    & (df["Model"].isin(['GLAO', 'Direct MLNN', 'ResNet', 'Pseudo-LS', 'Pseudo-MMSE']))]
             # df0['Model'] = df0['Model'].cat.remove_unused_categories()
             df0 = df0.sort_values(by=["Model"])
             g = sns.relplot(data=df0, kind='line', 
                 x='Epoch', y='Moving Average', hue="Model",
+                facet_kws={'sharey': "row", 'sharex': True})
+            g.set(yscale='log', ylabel="Moving Average Loss (rads$^2$)")
+            g.figure.suptitle(f"D/r0 = {D_r0}")
+            # g.figure.tight_layout()
+            g.figure.subplots_adjust(top=0.9)
+
+    for D_r0 in df["D_r0"].unique():
+        for r0_Type in df["r0_Type"].unique():
+            df0 = df[(df["Save_Epoch"] == "Final") 
+                    & (df["Type"] == "Reconstruction")
+                    & (df["Stage"] == "Train")
+                    & (df["D_r0"] == D_r0)
+                    & (df["r0_Type"] == r0_Type)
+                    & (df["Embed"] != "No")
+                    & (df["Model"].isin(['Pseudo-LS', 'ResNet']))]
+            # df0['Model'] = df0['Model'].cat.remove_unused_categories()
+            df0 = df0.sort_values(by=["Model"])
+            g = sns.relplot(data=df0, kind='line', 
+                x='Epoch', y='Moving Average', hue="Model", style='Size',
                 facet_kws={'sharey': "row", 'sharex': True})
             g.set(yscale='log', ylabel="Moving Average Loss (rads$^2$)")
             g.figure.suptitle(f"D/r0 = {D_r0}")

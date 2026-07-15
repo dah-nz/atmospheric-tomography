@@ -103,6 +103,10 @@ class Config():
         parser.add_argument('-c', '--continue_training', action='store_true', help="Save results appended to previous training run")
         parser.add_argument("--mode_skip", action='store', default=3, help="Skip modes from the beginning. Default=3, skipping piston, tip/tilt.")
 
+        parser.add_argument("--asterism_model_location", action="store", default="C:/Code/PhD/Data/Models", help="Location of asterism selection models.")
+        parser.add_argument("--quality_model", action="store", default="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl", help="Name of model that performs quality regression on asterisms geometry.")
+        parser.add_argument("--regime_model", action="store", default="NN_tomo_regime.pkl", help="Name of model that classifies asterisms based on tomographic regime.")
+
         try:
             args = parser.parse_args()
         except argparse.ArgumentTypeError as e:
