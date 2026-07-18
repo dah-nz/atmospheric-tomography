@@ -374,10 +374,10 @@ class MMSE(LeastSquares):
             T = self.cache[h]['T']
 
         else:
-            if self._last_ast != beacons:
+            if self._last_ast != h:
                 A = self.a_mat(beacons, layers_sizes, layer_pixels, grid=self.proj_grid, display=self.display)
                 self.A = A
-                self._last_ast = beacons
+                self._last_ast = h
             else:
                 A = self.A
 

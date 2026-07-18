@@ -194,7 +194,7 @@ def main():
         'baseline': "Direct MLNN",
         'pseudo_lsq': "Pseudo-LS",
         'pseudo_mmse': "Pseudo-MMSE",
-        'NoInverseKzz': "PQ",
+        'NoInverseKzz': "PQ + Priors",
         'LeastSquares': "Least Squares"
     }).fillna(df["Model"])
 

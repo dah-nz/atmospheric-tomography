@@ -25,7 +25,7 @@ import util
 def run_tests():
     # test_layer_shapes()
 
-    # test_psfs()
+    test_psfs()
 
     # test_strehl()
     # test_beacons()
@@ -37,8 +37,6 @@ def run_tests():
     # projection.test_projection()
 
     # test_intra_phase_screen()
-
-    display_models_over_different_Dr0()
 
     # C = zernike.covar(36)
     # D = 1.8
@@ -835,5 +833,3 @@ def test_strehl():
     axs[0, 3].imshow(ps-recon_screen, cmap='inferno')
     axs[1, 3].imshow(np.log10(diff_psf+eps), cmap='inferno', vmin=vm, vmax=0)
 
-def display_models_over_different_Dr0():
-    pass

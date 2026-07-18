@@ -23,6 +23,8 @@ class Runner(object):
         raise NotImplementedError
     def test(self, data):
         raise NotImplementedError
+    def run(self, data):
+        return self.test(data)
     
 class TomoRunner(Runner):
     def __init__(self, tomo_algorithm, loss_fn, target, basis, skip_lsq=False) -> None:

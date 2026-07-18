@@ -1,6 +1,14 @@
-import ml.models as models
+import numpy as np
+import pandas as pd
+import os
+# import ml.models as models
+from ml import models, runner, ml
+import torch
 from torchinfo import summary, ModelStatistics
 import cfg as config
+import seaborn as sns
+import matplotlib.pyplot as plt
+from tomography import asterisms, phase_screen, tomography, beacon, psf
 
 def size(info):
     return ModelStatistics.to_megabytes(
@@ -8,7 +16,14 @@ def size(info):
             )
 
 def run_tests():
+    # model_sizes()
 
+    # run_models_over_different_Dr0()
+    # display_models_over_different_Dr0()
+
+    run_and_display_single_example()
+
+def model_sizes():
     data = []
 
     cfg = config.Config()
@@ -27,3 +42,338 @@ def run_tests():
         print(f"{m},{s:.2f},{p},{(p/p0-1.0)*100.0:.4f}")
         
     print("TEST")
+
+
+def run_models_over_different_Dr0():
+    from training import run_epoch
+    
+
+    N = 200
+
+    cfg = config.Config()
+
+    ml_run = ml.Trainer(cfg, skip_lsq=True)
+
+    results = {
+        "Profile": [],
+        "D_r0": [],
+        "Model": [],
+        "Type": [],
+        "Loss": [],
+    }
+
+
+    print(ml_run.model_file_names)
+    ml_run.load_models(suffix="_Variable_Final", dir=cfg.directory + "/current")
+
+    mask = cfg.basis.get_mask(cfg.aperture_size)
+
+    layer_conditions = {
+        "UCMJO": ([0.88, 0.03, 0.09], [1000, 5000, 10000]),
+        "Ellerbroek": ([0.230, 0.296, 0.246, 0.110, 0.064, 0.050, 0.004], [4.5, 463, 1483, 4840, 11122, 14906, 18635])
+    }
+
+    for profile, (cn2_pc, alts) in layer_conditions.items():
+        for D_r0 in [5., 10., 15., 20., 25., 30., 35., 40., 45., 50.]:
+            total_r0 = cfg.diameter / D_r0
+            var = total_r0 ** (-5/3)
+
+            r0 = [(var * layer_cn2_pc) ** (-3/5) for layer_cn2_pc in cn2_pc]
+
+            atm = phase_screen.Atmosphere(N, alts, r0, cfg.diameter, cfg.aperture_size)
+
+            asts = asterisms.generate_asterisms(N, 
+                                                mask=mask,
+                                                quality_threshold=cfg.asterism_quality_threshold,
+                                                quality_limit=cfg.minimum_asterism_quality,
+                                                use_regime_model=True,
+                                                model_location=cfg.asterism_model_location,
+                                                quality_model=cfg.quality_model,
+                                                regime_model=cfg.regime_model)
+
+            result_data = run_epoch(ml_run, N, asts, atm, cfg.basis, train=False, wfs=None)
+
+            for model, data_dict in result_data.items():
+                for key, value in data_dict.items():
+                    results["Profile"].append(profile)
+                    results["D_r0"].append(D_r0)
+                    results["Model"].append(model)
+                    results["Type"].append(key)
+                    results["Loss"].append(np.mean(value))
+
+    df = pd.DataFrame.from_dict(results, orient="columns")
+
+    df.to_parquet(os.path.join("D:/Data/2026/cross_comparison", f"CrossComparisonForDR0_{int(cfg.diameter/cfg.total_r0)}.parquet"))
+    print(df.head())
+
+    # Build a set of different atmospheres with different D/r0 profiles
+
+    # Pull a number of variable asterisms
+
+    # Run the different models with the different asterism and atmospheres
+
+def display_models_over_different_Dr0():
+
+    # Display results from above
+    import glob
+    import matplotlib.lines as mlines
+
+    search_pattern = os.path.join("D:/Data/2026/cross_comparison", "CrossComparisonForDR0*.parquet")
+    files = glob.glob(search_pattern)
+
+    df = pd.DataFrame()
+
+    for file in files:
+        Dr0 = int(file.split(".")[0].split("_")[-1])
+        df0 = pd.read_parquet(file)
+        df0["Model_D_r0"] = Dr0
+
+        df = pd.concat([df, df0])
+
+    # Set embedding state
+    df["Embed"] = "No"
+    df.loc[df['Model'].str.contains("Embed"), "Embed"] = "Yes"
+    df.loc[df['Model'].isin(['Open Loop', 'LeastSquares', 'MMSE', "Fitting Error", 'GLAO', 'AO']), "Embed"] = "NA"
+    df["Model"] = df["Model"].replace(r'(?:^GuideStarEmbed|Embed)_?', '', regex=True)
+    print(df['Embed'].unique())
+
+    # Set size variable
+    df["Size"] = "Standardised"
+    df.loc[df['Model'].str.contains("smol"), "Size"] = "Small"
+    df.loc[df['Model'].isin(['Open Loop', 'LeastSquares', 'MMSE', "Fitting Error", 'GLAO', 'AO']), "Size"] = "NA"
+    print(df['Size'].unique())
+    df["Model"] = df["Model"].replace(r'smol_', '', regex=True)
+    df["Model"] = df["Model"].replace(r'_smol', '', regex=True)
+
+    # Remove unwanted junk from Model names
+    df["Model"] = df["Model"].replace(r'MLNN_', '', regex=True)
+    df["Model"] = df["Model"].replace(r'ResNet(?!_|$)', 'ResNet_', regex=True)
+    df["Model"] = df["Model"].replace(r'_Variable.*', '', regex=True)
+    
+    df = df[df['Model'] != 'singlemode']
+
+    df["Model"] = df["Model"].map({
+        'baseline': "Direct MLNN",
+        'pseudo_lsq': "Pseudo-LS",
+        'pseudo_mmse': "Pseudo-MMSE",
+        'NoInverseKzz': "PQ + Priors",
+        'LeastSquares': "LS"
+    }).fillna(df["Model"])
+
+    print(df.head())
+    print(df["Model"].unique())
+
+    size_excl = "Standardised"
+    embed_excl = "No"
+
+    df0 = df[(df["Size"] != size_excl) 
+              & (df["Type"] == "Reconstruction")
+              & (df["Embed"] != embed_excl)
+              & (df["Model"] == "Direct MLNN")]
+    # df0 = df0.sort_values(by=["Model"])
+    df0 = df0.rename(columns= {"Model_D_r0": "Model $D/r_0$"})
+    
+
+    g = sns.relplot(data=df0, kind='line',
+                    x="D_r0", y="Loss", hue="Model $D/r_0$", style="Profile")
+    g.set(ylabel="Reconstruction Loss (rads$^2$)", xlabel="$D/r_0$")
+    g._legend.remove()
+
+    group_cols = [c for c in df.columns if c not in ["Model_D_r0", "Profile", "Loss"]]
+    dfm = df.groupby(group_cols, as_index=False)['Loss'].mean()
+    dfm = dfm[(dfm["Size"] != size_excl)
+              & (dfm["Type"] == "Reconstruction")
+              & (dfm["Embed"] != embed_excl)
+              & (dfm["Model"].isin(["GLAO", "Fitting Error"]))]
+
+    r0_list = dfm[dfm["Model"] == "GLAO"]["D_r0"].tolist()
+    glao_list = dfm[dfm["Model"] == "GLAO"]["Loss"].tolist()
+
+    r0_fe_list = dfm[dfm["Model"] == "Fitting Error"]["D_r0"].tolist()
+    fe_list = dfm[dfm["Model"] == "Fitting Error"]["Loss"].tolist()
+
+    for ax in g.axes.flat:
+        ax.plot(r0_fe_list, fe_list, label="Fitting Error")
+        ax.plot(r0_list, glao_list, label="GLAO")
+
+        handles, labels = ax.get_legend_handles_labels()
+        blank_handle = mlines.Line2D([], [], color='none')
+
+        handles.insert(-2, blank_handle)
+        labels.insert(-2, '')   # use ' ' (a space) if '' gets collapsed/stripped
+
+        ax.legend(handles, labels)
+    pass
+
+def run_and_display_single_example():
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    cfg = config.Config()
+
+    mask = cfg.basis.get_mask(cfg.aperture_size)
+
+    target = beacon.Beacon(0,0)
+
+    r0 = [0.194032125, 1.49358721, 0.772677337]
+
+    model = models.GuideStarEmbed_pseudo_lsq(cfg).to(device)
+    filepath = os.path.join(cfg.directory + "/current/parameters", "GuideStarEmbed_pseudo_lsq_Zernike_36_0.059999999912984346_1.8__Variable_Final.mdl")
+    model.load_state_dict(torch.load(filepath, weights_only=True))
+
+    MMSE = tomography.MMSE(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size, r0=cfg.total_r0)
+
+    atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, r0, cfg.diameter, cfg.aperture_size)
+    angle_norm = lambda x: [(x.theta % (2*np.pi)) / (2*np.pi), x._gamma_arcsec / atmosphere.limit_angle]
+
+    asterism = asterisms.generate_asterisms(1, 
+                                            mask=mask,
+                                            quality_threshold=cfg.asterism_quality_threshold,
+                                            quality_limit=cfg.minimum_asterism_quality,
+                                            use_regime_model=True,
+                                            model_location=cfg.asterism_model_location,
+                                            quality_model=cfg.quality_model,
+                                            regime_model=cfg.regime_model)[0]
+
+    gs_x = [a.position_arcsec()[0] for a in asterism]
+    gs_y = [a.position_arcsec()[1] for a in asterism]
+
+    target_coeffs = target.cutout_coeffs(cfg.basis, cfg.diameter, atmosphere.altitudes, atmosphere[0], atmosphere.metapupil_diameters)
+    target_screen = target.total_cutout(cfg.diameter, atmosphere.altitudes, atmosphere[0], atmosphere.metapupil_diameters)
+    fitted_screen = cfg.basis.compose(target_screen.shape, target_coeffs)
+
+    asterism_coeffs = tomography.get_coeffs_for_asterism(asterism, cfg.basis, cfg.diameter, atmosphere[0], atmosphere.altitudes, atmosphere.metapupil_diameters)
+
+    with torch.no_grad():
+        gs = np.array([angle_norm(a) for a in asterism], dtype=np.float32)
+        X = asterism_coeffs
+
+        ptt_y = target_coeffs[:cfg.mode_skip]
+        X = X[:, cfg.mode_skip:]
+
+        gs = torch.from_numpy(gs).unsqueeze(0).to(device)
+        X = torch.from_numpy(X).unsqueeze(0).to(device)
+    
+        pred_A = model(gs)
+        X = torch.flatten(X, start_dim=1)
+        pred = torch.einsum("bnm,bm->bn", pred_A, X)
+
+        pred = pred.to("cpu").detach().numpy().ravel()
+
+        res = np.zeros_like(target_coeffs)
+        np.concatenate((ptt_y, pred), out=res)
+
+        recon_screen = cfg.basis.compose(target_screen.shape, res)
+
+    mmse_coeffs = MMSE.run(asterism, target, asterism_coeffs, ptt_y)
+    mmse_screen = cfg.basis.compose(target_screen.shape, mmse_coeffs)
+    
+    # Plot different parts
+    cmap = 'inferno'
+
+    vmax = max(np.max(target_screen), np.max(fitted_screen), np.max(recon_screen), np.max(mmse_screen))
+    vmin = min(np.min(target_screen), np.min(fitted_screen), np.min(recon_screen), np.min(mmse_screen))
+    extent_a = (120, -120, 120, -120)
+
+
+    plt.figure()
+    plt.imshow(fitted_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
+
+    plt.figure()
+    plt.imshow(recon_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
+
+    plt.figure()
+    plt.imshow(mmse_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
+
+    target_screen *= mask
+
+    plt.figure()
+    scr_im = plt.imshow(target_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
+
+    dmax = max(np.max(target_screen - fitted_screen),
+               np.max(target_screen - recon_screen),
+               np.max(target_screen - mmse_screen))
+    dmin = min(np.min(target_screen - fitted_screen),
+               np.min(target_screen - recon_screen),
+               np.min(target_screen - mmse_screen))
+    
+    plt.figure()
+    dif_im = plt.imshow(target_screen - fitted_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
+
+    plt.figure()
+    plt.imshow(target_screen - recon_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
+
+    plt.figure()
+    plt.imshow(target_screen - mmse_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
+
+    wavelength = 550e-9
+    res = 600*wavelength/cfg.diameter
+    extent_l = (-res/2 * 1e6, res/2 * 1e6, -res/2 * 1e6, res/2 * 1e6)
+
+    airy_disc = psf.psf(mask)
+    fitted_psf = psf.psf(target_screen - fitted_screen)
+    recon_psf = psf.psf(target_screen - recon_screen)
+    mmse_psf = psf.psf(target_screen - mmse_screen)
+
+    plt.figure()
+    airy_psf = np.log10(airy_disc / airy_disc.max())
+    psf_im = plt.imshow(airy_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.xlabel("Position ($\mu$m)")
+    plt.ylabel("Position ($\mu$m)")
+
+    plt.figure()
+    fitted_psf = np.log10(fitted_psf / airy_disc.max())
+    plt.imshow(fitted_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.xlabel("Position ($\mu$m)")
+    plt.ylabel("Position ($\mu$m)")
+
+    plt.figure()
+    recon_psf = np.log10(recon_psf / airy_disc.max())
+    plt.imshow(recon_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.xlabel("Position ($\mu$m)")
+    plt.ylabel("Position ($\mu$m)")
+
+    plt.figure()
+    mmse_psf = np.log10(mmse_psf / airy_disc.max())
+    plt.imshow(mmse_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.xlabel("Position ($\mu$m)")
+    plt.ylabel("Position ($\mu$m)")
+
+    plt.figure()
+    ax = plt.gca()
+    plt.scatter(gs_x, gs_y, marker="x")
+    x = [120 * np.cos(theta) for theta in np.linspace(0, 2*np.pi, endpoint=True)]
+    y = [120 * np.sin(theta) for theta in np.linspace(0, 2*np.pi, endpoint=True)]
+    plt.plot(x, y, "--")
+    ax.set_aspect('equal', 'box')
+
+    fig2, ax2 = plt.subplots(figsize=(1, 4.5))
+    cbar = fig2.colorbar(psf_im, cax=ax2, orientation='vertical', cmap=cmap)
+    cbar.set_label("Normalised Intensity [$\\log(I/I_{max})$]")
+    fig2.tight_layout()
+
+    fig3, ax3 = plt.subplots(figsize=(1, 4.5))
+    cbar = fig3.colorbar(scr_im, cax=ax3, orientation='vertical', cmap=cmap)
+    cbar.set_label("Phase (radians)")
+    fig3.tight_layout()
+
+    fig4, ax4 = plt.subplots(figsize=(1, 4.5))
+    cbar = fig4.colorbar(dif_im, cax=ax4, orientation='vertical', cmap=cmap)
+    cbar.set_label("Phase (radians)")
+    fig4.tight_layout()
+
+    pass

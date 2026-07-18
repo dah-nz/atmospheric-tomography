@@ -1,7 +1,23 @@
 [
     {
-      "directory": "D:/Data/2026/constant_r0_Dr040",
+      "directory": "D:/Data/2026/different_r0_Dr030",
       "display_training": true,
-      "display_asterisms": false
+      "display_asterisms": false,
+
+      "num_modes": 36,
+      "aperture_size": 100,
+      "diameter": 1.8,
+
+      "r0": [0.064677375, 0.497862403, 0.257559112],
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+
+      "asterism_size": 3,
+      "asterism_quality_threshold": 0.04,
+      "minimum_asterism_quality": 0.00,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
     }
   ]

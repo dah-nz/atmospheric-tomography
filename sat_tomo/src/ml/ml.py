@@ -159,7 +159,7 @@ class Trainer():
                 try:
                     model.load_state_dict(torch.load(ff, weights_only=True))
                 except FileNotFoundError:       # If the file isn't found, there's nothing to load, so the model will remain uninitialised
-                    logger.info(f"State dict for model {name} with suffix {suffix} not found in {ff}")
+                    logger.info(f"File {ff} not found. State dict for model {name} with suffix {suffix} will be randomly initialised.")
         else:
             for name, model_type, filepath in model_dict:
                 logger.info(f"Loading model {name} [{model_type}] from file {filepath}")
