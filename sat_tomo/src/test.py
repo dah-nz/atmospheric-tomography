@@ -9,8 +9,8 @@ if __name__ == "__main__":
     # from tomography import test_oopao
     # test_oopao.run_tests()
 
-    # from tomography import test_regime_data
-    # test_regime_data.run_tests()
+    from tomography import test_regime_data
+    test_regime_data.run_tests()
 
     # from tomography import test_asterism_quality
     # test_asterism_quality.run_tests()
@@ -22,8 +22,8 @@ if __name__ == "__main__":
     # from tomography import test_tomography
     # test_tomography.run_tests()
 
-    from ml import test_models
-    test_models.run_tests()
+    # from ml import test_models
+    # test_models.run_tests()
 
     plt.show()
 

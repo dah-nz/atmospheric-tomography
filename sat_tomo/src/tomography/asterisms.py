@@ -91,8 +91,11 @@ def generate_asterisms(n,
                        return_all=False):
     logger.info(f"Generating {n} variable asterisms")
 
-    if rng is None:
+    if isinstance(rng, int):
+        rng = np.random.default_rng(seed=rng)
+    elif rng is None:
         rng = np.random.default_rng()
+
     asterism_list = []
     if return_all:
         raw_asterism_list = []
@@ -105,11 +108,20 @@ def generate_asterisms(n,
 
     get_angle = lambda x: x.theta
 
-    with open(os.path.join(model_location, quality_model), 'rb') as f:
-        model, scaler = pickle.load(f)
+    if quality_model is not None:
+        print(quality_model)
+        with open(os.path.join(model_location, quality_model), 'rb') as f:
+            model, scaler = pickle.load(f)
+            use_quality_model = True
+    else:
+        use_quality_model = False
 
-    with open(os.path.join(model_location, regime_model), 'rb') as f:
-        regime_model, regime_scaler = pickle.load(f)
+    if regime_model is not None:
+        print(regime_model)
+        with open(os.path.join(model_location, regime_model), 'rb') as f:
+            regime_model, regime_scaler = pickle.load(f)
+    else:
+        use_regime_model = False
 
     while (len(asterism_list) < n):
         if len(asterism_list) > 0:
@@ -133,6 +145,7 @@ def generate_asterisms(n,
 
                 X = asterism_features(raw)
 
+                t = 1.0
                 if use_regime_model:
                     if regime_scaler != None:
                         X1 = regime_scaler.transform(X)
@@ -144,27 +157,24 @@ def generate_asterisms(n,
                             ao_regime_list.append(raw)
                         else:
                             tomo_regime_list.append(raw)
-
-                else:
-                    t = 1.0
             
-                if quality_limit is not None and quality_threshold is not None and quality_threshold >= quality_limit:
-                    if scaler != None:
-                        X = scaler.transform(X)
-                    
-                    q = model.predict(X)
-                    if q >= quality_threshold:
-                        if return_all:
-                            high_quality_list.append(raw)
-                        l = 1.0
-                    elif q <= quality_limit:
-                        if return_all:
-                            low_quality_list.append(raw)
-                        l = 0.0
-                    else:
-                        l = (q - quality_limit) / (quality_threshold - quality_limit)
-                else:
-                    l = 1.0
+                l = 1.0
+                if use_quality_model:
+                    if quality_limit is not None and quality_threshold is not None and quality_threshold >= quality_limit:
+                        if scaler != None:
+                            X = scaler.transform(X)
+                        
+                        q = model.predict(X)
+                        if q >= quality_threshold:
+                            if return_all:
+                                high_quality_list.append(raw)
+                            l = 1.0
+                        elif q <= quality_limit:
+                            if return_all:
+                                low_quality_list.append(raw)
+                            l = 0.0
+                        else:
+                            l = (q - quality_limit) / (quality_threshold - quality_limit)
                 
                 # l = l ** 1
                 # l = 1.0

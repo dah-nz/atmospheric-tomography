@@ -90,8 +90,8 @@ def run_asterism_quality_and_regime_models():
     #     run_asterism_comparison(cfg)
     #     bulk_compile_asterism_data(f'regime_validation_data_{t}')
 
-    # transform_data(cfg)
-    # convert_parquets_to_csv()
+    transform_data(cfg)
+    convert_parquets_to_csv()
 
     files = glob.glob(os.path.join(DATA_FOLDER, "*_transformed.parquet"))
     # files = [f for f in files if 'rng' in f]
@@ -466,7 +466,20 @@ def transform_data(cfg):
         baseline_factors = ['group_id', 'asterism_id']
         df['regime'] = 'ao'
         df.loc[df['strehl_glao_mean'] > df['strehl_ao_mean'], 'regime'] = 'glao'
+        df.loc[(df['strehl_ratio_mean'] > df['strehl_ao_mean']), 'regime'] = ''
         df.loc[(df['strehl_ratio_mean'] > df['strehl_glao_mean']) & (df['strehl_ratio_mean'] > df['strehl_ao_mean']), 'regime'] = 'tomo'
+
+        df['ao_regime'] = False
+        # df[df['strehl_glao_mean'] > df['strehl_ao_mean']]['ao_regime'] = False
+        df.loc[(df['strehl_ratio_mean'] < df['strehl_ao_mean']) |
+           (df['strehl_glao_mean'] < df['strehl_ao_mean']), 'ao_regime'] = True
+
+        df['glao_regime'] = False
+        df.loc[df['strehl_glao_mean'] > df['strehl_ao_mean'], 'glao_regime'] = True
+
+        df['tomo_regime'] = False
+        df.loc[(df['strehl_ratio_mean'] > df['strehl_ao_mean']) & 
+               (df['strehl_glao_mean'] > df['strehl_ao_mean']), 'tomo_regime'] = True
         
         # df_sorted = df.sort_values(by=["group_id", "asterism_id"])
         # print(df_sorted.head(10))
@@ -533,15 +546,15 @@ def train_models(files, validation_files, data_dir=DATA_FOLDER, regime='not_ao')
     print(test_df.columns)
     print(test_df['regime'].unique())
 
-    # Regime is not ao - all places where (glao > ao), and where (lsq > ao and lsq > glao)
-    if regime == 'not_ao':
-        test_df['tomo_regime'] = test_df['regime'] != 'ao'
-        valid_df['tomo_regime'] = valid_df['regime'] != 'ao'
+    # # Regime is not ao - all places where (glao > ao), and where (lsq > ao and lsq > glao)
+    # if regime == 'not_ao':
+    #     test_df['tomo_regime'] = test_df['regime'] != 'ao'
+    #     valid_df['tomo_regime'] = valid_df['regime'] != 'ao'
 
-    # Regime is tomo - all places where (lsq > ao and lsq > glao).
-    else:
-        test_df['tomo_regime'] = test_df['regime'] == 'tomo'
-        valid_df['tomo_regime'] = valid_df['regime'] == 'tomo'
+    # # Regime is tomo - all places where (lsq > ao and lsq > glao).
+    # else:
+    #     test_df['tomo_regime'] = test_df['regime'] == 'tomo'
+    #     valid_df['tomo_regime'] = valid_df['regime'] == 'tomo'
 
 
     print(test_df['tomo_regime'].value_counts())

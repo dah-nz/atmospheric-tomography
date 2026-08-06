@@ -1,0 +1,231 @@
+[
+    {
+      "directory": "D:/Data/2026/heuristic_none",
+      "num_modes": 36,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": [0.064677375, 0.497862403, 0.257559112],
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+      
+      "train_models": ["ResNetEmbed",
+                       "ResNet",
+                       "MLNN_baseline",
+                       "MLNN_pseudo_lsq",
+                       "MLNN_NoInverseKzz",
+                       "GuideStarEmbed_baseline",
+                       "GuideStarEmbed_pseudo_lsq",
+                       "GuideStarEmbed_NoInverseKzz",
+                       "MLNN_baseline_smol",
+                       "MLNN_pseudo_lsq_smol",
+                       "MLNN_NoInverseKzz_smol",
+                       "GuideStarEmbed_singlemode_smol",
+                       "GuideStarEmbed_pseudo_lsq_smol",
+                       "GuideStarEmbed_NoInverseKzz_smol"
+                    ],
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      "mmse_off": false,
+
+      "sample_set_off": true,
+      "sample_seed": 123,
+      
+      "epochs": 1000,
+      "training_size": 256,
+      "testing_size": 256,
+      "verification_size": 0,
+      "save_frequency": 250,
+      "display_training": false,
+      
+      "shwfs": false,
+      "noise": false,
+      
+      "asterism_size": 3,
+      "asterism_quality_threshold": 0.04,
+      "minimum_asterism_quality": 0.00,
+      
+      "satellites": false,
+      "period": 72,
+
+      "load_previous": false,
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "disabled",
+      "regime_model": "disabled"
+    },
+    {
+      "directory": "D:/Data/2026/heuristic_regime",
+      "num_modes": 36,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": [0.064677375, 0.497862403, 0.257559112],
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+      
+      "train_models": ["ResNetEmbed",
+                       "ResNet",
+                       "MLNN_baseline",
+                       "MLNN_pseudo_lsq",
+                       "MLNN_NoInverseKzz",
+                       "GuideStarEmbed_baseline",
+                       "GuideStarEmbed_pseudo_lsq",
+                       "GuideStarEmbed_NoInverseKzz",
+                       "MLNN_baseline_smol",
+                       "MLNN_pseudo_lsq_smol",
+                       "MLNN_NoInverseKzz_smol",
+                       "GuideStarEmbed_singlemode_smol",
+                       "GuideStarEmbed_pseudo_lsq_smol",
+                       "GuideStarEmbed_NoInverseKzz_smol"
+                    ],
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      "mmse_off": false,
+
+      "sample_set_off": true,
+      "sample_seed": 123,
+      
+      "epochs": 1000,
+      "training_size": 256,
+      "testing_size": 256,
+      "verification_size": 0,
+      "save_frequency": 250,
+      "display_training": false,
+      
+      "shwfs": false,
+      "noise": false,
+      
+      "asterism_size": 3,
+      "asterism_quality_threshold": 0.04,
+      "minimum_asterism_quality": 0.00,
+      
+      "satellites": false,
+      "period": 72,
+
+      "load_previous": false,
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "disabled",
+      "regime_model": "NN_tomo_regime.pkl"
+    },
+    {
+      "directory": "D:/Data/2026/heuristic_quality",
+      "num_modes": 36,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": [0.064677375, 0.497862403, 0.257559112],
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+      
+      "train_models": ["ResNetEmbed",
+                       "ResNet",
+                       "MLNN_baseline",
+                       "MLNN_pseudo_lsq",
+                       "MLNN_NoInverseKzz",
+                       "GuideStarEmbed_baseline",
+                       "GuideStarEmbed_pseudo_lsq",
+                       "GuideStarEmbed_NoInverseKzz",
+                       "MLNN_baseline_smol",
+                       "MLNN_pseudo_lsq_smol",
+                       "MLNN_NoInverseKzz_smol",
+                       "GuideStarEmbed_singlemode_smol",
+                       "GuideStarEmbed_pseudo_lsq_smol",
+                       "GuideStarEmbed_NoInverseKzz_smol"
+                    ],
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      "mmse_off": false,
+
+      "sample_set_off": true,
+      "sample_seed": 123,
+      
+      "epochs": 1000,
+      "training_size": 256,
+      "testing_size": 256,
+      "verification_size": 0,
+      "save_frequency": 250,
+      "display_training": false,
+      
+      "shwfs": false,
+      "noise": false,
+      
+      "asterism_size": 3,
+      "asterism_quality_threshold": 0.04,
+      "minimum_asterism_quality": 0.00,
+      
+      "satellites": false,
+      "period": 72,
+
+      "load_previous": false,
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "disabled"
+    },
+    {
+      "directory": "D:/Data/2026/heuristic_both",
+      "num_modes": 36,
+      "aperture_size": 100,
+      "diameter": 1.8,
+      "r0": [0.064677375, 0.497862403, 0.257559112],
+      "layers": 3,
+      "altitudes": [1000,5000,10000],
+      "magnitude": 14,
+      
+      "train_models": ["ResNetEmbed",
+                       "ResNet",
+                       "MLNN_baseline",
+                       "MLNN_pseudo_lsq",
+                       "MLNN_NoInverseKzz",
+                       "GuideStarEmbed_baseline",
+                       "GuideStarEmbed_pseudo_lsq",
+                       "GuideStarEmbed_NoInverseKzz",
+                       "MLNN_baseline_smol",
+                       "MLNN_pseudo_lsq_smol",
+                       "MLNN_NoInverseKzz_smol",
+                       "GuideStarEmbed_singlemode_smol",
+                       "GuideStarEmbed_pseudo_lsq_smol",
+                       "GuideStarEmbed_NoInverseKzz_smol"
+                    ],
+
+      "lsq_off": false,
+      "glao_off": false,
+      "ao_off": false,
+      "mmse_off": false,
+
+      "sample_set_off": true,
+      "sample_seed": 123,
+      
+      "epochs": 1000,
+      "training_size": 256,
+      "testing_size": 256,
+      "verification_size": 0,
+      "save_frequency": 250,
+      "display_training": false,
+      
+      "shwfs": false,
+      "noise": false,
+      
+      "asterism_size": 3,
+      "asterism_quality_threshold": 0.04,
+      "minimum_asterism_quality": 0.00,
+      
+      "satellites": false,
+      "period": 72,
+
+      "load_previous": false,
+      "continue_training": false,
+
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",
+      "quality_model": "Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+      "regime_model": "NN_tomo_regime.pkl"
+    }
+]

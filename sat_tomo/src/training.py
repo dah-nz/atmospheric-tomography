@@ -236,7 +236,8 @@ def run(cfg):
             "Variable": variable_trainer,
         }
 
-    results, phase_data, asterism_data = verification(cfg, log, asterism_sets, model_data, mask, shwfs, results, phase_data, asterism_data)
+    if cfg.verification_size > 0:
+        results, phase_data, asterism_data = verification(cfg, log, asterism_sets, model_data, mask, shwfs, results, phase_data, asterism_data)
 
     df = pd.DataFrame.from_dict(results, orient="columns")
     df_phase = pd.DataFrame.from_dict(phase_data, orient="columns")

@@ -128,9 +128,103 @@ def training(cfg, file_name="current/results.csv"):
     # print(df_v_coeff[["Model", "Loss"]].groupby("Model").describe())
     
 def main():
+    # main_testing_run()
+    heuristic_training()
+
+def heuristic_training():
+    file_name = "current/results.csv"
+    save_dir = "//file/UsersD$/dah158/Home/My Documents/03 - Doctorate/2026/Journal Paper/fig"
+
+    dfs = []
+
+    for heuristic in ["none", "regime", "quality", "both"]:
+        directory = f"D:/Data/2026/heuristic_{heuristic}"
+        with open(os.path.join(directory, file_name), 'r') as f:
+            df0 = pd.read_csv(f)
+            df0["Heuristic"] = heuristic.title()
+            dfs.append(df0)
+
+    df = pd.concat(dfs, ignore_index=True)
+    df = df.sort_values(by=["Epoch"])
+
+    window_size = 10
+
+    df[f'Moving Average'] = (
+        df.groupby(['Type', 'Model', 'Stage', 'Asterism', 'Heuristic'])['Loss']
+        .transform(lambda x: x.rolling(window=window_size, min_periods=1).mean())
+    )
+
+    df["Embed"] = "No"
+    df.loc[df['Model'].str.contains("Embed"), "Embed"] = "Yes"
+    df.loc[df['Model'].isin(['Open Loop', 'LeastSquares', 'MMSE', "Fitting Error", 'GLAO', 'AO']), "Embed"] = "NA"
+    print(df['Embed'].unique())
+
+    df["Size"] = "Standardised"
+    df.loc[df['Model'].str.contains("smol"), "Size"] = "Small"
+    print(df['Size'].unique())
+
+    df["Model"] = df["Model"].replace(r'(?:^GuideStarEmbed|Embed)_?', '', regex=True)
+    df["Model"] = df["Model"].replace(r'smol_', '', regex=True)
+    df["Model"] = df["Model"].replace(r'MLNN_', '', regex=True)
+    df["Model"] = df["Model"].replace(r'ResNet(?!_|$)', 'ResNet_', regex=True)
+    df["Save_Epoch"] = df["Model"].str.extract(r'_e(\d+)').fillna("Final")
+    #  = np.where(extracted.notna(), extracted, "Final")
+    print(df["Save_Epoch"].unique())
+    df["Model"] = df["Model"].replace(r'_Variable.*', '', regex=True)
+    df["Model"] = df["Model"].replace(r'_smol', '', regex=True)
+
+    df = df[df['Model'] != 'singlemode']
+
+    df["Model"] = df["Model"].map({
+        'baseline': "Direct MLNN",
+        'pseudo_lsq': "Pseudo-LS",
+        'pseudo_mmse': "Pseudo-MMSE",
+        'NoInverseKzz': "PQ + Priors",
+        'LeastSquares': "Least Squares"
+    }).fillna(df["Model"])
+
+    print(df["Model"].unique())
+
+    # for D_r0 in df["D_r0"].unique():
+    #     for r0_Type in df["r0_Type"].unique():
+    df0 = df[(df["Save_Epoch"] == "Final") 
+            & (df["Size"] == "Standardised") 
+            & (df["Type"] == "Reconstruction")
+            & (df["Stage"] == "Train")
+            & (df["Embed"] != "No")
+            & (df["Model"].isin(['Direct MLNN', 'Pseudo-LS']))]
+    # df0['Model'] = df0['Model'].cat.remove_unused_categories()
+    # df0 = df0.sort_values(by=["Model"])
+    g = sns.relplot(data=df0, kind='line', 
+        x='Epoch', y='Moving Average', hue="Model", style="Heuristic",
+        facet_kws={'sharey': "row", 'sharex': True})
+    g.set(ylabel="Moving Average Loss (rads$^2$)", ylim=(10, 40))
+    # g.figure.suptitle(f"D/r0 = {D_r0}")
+    # g.figure.tight_layout()
+    g.figure.subplots_adjust(top=0.9)
+    plt.savefig(os.path.join(save_dir, f"heuristic_training_relplot.pgf"), backend='pgf')
+
+    for heuristic in df["Heuristic"].unique():
+        df1 = df[(df["Save_Epoch"] == "Final") 
+            & (df["Size"] == "Standardised") 
+            & (df["Type"] == "Reconstruction")
+            & (df["Stage"] == "Verification")
+            & (df["Heuristic"] == heuristic)]
+
+        print(f"*** Reconstruction Statistics: Heuristic: {heuristic} ***")
+        print(df1.groupby(["Model", "Embed"])["Loss"].describe())
+
+    plt.show()
+
+
+def main_testing_run():
     file_name = "current/results.csv"
     r0_type = ["different"]
-    Dr0_values = [10, 20, 30, 40]
+
+    save_dir = "//file/UsersD$/dah158/Home/My Documents/03 - Doctorate/2026/Journal Paper/fig"
+    height = 3.2
+    # Dr0_values = [10, 20, 30, 40]
+    Dr0_values = [30]
 
     dfs = []
 
@@ -224,16 +318,17 @@ def main():
                     & (df["D_r0"] == D_r0)
                     & (df["r0_Type"] == r0_Type)
                     & (df["Embed"] != "No")
-                    & (df["Model"].isin(['GLAO', 'Direct MLNN', 'ResNet', 'Pseudo-LS', 'Pseudo-MMSE']))]
+                    & (df["Model"].isin(['Direct MLNN', 'ResNet', 'Pseudo-LS', 'PQ + Priors', 'GLAO']))]
             # df0['Model'] = df0['Model'].cat.remove_unused_categories()
-            df0 = df0.sort_values(by=["Model"])
+            # df0 = df0.sort_values(by=["Model"])
             g = sns.relplot(data=df0, kind='line', 
                 x='Epoch', y='Moving Average', hue="Model",
                 facet_kws={'sharey': "row", 'sharex': True})
-            g.set(yscale='log', ylabel="Moving Average Loss (rads$^2$)")
-            g.figure.suptitle(f"D/r0 = {D_r0}")
+            g.set(ylabel="Moving Average Loss (rads$^2$)", ylim=(10, 40))
+            # g.figure.suptitle(f"D/r0 = {D_r0}")
             # g.figure.tight_layout()
             g.figure.subplots_adjust(top=0.9)
+            plt.savefig(os.path.join(save_dir, f"training_relplot.pgf"), backend='pgf')
 
     for D_r0 in df["D_r0"].unique():
         for r0_Type in df["r0_Type"].unique():
@@ -243,16 +338,40 @@ def main():
                     & (df["D_r0"] == D_r0)
                     & (df["r0_Type"] == r0_Type)
                     & (df["Embed"] != "No")
-                    & (df["Model"].isin(['Pseudo-LS', 'ResNet']))]
+                    & (df["Model"].isin(['Direct MLNN', 'ResNet', 'Pseudo-LS', 'PQ + Priors']))]
             # df0['Model'] = df0['Model'].cat.remove_unused_categories()
-            df0 = df0.sort_values(by=["Model"])
+            # df0 = df0.sort_values(by=["Model"])
             g = sns.relplot(data=df0, kind='line', 
                 x='Epoch', y='Moving Average', hue="Model", style='Size',
                 facet_kws={'sharey': "row", 'sharex': True})
-            g.set(yscale='log', ylabel="Moving Average Loss (rads$^2$)")
-            g.figure.suptitle(f"D/r0 = {D_r0}")
+            g.set(ylabel="Moving Average Loss (rads$^2$)", ylim=(10, 40))
+            # g.figure.suptitle(f"D/r0 = {D_r0}")
             # g.figure.tight_layout()
             g.figure.subplots_adjust(top=0.9)
+            # plt.tight_layout()
+            plt.savefig(os.path.join(save_dir, f"size_relplot.pgf"), backend='pgf')
+    
+    for D_r0 in df["D_r0"].unique():
+        for r0_Type in df["r0_Type"].unique():
+            df0 = df[(df["Save_Epoch"] == "Final") 
+                    & (df["Type"] == "Reconstruction")
+                    & (df["Stage"] == "Train")
+                    & (df["D_r0"] == D_r0)
+                    & (df["r0_Type"] == r0_Type)
+                    & (df["Size"] == "Standardised")
+                    & (df["Model"].isin(['Direct MLNN', 'ResNet', 'Pseudo-LS', 'PQ + Priors']))]
+            # df0['Model'] = df0['Model'].cat.remove_unused_categories()
+            # df0 = df0.sort_values(by=["Model"])
+            g = sns.relplot(data=df0, kind='line', 
+                x='Epoch', y='Moving Average', hue="Model", style='Embed',
+                facet_kws={'sharey': "row", 'sharex': True})
+            g.set(ylabel="Moving Average Loss (rads$^2$)", ylim=(10, 40))
+            # g.figure.suptitle(f"D/r0 = {D_r0}")
+            # g.figure.tight_layout()
+            g.figure.subplots_adjust(top=0.9)
+            # plt.tight_layout()
+            plt.savefig(os.path.join(save_dir, f"embedding_relplot.pgf"), backend='pgf')
+
 
     for D_r0 in df["D_r0"].unique():
         for r0_Type in df["r0_Type"].unique():
@@ -272,7 +391,7 @@ def main():
             # df0 = df0.sort_values(by=["Model"])
             fig, axs = plt.subplots(1, 1)
             sns.boxplot(data=df0, x='Model', y='Loss', ax=axs, log_scale=True, order=order)
-            axs.set_title(f"D/r0 = {D_r0}")
+            # axs.set_title(f"D/r0 = {D_r0}")
             axs.tick_params(axis='x', rotation=30)
             axs.set_ylabel("Loss (rads$^2$)")
 

@@ -2211,7 +2211,11 @@ def test_show_heatmap():
     plt.show()
 
 def test_show_heatmap_from_generation():
+    
+    save_dir = "//file/UsersD$/dah158/Home/My Documents/03 - Doctorate/2026/Journal Paper/fig"
+    height = 3.2
     n = 10000
+
     asterism_list, low_quality_list, high_quality_list, ao_regime_list, tomo_regime_list, raw_asterism_list = \
         asterisms.generate_asterisms(n, 
                                      quality_threshold=0.0,
@@ -2251,7 +2255,7 @@ def test_show_heatmap_from_generation():
         "Low Quality": low_quality_list,
         "High Quality": high_quality_list,
         "AO Regime": ao_regime_list,
-        "Tomo Regime": tomo_regime_list,
+        "Tomographic Regime": tomo_regime_list,
 
     }
 
@@ -2272,7 +2276,7 @@ def test_show_heatmap_from_generation():
         # xy_heatmap, xedges, yedges = np.histogram2d(X, Y, bins=50, density=True)
         tg_heatmap, xedges, yedges = np.histogram2d(gamma, theta, bins=50, density=True)
 
-        fig, ax = plt.subplots(1, 1)
+        fig, ax = plt.subplots(1, 1, figsize=(height, height))
         # fig.canvas.set_window_title(f'{name} asterisms')
         fig.suptitle(f'{name} asterisms')
         # ax[0].imshow(xy_heatmap.T, origin='lower', extent=[X.min(), X.max(), Y.min(), Y.max()])
@@ -2280,16 +2284,51 @@ def test_show_heatmap_from_generation():
         ax.set_xlabel('Angle from centre (")')
         ax.set_ylabel('Angle around aperture (rads)')
 
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_dir, f"heatmap_{name}.pgf"), backend='pgf')
+
         fig, ax = plt.subplots(2, 1)
         # fig.canvas.set_window_title(f'{name} asterisms')
         fig.suptitle(f'{name} asterisms')
         # ax[0].imshow(xy_heatmap.T, origin='lower', extent=[X.min(), X.max(), Y.min(), Y.max()])
-        ax[0].hist(gamma, bins=50)
-        ax[1].hist(theta, bins=50)
+        ax[0].hist(gamma, bins=50, range=(0, 120))
+        ax[1].hist(theta, bins=50, range=(0, 2*np.pi))
         ax[0].set_xlabel('Angle from centre (")')
         ax[0].set_ylabel('Density')
         ax[1].set_xlabel('Angle around aperture (rads)')
         ax[1].set_ylabel('Density')
+
+        # plt.savefig(os.path.join(save_dir, f"hist_{name}.pgf"), backend='pgf')
+
+    fig, ax = plt.subplots(1,1, figsize=(height, height))
+    for name, asts in ast_dict.items():
+        if name in ["Selected", "High Quality", "Tomographic Regime"]:
+            gf = lambda x: x.gamma
+            gamma = np.array(list(map(gf, asts)))
+            gamma = util.rad2arcsec(gamma)
+            ax.hist(gamma, bins=100, range=(0, 120), label=name, histtype="step")
+
+    ax.set_xlabel('Angle from centre (")')
+    ax.set_ylabel('Count')
+    ax.legend()
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, f"hist_compare.pgf"), backend='pgf')
+
+    fig, ax = plt.subplots(1,1, figsize=(height, height))
+    for name, asts in ast_dict.items():
+        if name in ["Selected", "High Quality", "Tomographic Regime"]:
+            gf = lambda x: x.gamma
+            gamma = np.array(list(map(gf, asts)))
+            gamma = util.rad2arcsec(gamma)
+            ax.hist(gamma, bins=100, range=(0, 120), label=name, density=True, cumulative=True, histtype='step')
+
+    ax.set_xlabel('Angle from centre (")')
+    ax.set_ylabel('Density')
+    ax.legend(loc="upper left")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, f"cdf_compare.pgf"), backend='pgf')
 
     # df["X"] = df['Gamma'] * np.cos(df['Theta'])
     # df["Y"] = df['Gamma'] * np.sin(df['Theta'])

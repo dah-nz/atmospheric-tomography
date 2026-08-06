@@ -8,6 +8,8 @@ from torchinfo import summary, ModelStatistics
 import cfg as config
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+import matplot2tikz as tikzplotlib
 from tomography import asterisms, phase_screen, tomography, beacon, psf
 
 def size(info):
@@ -18,10 +20,12 @@ def size(info):
 def run_tests():
     # model_sizes()
 
+    run_models_over_different_heuristics()
+    display_models_over_different_heuristics()
     # run_models_over_different_Dr0()
     # display_models_over_different_Dr0()
 
-    run_and_display_single_example()
+    # run_and_display_single_example()
 
 def model_sizes():
     data = []
@@ -103,7 +107,7 @@ def run_models_over_different_Dr0():
 
     df = pd.DataFrame.from_dict(results, orient="columns")
 
-    df.to_parquet(os.path.join("D:/Data/2026/cross_comparison", f"CrossComparisonForDR0_{int(cfg.diameter/cfg.total_r0)}.parquet"))
+    df.to_parquet(os.path.join("D:/Data/2026/cross_comparison/constant", f"CrossComparisonForDR0_{int(cfg.diameter/cfg.total_r0)}.parquet"))
     print(df.head())
 
     # Build a set of different atmospheres with different D/r0 profiles
@@ -118,7 +122,7 @@ def display_models_over_different_Dr0():
     import glob
     import matplotlib.lines as mlines
 
-    search_pattern = os.path.join("D:/Data/2026/cross_comparison", "CrossComparisonForDR0*.parquet")
+    search_pattern = os.path.join("D:/Data/2026/cross_comparison/constant", "CrossComparisonForDR0*.parquet")
     files = glob.glob(search_pattern)
 
     df = pd.DataFrame()
@@ -209,6 +213,8 @@ def run_and_display_single_example():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    seed = 4
+
     cfg = config.Config()
 
     mask = cfg.basis.get_mask(cfg.aperture_size)
@@ -223,7 +229,7 @@ def run_and_display_single_example():
 
     MMSE = tomography.MMSE(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size, r0=cfg.total_r0)
 
-    atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, r0, cfg.diameter, cfg.aperture_size)
+    atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, r0, cfg.diameter, cfg.aperture_size, rng=seed)
     angle_norm = lambda x: [(x.theta % (2*np.pi)) / (2*np.pi), x._gamma_arcsec / atmosphere.limit_angle]
 
     asterism = asterisms.generate_asterisms(1, 
@@ -233,7 +239,8 @@ def run_and_display_single_example():
                                             use_regime_model=True,
                                             model_location=cfg.asterism_model_location,
                                             quality_model=cfg.quality_model,
-                                            regime_model=cfg.regime_model)[0]
+                                            regime_model=cfg.regime_model,
+                                            rng=seed)[0]
 
     gs_x = [a.position_arcsec()[0] for a in asterism]
     gs_y = [a.position_arcsec()[1] for a in asterism]
@@ -269,34 +276,49 @@ def run_and_display_single_example():
     mmse_screen = cfg.basis.compose(target_screen.shape, mmse_coeffs)
     
     # Plot different parts
-    cmap = 'inferno'
+    height=3.2
+    cmap = 'viridis'
+
+    save_dir = "//file/UsersD$/dah158/Home/My Documents/03 - Doctorate/2026/Journal Paper/fig"
 
     vmax = max(np.max(target_screen), np.max(fitted_screen), np.max(recon_screen), np.max(mmse_screen))
     vmin = min(np.min(target_screen), np.min(fitted_screen), np.min(recon_screen), np.min(mmse_screen))
+    vmax, vmin = max(vmax, -vmin), min(-vmax, vmin)
     extent_a = (120, -120, 120, -120)
 
-
-    plt.figure()
+    plt.figure(figsize=(height, height))
     plt.imshow(fitted_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "fitted_screen.tex"))
+    plt.savefig(os.path.join(save_dir, "example_fitted_screen.pgf"), backend='pgf')
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     plt.imshow(recon_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "recon_screen.tex"))
+    plt.savefig(os.path.join(save_dir, "example_recon_screen.pgf"), backend='pgf')
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     plt.imshow(mmse_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "mmse_screen.tex"))
+    plt.savefig(os.path.join(save_dir, "example_mmse_screen.pgf"), backend='pgf')
 
     target_screen *= mask
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     scr_im = plt.imshow(target_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "target_screen.tex"))
+    plt.savefig(os.path.join(save_dir, "example_target_screen.pgf"), backend='pgf')
 
     dmax = max(np.max(target_screen - fitted_screen),
                np.max(target_screen - recon_screen),
@@ -304,24 +326,35 @@ def run_and_display_single_example():
     dmin = min(np.min(target_screen - fitted_screen),
                np.min(target_screen - recon_screen),
                np.min(target_screen - mmse_screen))
+    dmax, dmin = max(dmax, -dmin), min(-dmax, dmin)
+    # dmax, dmin = vmax, vmin
     
-    plt.figure()
+    plt.figure(figsize=(height, height))
     dif_im = plt.imshow(target_screen - fitted_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "fitted_resid.tex"))
+    plt.savefig(os.path.join(save_dir, "example_fitted_resid.pgf"), backend='pgf')
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     plt.imshow(target_screen - recon_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "recon_resid.tex"))
+    plt.savefig(os.path.join(save_dir, "example_recon_resid.pgf"), backend='pgf')
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     plt.imshow(target_screen - mmse_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "mmse_resid.tex"))
+    plt.savefig(os.path.join(save_dir, "example_mmse_resid.pgf"), backend='pgf')
 
     wavelength = 550e-9
-    res = 600*wavelength/cfg.diameter
+    res = 1000 * wavelength / cfg.diameter
     extent_l = (-res/2 * 1e6, res/2 * 1e6, -res/2 * 1e6, res/2 * 1e6)
 
     airy_disc = psf.psf(mask)
@@ -329,51 +362,292 @@ def run_and_display_single_example():
     recon_psf = psf.psf(target_screen - recon_screen)
     mmse_psf = psf.psf(target_screen - mmse_screen)
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     airy_psf = np.log10(airy_disc / airy_disc.max())
     psf_im = plt.imshow(airy_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
     plt.xlabel("Position ($\mu$m)")
     plt.ylabel("Position ($\mu$m)")
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "airy_psf.tex"))
+    plt.savefig(os.path.join(save_dir, "example_airy_psf.pgf"), backend='pgf')
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     fitted_psf = np.log10(fitted_psf / airy_disc.max())
     plt.imshow(fitted_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
     plt.xlabel("Position ($\mu$m)")
     plt.ylabel("Position ($\mu$m)")
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "fitted_psf.tex"))
+    plt.savefig(os.path.join(save_dir, "example_fitted_psf.pgf"), backend='pgf')
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     recon_psf = np.log10(recon_psf / airy_disc.max())
     plt.imshow(recon_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
     plt.xlabel("Position ($\mu$m)")
     plt.ylabel("Position ($\mu$m)")
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "recon_psf.tex"))
+    plt.savefig(os.path.join(save_dir, "example_recon_psf.pgf"), backend='pgf')
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     mmse_psf = np.log10(mmse_psf / airy_disc.max())
     plt.imshow(mmse_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
     plt.xlabel("Position ($\mu$m)")
     plt.ylabel("Position ($\mu$m)")
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "mmse_psf.tex"))
+    plt.savefig(os.path.join(save_dir, "example_mmse_psf.pgf"), backend='pgf')
 
-    plt.figure()
+    plt.figure(figsize=(height, height))
     ax = plt.gca()
     plt.scatter(gs_x, gs_y, marker="x")
     x = [120 * np.cos(theta) for theta in np.linspace(0, 2*np.pi, endpoint=True)]
     y = [120 * np.sin(theta) for theta in np.linspace(0, 2*np.pi, endpoint=True)]
     plt.plot(x, y, "--")
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
     ax.set_aspect('equal', 'box')
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, "example_asterism.pgf"), backend='pgf')
+    # tikzplotlib.save(os.path.join(save_dir, "asterism.tex"))
 
-    fig2, ax2 = plt.subplots(figsize=(1, 4.5))
-    cbar = fig2.colorbar(psf_im, cax=ax2, orientation='vertical', cmap=cmap)
+    fig2, ax2 = plt.subplots(figsize=(1, height))
+    # fig2 = plt.figure(figsize=(1, 4.5))
+    # ax2 = fig2.add_axes() #[0.1, 0.1, 0.3, 0.8])
+    cmap = eval(f"mpl.cm.{cmap}")
+    norm = mpl.colors.Normalize(vmin=-6, vmax=0)
+
+    cbar = mpl.colorbar.ColorbarBase(ax2, cmap=cmap, norm=norm, orientation='vertical')
+
     cbar.set_label("Normalised Intensity [$\\log(I/I_{max})$]")
     fig2.tight_layout()
+    plt.savefig(os.path.join(save_dir, "example_psf_cb.pgf"), backend='pgf')
+    # tikzplotlib.save(os.path.join(save_dir, "psf_cb.tex"))
 
-    fig3, ax3 = plt.subplots(figsize=(1, 4.5))
-    cbar = fig3.colorbar(scr_im, cax=ax3, orientation='vertical', cmap=cmap)
+    # cbar = fig2.colorbar(psf_im, ax=ax2, cax=ax2, orientation='vertical', cmap=cmap)
+
+    # cbar = fig2.colorbar(psf_im, ax=ax2, cax=ax2, orientation='vertical', cmap=cmap)
+    # cbar.set_label("Normalised Intensity [$\\log(I/I_{max})$]")
+    # fig2.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "psf_cb.tex"))
+
+    fig3, ax3 = plt.subplots(figsize=(1, height))
+    # fig3 = plt.figure(figsize=(1, 4.5))
+    # ax3 = fig3.add_axes() #[0.1, 0.1, 0.3, 0.8])
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+
+    cbar = mpl.colorbar.ColorbarBase(ax3, cmap=cmap, norm=norm, orientation='vertical')
+
     cbar.set_label("Phase (radians)")
     fig3.tight_layout()
+    plt.savefig(os.path.join(save_dir, "example_screen_cb.pgf"), backend='pgf')
+    # tikzplotlib.save(os.path.join(save_dir, "screen_cb.tex"))
 
-    fig4, ax4 = plt.subplots(figsize=(1, 4.5))
-    cbar = fig4.colorbar(dif_im, cax=ax4, orientation='vertical', cmap=cmap)
+    # cbar = fig3.colorbar(scr_im, ax=ax3, cax=ax3, orientation='vertical', cmap=cmap)
+    # cbar.set_label("Phase (radians)")
+    # fig3.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "screen_cb.tex"))
+
+    fig4, ax4 = plt.subplots(figsize=(1, height))
+    # fig4 = plt.figure(figsize=(1, 4.5))
+    # ax4 = fig4.add_axes() #[0.1, 0.1, 0.3, 0.8])
+    norm = mpl.colors.Normalize(vmin=dmin, vmax=dmax)
+
+    cbar = mpl.colorbar.ColorbarBase(ax4, cmap=cmap, norm=norm, orientation='vertical')
+
     cbar.set_label("Phase (radians)")
     fig4.tight_layout()
+    plt.savefig(os.path.join(save_dir, "example_resid_cb.pgf"), backend='pgf')
+    # tikzplotlib.save(os.path.join(save_dir, "resid_cb.tex"))
 
+    # cbar = fig4.colorbar(dif_im, ax=ax4, cax=ax4, orientation='vertical', cmap=cmap)
+    # cbar.set_label("Phase (radians)")
+    # fig4.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "resid_cb.tex"))
+
+    pass
+
+def run_models_over_different_heuristics():
+    from training import run_epoch
+    
+    N = 1000
+
+    cfg = config.Config()
+
+    ml_run = ml.Trainer(cfg, skip_lsq=True)
+
+    results = {
+        "Model_Heuristic": [],
+        "Asterism_Heuristic": [],
+        "Model": [],
+        "Type": [],
+        "Loss": [],
+        "stdev": []
+    }
+
+    heuristics = ["both", "none", "quality", "regime"]
+
+    directory_base = cfg.directory.split("_")[0]
+
+    directories = [directory_base + "_" + h for h in heuristics]
+    print(ml_run.model_file_names)
+
+    mask = cfg.basis.get_mask(cfg.aperture_size)
+
+    # layer_conditions = {
+    #     "UCMJO": ([0.88, 0.03, 0.09], [1000, 5000, 10000]),
+    #     "Ellerbroek": ([0.230, 0.296, 0.246, 0.110, 0.064, 0.050, 0.004], [4.5, 463, 1483, 4840, 11122, 14906, 18635])
+    # }
+
+    # for profile, (cn2_pc, alts) in layer_conditions.items():
+        # for D_r0 in [5., 10., 15., 20., 25., 30., 35., 40., 45., 50.]:
+            # total_r0 = cfg.diameter / D_r0
+            # var = total_r0 ** (-5/3)
+
+            # r0 = [(var * layer_cn2_pc) ** (-3/5) for layer_cn2_pc in cn2_pc]
+
+    for heuristic in heuristics:
+        atm = phase_screen.Atmosphere(N, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+
+        if heuristic == "both" or heuristic == "quality":
+            quality_model = cfg.quality_model
+        else:
+            quality_model = None
+
+        if heuristic == "both" or heuristic == "regime":
+            regime_model = cfg.regime_model
+        else:
+            regime_model = None
+
+        asts = asterisms.generate_asterisms(N, 
+                                            mask=mask,
+                                            quality_threshold=cfg.asterism_quality_threshold,
+                                            quality_limit=cfg.minimum_asterism_quality,
+                                            use_regime_model=True,
+                                            model_location=cfg.asterism_model_location,
+                                            quality_model=quality_model,
+                                            regime_model=regime_model)
+
+        for model_h, directory in zip(heuristics, directories):
+            ml_run.load_models(suffix="_Variable_Final", dir=directory + "/current")
+
+            result_data = run_epoch(ml_run, N, asts, atm, cfg.basis, train=False, wfs=None)
+
+            for model, data_dict in result_data.items():
+                for key, value in data_dict.items():
+                    results["Model_Heuristic"].append(model_h)
+                    results["Asterism_Heuristic"].append(heuristic)
+                    results["Model"].append(model)
+                    results["Type"].append(key)
+                    results["Loss"].append(np.mean(value))
+                    results['stdev'].append(np.std(value))
+
+    df = pd.DataFrame.from_dict(results, orient="columns")
+
+    df.to_parquet(os.path.join("D:/Data/2026/heuristic_comparison", f"HeuristicComparison.parquet"))
+    print(df.head())
+
+def display_models_over_different_heuristics():
+
+    # Display results from above
+    import glob
+    import matplotlib.lines as mlines
+
+    file_path = os.path.join("D:/Data/2026/heuristic_comparison", "HeuristicComparison.parquet")
+    df = pd.read_parquet(file_path)
+    
+    # Set embedding state
+    df["Embed"] = "No"
+    df.loc[df['Model'].str.contains("Embed"), "Embed"] = "Yes"
+    df.loc[df['Model'].isin(['Open Loop', 'LeastSquares', 'MMSE', "Fitting Error", 'GLAO', 'AO']), "Embed"] = "NA"
+    df["Model"] = df["Model"].replace(r'(?:^GuideStarEmbed|Embed)_?', '', regex=True)
+    print(df['Embed'].unique())
+
+    # Set size variable
+    df["Size"] = "Standardised"
+    df.loc[df['Model'].str.contains("smol"), "Size"] = "Small"
+    df.loc[df['Model'].isin(['Open Loop', 'LeastSquares', 'MMSE', "Fitting Error", 'GLAO', 'AO']), "Size"] = "NA"
+    print(df['Size'].unique())
+    df["Model"] = df["Model"].replace(r'smol_', '', regex=True)
+    df["Model"] = df["Model"].replace(r'_smol', '', regex=True)
+
+    # Remove unwanted junk from Model names
+    df["Model"] = df["Model"].replace(r'MLNN_', '', regex=True)
+    df["Model"] = df["Model"].replace(r'ResNet(?!_|$)', 'ResNet_', regex=True)
+    df["Model"] = df["Model"].replace(r'_Variable.*', '', regex=True)
+    
+    df = df[df['Model'] != 'singlemode']
+
+    df["Model"] = df["Model"].map({
+        'baseline': "Direct MLNN",
+        'pseudo_lsq': "Pseudo-LS",
+        'pseudo_mmse': "Pseudo-MMSE",
+        'NoInverseKzz': "PQ + Priors",
+        'LeastSquares': "LS"
+    }).fillna(df["Model"])
+
+    print(df.head())
+    print(df["Model"].unique())
+
+    size_excl = "Small"
+    embed_excl = "No"
+
+
+    # df0 = df0.sort_values(by=["Model"])
+
+    df["Model_Heuristic"] = df["Model_Heuristic"].map({
+        'both': "Both",
+        'none': "None",
+        'regime': "Tomographic Regime",
+        'quality': "Quality",
+    }).fillna(df["Model_Heuristic"])
+
+    df["Asterism_Heuristic"] = df["Asterism_Heuristic"].map({
+        'both': "Both",
+        'none': "None",
+        'regime': "Tomographic Regime",
+        'quality': "Quality",
+    }).fillna(df["Asterism_Heuristic"])
+
+    df = df.rename(columns= {"Model_Heuristic": "Model Heuristic", "Asterism_Heuristic": "Asterism Heuristic"})
+
+    df = df[(df["Size"] != size_excl) 
+            & (df["Type"] == "Reconstruction")
+            & (df["Embed"] != embed_excl)]
+
+
+    for model in df["Model"].unique():
+        df0 = df[df["Model"] == model]
+        # print(df0.groupby(["Model Heuristic", "Asterism Heuristic"])["Loss"].mean())
+        print(df0)
+
+    # g = sns.relplot(data=df0, kind='line',
+    #                 x="D_r0", y="Loss", hue="Model $D/r_0$", style="Profile")
+    # g.set(ylabel="Reconstruction Loss (rads$^2$)", xlabel="$D/r_0$")
+    # g._legend.remove()
+
+    # group_cols = [c for c in df.columns if c not in ["Model_D_r0", "Profile", "Loss"]]
+    # dfm = df.groupby(group_cols, as_index=False)['Loss'].mean()
+    # dfm = dfm[(dfm["Size"] != size_excl)
+    #           & (dfm["Type"] == "Reconstruction")
+    #           & (dfm["Embed"] != embed_excl)
+    #           & (dfm["Model"].isin(["GLAO", "Fitting Error"]))]
+
+    # r0_list = dfm[dfm["Model"] == "GLAO"]["D_r0"].tolist()
+    # glao_list = dfm[dfm["Model"] == "GLAO"]["Loss"].tolist()
+
+    # r0_fe_list = dfm[dfm["Model"] == "Fitting Error"]["D_r0"].tolist()
+    # fe_list = dfm[dfm["Model"] == "Fitting Error"]["Loss"].tolist()
+
+    # for ax in g.axes.flat:
+    #     ax.plot(r0_fe_list, fe_list, label="Fitting Error")
+    #     ax.plot(r0_list, glao_list, label="GLAO")
+
+    #     handles, labels = ax.get_legend_handles_labels()
+    #     blank_handle = mlines.Line2D([], [], color='none')
+
+    #     handles.insert(-2, blank_handle)
+    #     labels.insert(-2, '')   # use ' ' (a space) if '' gets collapsed/stripped
+
+    #     ax.legend(handles, labels)
     pass

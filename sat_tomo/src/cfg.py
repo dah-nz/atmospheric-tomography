@@ -149,7 +149,7 @@ class Config():
         # if type(args.asterism_angle_threshold) is str:
         #     args.asterism_angle_threshold = float(args.asterism_angle_threshold)
 
-        if args.verification_size <= 0:
+        if args.verification_size < 0:
             args.verification_size = args.testing_size
 
         if args.altitudes is None or len(args.altitudes) == 0:
@@ -215,6 +215,11 @@ class Config():
             else:
                 self.total_r0 = np.sum([r0 ** (-5/3) for r0 in args.r0]) ** (-3/5)
 
+        if args.quality_model == "disabled":
+            self.quality_model = None
+
+        if args.regime_model == "disabled":
+            self.regime_model = None
 
         match self.loss_function:
             case _: #mse_loss
@@ -223,7 +228,10 @@ class Config():
         self.args = args
 
     def get_file_name(self, name):
-        return f"{name}_{type(self.basis).__name__}_{self.num_modes}_{self.total_r0}_{self.diameter}"
+        if float(f"{self.total_r0:.3f}") == float(f"{self.total_r0:.2f}"):
+            return f"{name}_{type(self.basis).__name__}_{self.num_modes}_{self.total_r0:.2f}_{self.diameter}"
+        return f"{name}_{type(self.basis).__name__}_{self.num_modes}_{self.total_r0:.3f}_{self.diameter}"
+        
     
     def save(self, directory):
 
