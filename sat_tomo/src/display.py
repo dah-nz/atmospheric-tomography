@@ -192,11 +192,11 @@ def heuristic_training():
             & (df["Type"] == "Reconstruction")
             & (df["Stage"] == "Train")
             & (df["Embed"] != "No")
-            & (df["Model"].isin(['Direct MLNN', 'Pseudo-LS']))]
+            & (df["Model"].isin(['Pseudo-LS']))]
     # df0['Model'] = df0['Model'].cat.remove_unused_categories()
     # df0 = df0.sort_values(by=["Model"])
     g = sns.relplot(data=df0, kind='line', 
-        x='Epoch', y='Moving Average', hue="Model", style="Heuristic",
+        x='Epoch', y='Moving Average', hue="Heuristic",
         facet_kws={'sharey': "row", 'sharex': True})
     g.set(ylabel="Moving Average Loss (rads$^2$)", ylim=(10, 40))
     # g.figure.suptitle(f"D/r0 = {D_r0}")

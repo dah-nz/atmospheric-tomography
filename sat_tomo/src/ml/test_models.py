@@ -20,7 +20,7 @@ def size(info):
 def run_tests():
     # model_sizes()
 
-    run_models_over_different_heuristics()
+    # run_models_over_different_heuristics()
     display_models_over_different_heuristics()
     # run_models_over_different_Dr0()
     # display_models_over_different_Dr0()
@@ -611,15 +611,28 @@ def display_models_over_different_heuristics():
 
     df = df.rename(columns= {"Model_Heuristic": "Model Heuristic", "Asterism_Heuristic": "Asterism Heuristic"})
 
-    df = df[(df["Size"] != size_excl) 
-            & (df["Type"] == "Reconstruction")
-            & (df["Embed"] != embed_excl)]
+    df = df[(df["Type"] == "Reconstruction")]
+    #            & ((df["Model Heuristic"] == "Both") | (df["Model Heuristic"] == "None"))
+    #        & ((df["Asterism Heuristic"] == "Both") | (df["Asterism Heuristic"] == "None"))]
 
-
-    for model in df["Model"].unique():
+    for model in ["Pseudo-LS", "AO", "GLAO"]:
         df0 = df[df["Model"] == model]
+        if model == "Pseudo-LS":
+            df1 = df0[df0["Size"] == "Small"]
+            df1 = df1[df1["Embed"] == "Yes"]
+            print(df1)
+            df1 = df0[df0["Size"] == "Small"]
+            df1 = df1[df1["Embed"] == "No"]
+            print(df1)
+            df1 = df0[df0["Size"] == "Standardised"]
+            df1 = df1[df1["Embed"] == "Yes"]
+            print(df1)
+            df1 = df0[df0["Size"] == "Standardised"]
+            df1 = df1[df1["Embed"] == "No"]
+            print(df1)
         # print(df0.groupby(["Model Heuristic", "Asterism Heuristic"])["Loss"].mean())
-        print(df0)
+        else:
+            print(df0)
 
     # g = sns.relplot(data=df0, kind='line',
     #                 x="D_r0", y="Loss", hue="Model $D/r_0$", style="Profile")
