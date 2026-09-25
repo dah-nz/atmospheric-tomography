@@ -1,74 +1,72 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
-r0_layers = np.array([0.0506, 0.3895, 0.2015])  # in meters
+def config(a, b, c):
+    return f'{{\n\
+      "directory": "D:/Data/2026/altitudes2/altitudes_{int(a*1000)}_{int(b*1000)}_{int(c*1000)}",\n\
+      "num_modes": 36,\n\
+      "aperture_size": 100,\n\
+      "diameter": 1.8,\n\
+      "r0": [0.064677, 0.497862, 0.257559],\n\
+      "layers": 3,\n\
+      "altitudes": [{int(a*1000)},{int(b*1000)},{int(c*1000)}],\n\
+      "magnitude": 14,\n\
+      "train_models": ["GuideStarEmbed_baseline",\n\
+                       "GuideStarEmbed_pseudo_lsq",\n\
+                       "GuideStarEmbed_pseudo_mmse",\n\
+                       "GuideStarEmbed_NoInverseKzz",\n\
+                       "ResNetEmbed"\n\
+                    ],\n\
+      "lsq_off": false,\n\
+      "glao_off": false,\n\
+      "ao_off": false,\n\
+      "mmse_off": false,\n\
+      "sample_set_off": true,\n\
+      "sample_seed": 123,\n\
+      "epochs": 0,\n\
+      "training_size": 0,\n\
+      "verification_size": 1000,\n\
+      "save_frequency": 200,\n\
+      "display_training": false,\n\
+      "shwfs": false,\n\
+      "noise": false,\n\
+      "asterism_size": 3,\n\
+      "angle_threshold": 5,\n\
+      "satellites": false,\n\
+      "period": 72,\n\
+      "load_previous": false,\n\
+      "continue_training": false,\n\
+      "verification_skip_lsq": true,\n\
+      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",\n\
+      "quality_model": "disabled",\n\
+      "regime_model": "disabled",\n\
+      "init_model_directory": "D:/Data/2026/all_asterisms/20260817_143646"\n\
+    }}'
 
-r0_total = (np.sum(r0_layers**(-5/3)))**(-3/5)
+with open('output.txt', 'w') as f:
+    first = True
+    A = np.linspace(0, 2, num=21, endpoint=True)
+    B = np.linspace(2, 8, num=25, endpoint=True)
+    C = np.linspace(7, 14, num=29, endpoint=True)
 
-print(r0_total)
-quit()
+    print(A,B,C)
 
-N = 1000
-D = 4
-size = 1000
+    f.write('[')
 
-r0_to_var = lambda r0: 1.0299 * (D/r0) ** (5/3)
-var_to_r0 = lambda var: D * (1.0299 / var) ** (3/5)
+    for a in A:
+        if not first:
+            f.write(',')
+        else:
+            first = False
+        f.write(config(a, 5, 10))
 
-r0_int = []
-r0_sum = []
-r0_exp = []
+    for b in B:
+        if b != 5:
+            f.write(',')
+            f.write(config(1, b, 10))
 
-var_int = []
-var_sum = []
-var_exp = []
+    for c in C:
+        if c != 10:
+            f.write(',')
+            f.write(config(1, 5, c))
 
-
-for _ in range(N):
-    r0 = np.random.normal(0.4, 0.1, 3)
-    # r0_t1 = (r0[0] ** (-5/3) + r0[1] ** (-5/3) + r0[2] ** (-5/3)) ** (-3/5)
-    r0_t1 = np.sum(r0**(-5/3))**(-3/5)
-
-    var_int.append(r0_to_var(r0_t1))
-
-    phi_a = np.random.normal(0, np.sqrt(r0_to_var(r0[0])), size=size)
-    phi_b = np.random.normal(0, np.sqrt(r0_to_var(r0[1])), size=size)
-    phi_c = np.random.normal(0, np.sqrt(r0_to_var(r0[2])), size=size)
-
-    phi_t = phi_a + phi_b + phi_c
-
-    r0_t2 = var_to_r0(np.var(phi_t))
-    var_sum.append(np.var(phi_t))
-
-    r0_a = var_to_r0(np.var(phi_a))
-    r0_b = var_to_r0(np.var(phi_b))
-    r0_c = var_to_r0(np.var(phi_c))
-
-    r0_t3 = (r0_a ** (-5/3) + r0_b ** (-5/3) + r0_c ** (-5/3)) ** (-3/5)
-    var_exp.append(r0_to_var(r0_t3))
-
-    r0_int.append(r0_t1)
-    r0_sum.append(r0_t2)
-    r0_exp.append(r0_t3)
-
-plt.hist(r0_int, bins=50, density=True, alpha=0.5)
-plt.figure()
-plt.hist(r0_sum, bins=50, density=True, alpha=0.5)
-plt.figure()
-plt.hist(r0_exp, bins=50, density=True, alpha=0.5)
-plt.figure()
-plt.hist(np.array(r0_sum) - np.array(r0_exp), bins=50, density=True, alpha=0.5)
-plt.figure()
-plt.hist(np.array(r0_sum) - np.array(r0_int), bins=50, density=True, alpha=0.5)
-plt.figure()
-plt.hist(np.array(r0_int) - np.array(r0_exp), bins=50, density=True, alpha=0.5)
-
-print(np.mean(r0_sum))
-print(np.mean(r0_exp))
-print(np.mean(r0_int))
-
-print(np.mean(var_sum))
-print(np.mean(var_exp))
-print(np.mean(var_int))
-
-plt.show()
+    f.write(']')

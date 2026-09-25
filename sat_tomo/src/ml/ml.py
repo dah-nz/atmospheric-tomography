@@ -136,13 +136,16 @@ class Trainer():
 
         return file_names
 
-    def save_models(self, epoch=-1, prefix="", suffix="", dir=None):
+    def save_models(self, epoch=-1, prefix="", suffix="", dir=None, skip_saving=False):
         files = self.get_file_names(epoch, prefix, suffix, dir)
         data = []
 
         for (model_type, model), ff in zip(self.models.items(), files):
             logger.info(f"Saving {suffix} model state dict for model {model_type} to {ff}")
-            torch.save(model.state_dict(), ff)
+            
+            if not skip_saving:
+                torch.save(model.state_dict(), ff)
+
             if epoch >= 0:
                 name = f"{prefix}{model_type}{suffix}_e{epoch}"
             else:

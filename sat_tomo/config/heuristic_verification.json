@@ -1,6 +1,6 @@
 [
     {
-      "directory": "D:/Data/2026/heuristic_both",
+      "directory": "D:/Data/2026",
       "num_modes": 36,
       "aperture_size": 100,
       "diameter": 1.8,
@@ -13,15 +13,19 @@
                        "ResNet",
                        "MLNN_baseline",
                        "MLNN_pseudo_lsq",
+                       "MLNN_pseudo_mmse",
                        "MLNN_NoInverseKzz",
                        "GuideStarEmbed_baseline",
                        "GuideStarEmbed_pseudo_lsq",
+                       "GuideStarEmbed_pseudo_mmse",
                        "GuideStarEmbed_NoInverseKzz",
                        "MLNN_baseline_smol",
                        "MLNN_pseudo_lsq_smol",
+                       "MLNN_pseudo_mmse_smol",
                        "MLNN_NoInverseKzz_smol",
                        "GuideStarEmbed_singlemode_smol",
                        "GuideStarEmbed_pseudo_lsq_smol",
+                       "GuideStarEmbed_pseudo_mmse_smol",
                        "GuideStarEmbed_NoInverseKzz_smol"
                     ],
 

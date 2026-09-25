@@ -2214,22 +2214,26 @@ def test_show_heatmap_from_generation():
     
     save_dir = "//file/UsersD$/dah158/Home/My Documents/03 - Doctorate/2026/Journal Paper/fig"
     height = 3.2
-    n = 10000
+    n = 100000
 
-    asterism_list, low_quality_list, high_quality_list, ao_regime_list, tomo_regime_list, raw_asterism_list = \
+    selected_asterism_list, shortlist, low_quality_list, high_quality_list, ao_regime_list, tomo_regime_list, raw_asterism_list, min_angle_list = \
         asterisms.generate_asterisms(n, 
                                      quality_threshold=0.0,
                                      quality_limit=0.0,
                                      return_all=True,
                                      model_location=os.path.join(DATA_FOLDER, "Models"),
-                                     quality_model="Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl")
+                                     quality_model="Neural_Network_lsq_strehl_ratio_rel_log_mean_All without Overlap.pkl",
+                                     regime_model=None,
+                                     minimum_angle=5)
 
-    asterism_list = np.array(asterism_list).flatten()
+    shortlist = np.array(shortlist).flatten()
+    selected_asterism_list = np.array(selected_asterism_list).flatten()
     low_quality_list = np.array(low_quality_list).flatten()
     high_quality_list = np.array(high_quality_list).flatten()
     ao_regime_list = np.array(ao_regime_list).flatten()
     tomo_regime_list = np.array(tomo_regime_list).flatten()
     raw_asterism_list = np.array(raw_asterism_list).flatten()
+    min_angle_list = np.array(min_angle_list).flatten()
 
     # print(asterism_list[0])
     # print(low_quality_list[0])
@@ -2237,13 +2241,16 @@ def test_show_heatmap_from_generation():
     # print(ao_regime_list[0])
     # print(tomo_regime_list[0])
     # print(raw_asterism_list[0])
+    N = lambda x: x.shape[0]/3
 
-    # print(asterism_list.shape)
-    # print(low_quality_list.shape)
-    # print(high_quality_list.shape)
-    # print(ao_regime_list.shape)
-    # print(tomo_regime_list.shape)
-    # print(raw_asterism_list.shape)
+    print(f"Selected: {N(selected_asterism_list)}")
+    print(f"Shortlist: {N(shortlist)}")
+    print(f"Low : {N(low_quality_list)}")
+    print(f"High : {N(high_quality_list)}")
+    print(f"AO : {N(ao_regime_list)}")
+    print(f"Tomo : {N(tomo_regime_list)}")
+    print(f"All : {N(raw_asterism_list)}")
+    print(f"Min Angle : {N(min_angle_list)}")
 
     # cfg = config.Config()
     # filepath = os.path.join(cfg.directory, "current/asterisms.csv")
@@ -2251,12 +2258,13 @@ def test_show_heatmap_from_generation():
 
     ast_dict = {
         "All": raw_asterism_list,
-        "Selected": asterism_list,
+        "Shortlist": shortlist,
+        "Selected": selected_asterism_list,
         "Low Quality": low_quality_list,
         "High Quality": high_quality_list,
         "AO Regime": ao_regime_list,
         "Tomographic Regime": tomo_regime_list,
-
+        "Minimum Angle": min_angle_list
     }
 
     for name, asts in ast_dict.items():

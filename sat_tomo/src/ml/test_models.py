@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
+import torch
 # import ml.models as models
 from ml import models, runner, ml
 import torch
@@ -10,7 +11,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplot2tikz as tikzplotlib
-from tomography import asterisms, phase_screen, tomography, beacon, psf
+from tomography import asterisms, phase_screen, tomography, beacon, psf, strehl
 
 def size(info):
     return ModelStatistics.to_megabytes(
@@ -21,11 +22,11 @@ def run_tests():
     # model_sizes()
 
     # run_models_over_different_heuristics()
-    display_models_over_different_heuristics()
+    # display_models_over_different_heuristics()
     # run_models_over_different_Dr0()
     # display_models_over_different_Dr0()
 
-    # run_and_display_single_example()
+    run_and_display_single_example()
 
 def model_sizes():
     data = []
@@ -37,13 +38,15 @@ def model_sizes():
 
 
         info = summary(model, input_size=model.input_size, verbose=0)
-        print(f"{m}: {info.trainable_params}/{info.total_params} [{size(info):.2f} MB]")
-        data.append((m,info.trainable_params,size(info)))
-        if "ResNet" in m:
-            p0 = info.trainable_params
+        print(info)
 
-    for m, p, s in data:
-        print(f"{m},{s:.2f},{p},{(p/p0-1.0)*100.0:.4f}")
+    #     print(f"{m}: {info.trainable_params}/{info.total_params} [{size(info):.2f} MB]")
+    #     data.append((m,info.trainable_params,size(info)))
+    #     if "ResNet" in m:
+    #         p0 = info.trainable_params
+
+    # for m, p, s in data:
+    #     print(f"{m},{s:.2f},{p},{(p/p0-1.0)*100.0:.4f}")
         
     print("TEST")
 
@@ -213,7 +216,7 @@ def run_and_display_single_example():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    seed = 4
+    seed = 7 #7
 
     cfg = config.Config()
 
@@ -221,26 +224,57 @@ def run_and_display_single_example():
 
     target = beacon.Beacon(0,0)
 
-    r0 = [0.194032125, 1.49358721, 0.772677337]
+    # r0 = [0.194032125, 1.49358721, 0.772677337]
+    r0 = [0.064677, 0.497862, 0.257559]
+
+    heuristic = cfg.directory.split('/')[-1]
 
     model = models.GuideStarEmbed_pseudo_lsq(cfg).to(device)
-    filepath = os.path.join(cfg.directory + "/current/parameters", "GuideStarEmbed_pseudo_lsq_Zernike_36_0.059999999912984346_1.8__Variable_Final.mdl")
+    filepath = os.path.join(cfg.directory + "/current/parameters", "GuideStarEmbed_pseudo_lsq_Zernike_36_0.06_1.8__Variable_Final.mdl")
     model.load_state_dict(torch.load(filepath, weights_only=True))
 
     MMSE = tomography.MMSE(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size, r0=cfg.total_r0)
-
+    LSQ = tomography.LeastSquares(cfg.basis, cfg.diameter, cfg.num_modes, cfg.altitudes, cfg.aperture_size, r0=cfg.total_r0)
+    
     atmosphere = phase_screen.Atmosphere(1, cfg.altitudes, r0, cfg.diameter, cfg.aperture_size, rng=seed)
     angle_norm = lambda x: [(x.theta % (2*np.pi)) / (2*np.pi), x._gamma_arcsec / atmosphere.limit_angle]
 
+    # # Method for finding a decent asterism
+    # plt.figure()
+    # ax = plt.gca()
+    # x = [120 * np.cos(theta) for theta in np.linspace(0, 2*np.pi, endpoint=True)]
+    # y = [120 * np.sin(theta) for theta in np.linspace(0, 2*np.pi, endpoint=True)]
+    # plt.plot(x, y, linestyle='dotted', color='k')
+    # plt.plot([0], [0], marker="o")
+
+    # for seed in range(0, 10):
+    #     asterism = asterisms.generate_asterisms(1, 
+    #                                             mask=mask,
+    #                                             quality_threshold=cfg.asterism_quality_threshold,
+    #                                             quality_limit=cfg.minimum_asterism_quality,
+    #                                             model_location=cfg.asterism_model_location,
+    #                                             quality_model=cfg.quality_model,
+    #                                             regime_model=cfg.regime_model,
+    #                                             rng=seed)[0]
+    #     gs_x = [a.position_arcsec()[0] for a in asterism]
+    #     gs_y = [a.position_arcsec()[1] for a in asterism]
+    #     plt.plot(gs_x, gs_y, "--", marker="x", label=seed)
+
+    # plt.xlabel('Position (")')
+    # plt.ylabel('Position (")')
+    # ax.set_aspect('equal', 'box')
+    # plt.legend()
+    # plt.tight_layout()
+    # return
+
     asterism = asterisms.generate_asterisms(1, 
-                                            mask=mask,
-                                            quality_threshold=cfg.asterism_quality_threshold,
-                                            quality_limit=cfg.minimum_asterism_quality,
-                                            use_regime_model=True,
-                                            model_location=cfg.asterism_model_location,
-                                            quality_model=cfg.quality_model,
-                                            regime_model=cfg.regime_model,
-                                            rng=seed)[0]
+                                        mask=mask,
+                                        quality_threshold=cfg.asterism_quality_threshold,
+                                        quality_limit=cfg.minimum_asterism_quality,
+                                        model_location=cfg.asterism_model_location,
+                                        quality_model=cfg.quality_model,
+                                        regime_model=cfg.regime_model,
+                                        rng=seed)[0]
 
     gs_x = [a.position_arcsec()[0] for a in asterism]
     gs_y = [a.position_arcsec()[1] for a in asterism]
@@ -266,23 +300,69 @@ def run_and_display_single_example():
         pred = torch.einsum("bnm,bm->bn", pred_A, X)
 
         pred = pred.to("cpu").detach().numpy().ravel()
+        pred_A = pred_A.to("cpu").detach().numpy()
 
         res = np.zeros_like(target_coeffs)
         np.concatenate((ptt_y, pred), out=res)
 
         recon_screen = cfg.basis.compose(target_screen.shape, res)
 
+    lsq_coeffs = LSQ.run(asterism, target, asterism_coeffs, ptt_y)
+    lsq_screen = cfg.basis.compose(target_screen.shape, lsq_coeffs)
+
     mmse_coeffs = MMSE.run(asterism, target, asterism_coeffs, ptt_y)
     mmse_screen = cfg.basis.compose(target_screen.shape, mmse_coeffs)
     
-    # Plot different parts
-    height=3.2
-    cmap = 'viridis'
+    fig, axs = plt.subplots(1, 3)
+    axs[0].imshow(mmse_screen-lsq_screen)
+    axs[1].imshow(mmse_screen)
+    axs[2].imshow(lsq_screen)
+
+    height = 2.2
+    cmap = 'twilight_shifted'
+    psf_cmap = 'bone'
 
     save_dir = "//file/UsersD$/dah158/Home/My Documents/03 - Doctorate/2026/Journal Paper/fig"
 
-    vmax = max(np.max(target_screen), np.max(fitted_screen), np.max(recon_screen), np.max(mmse_screen))
-    vmin = min(np.min(target_screen), np.min(fitted_screen), np.min(recon_screen), np.min(mmse_screen))
+    LSQ_A = LSQ.ATii.squeeze()
+    MINN_A = pred_A.squeeze()
+
+    vmax = max(np.amax(LSQ_A), np.amax(MINN_A))
+    vmin = min(np.amin(LSQ_A), np.amin(MINN_A))
+    vmax, vmin = max(abs(vmin), abs(vmax)), -max(abs(vmin), abs(vmax))
+
+    sz = 0.8
+    plt.figure(figsize=(sz*2*height, sz*height))
+    plt.imshow(LSQ_A, vmax=vmax, vmin=vmin, cmap=cmap)
+    plt.xlabel('Index')
+    plt.ylabel('Index')
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, f'example_LSQ_matrix_{heuristic}.pgf'), backend='pgf')
+    plt.figure(figsize=(sz*2*height, sz*height))
+    plt.imshow(MINN_A, vmax=vmax, vmin=vmin, cmap=cmap)
+    plt.xlabel('Index')
+    plt.ylabel('Index')
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, f'example_pseudo_ls_matrix_{heuristic}.pgf'), backend='pgf')
+
+    fig_mat_cb, ax_mat_cb = plt.subplots(figsize=(1.2, height))
+    # fig2 = plt.figure(figsize=(1, 4.5))
+    # ax2 = fig2.add_axes() #[0.1, 0.1, 0.3, 0.8])
+    cmap2 = eval(f"mpl.cm.{cmap}")
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+
+    cbar = mpl.colorbar.ColorbarBase(ax_mat_cb, cmap=cmap2, norm=norm, orientation='vertical')
+
+    cbar.set_label("Value")
+    fig_mat_cb.tight_layout()
+    plt.savefig(os.path.join(save_dir, f"example_matrix_cb_{heuristic}.pgf"), backend='pgf')
+
+    # Plot different parts
+    # cmap = 'viridis'
+
+
+    vmax = max(np.max(target_screen), np.max(fitted_screen), np.max(recon_screen), np.max(mmse_screen), np.max(lsq_screen))
+    vmin = min(np.min(target_screen), np.min(fitted_screen), np.min(recon_screen), np.min(mmse_screen), np.min(lsq_screen))
     vmax, vmin = max(vmax, -vmin), min(-vmax, vmin)
     extent_a = (120, -120, 120, -120)
 
@@ -292,7 +372,7 @@ def run_and_display_single_example():
     plt.ylabel('Position (")')
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "fitted_screen.tex"))
-    plt.savefig(os.path.join(save_dir, "example_fitted_screen.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_fitted_screen_{heuristic}.pgf"), backend='pgf')
 
     plt.figure(figsize=(height, height))
     plt.imshow(recon_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
@@ -300,7 +380,14 @@ def run_and_display_single_example():
     plt.ylabel('Position (")')
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "recon_screen.tex"))
-    plt.savefig(os.path.join(save_dir, "example_recon_screen.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_recon_screen_{heuristic}.pgf"), backend='pgf')
+
+    plt.figure(figsize=(height, height))
+    plt.imshow(lsq_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, f"example_lsq_screen_{heuristic}.pgf"), backend='pgf')
 
     plt.figure(figsize=(height, height))
     plt.imshow(mmse_screen, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent_a)
@@ -308,7 +395,7 @@ def run_and_display_single_example():
     plt.ylabel('Position (")')
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "mmse_screen.tex"))
-    plt.savefig(os.path.join(save_dir, "example_mmse_screen.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_mmse_screen_{heuristic}.pgf"), backend='pgf')
 
     target_screen *= mask
 
@@ -318,110 +405,159 @@ def run_and_display_single_example():
     plt.ylabel('Position (")')
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "target_screen.tex"))
-    plt.savefig(os.path.join(save_dir, "example_target_screen.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_target_screen_{heuristic}.pgf"), backend='pgf')
 
-    dmax = max(np.max(target_screen - fitted_screen),
-               np.max(target_screen - recon_screen),
-               np.max(target_screen - mmse_screen))
-    dmin = min(np.min(target_screen - fitted_screen),
-               np.min(target_screen - recon_screen),
-               np.min(target_screen - mmse_screen))
-    dmax, dmin = max(dmax, -dmin), min(-dmax, dmin)
-    # dmax, dmin = vmax, vmin
+    # dmax = max(np.max(target_screen - fitted_screen),
+    #            np.max(target_screen - recon_screen),
+    #            np.max(target_screen - mmse_screen),
+    #            np.max(target_screen - lsq_screen))
+    # dmin = min(np.min(target_screen - fitted_screen),
+    #            np.min(target_screen - recon_screen),
+    #            np.min(target_screen - mmse_screen),
+    #            np.min(target_screen - lsq_screen))
+    # dmax, dmin = max(dmax, -dmin), min(-dmax, dmin)
+    dmax, dmin = vmax, vmin
     
     plt.figure(figsize=(height, height))
     dif_im = plt.imshow(target_screen - fitted_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
+    sr = strehl.ratio(target_screen - fitted_screen, mask=mask)
+    print(f"Ideal SR: {sr}")
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "fitted_resid.tex"))
-    plt.savefig(os.path.join(save_dir, "example_fitted_resid.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_fitted_resid_{heuristic}.pgf"), backend='pgf')
+
+    plt.figure(figsize=(height, height))
+    plt.imshow(target_screen - lsq_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
+    sr = strehl.ratio(target_screen - lsq_screen, mask=mask)
+    print(f"LSQ SR: {sr}")
+    plt.xlabel('Position (")')
+    plt.ylabel('Position (")')
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "fitted_resid.tex"))
+    plt.savefig(os.path.join(save_dir, f"example_lsq_resid_{heuristic}.pgf"), backend='pgf')
 
     plt.figure(figsize=(height, height))
     plt.imshow(target_screen - recon_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
+    sr = strehl.ratio(target_screen - recon_screen, mask=mask)
+    print(f"MINN-LS SR: {sr}")
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "recon_resid.tex"))
-    plt.savefig(os.path.join(save_dir, "example_recon_resid.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_recon_resid_{heuristic}.pgf"), backend='pgf')
 
     plt.figure(figsize=(height, height))
     plt.imshow(target_screen - mmse_screen, vmax=dmax, vmin=dmin, cmap=cmap, extent=extent_a)
+    sr = strehl.ratio(target_screen - mmse_screen, mask=mask)
+    print(f"MMSE SR: {sr}")
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "mmse_resid.tex"))
-    plt.savefig(os.path.join(save_dir, "example_mmse_resid.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_mmse_resid_{heuristic}.pgf"), backend='pgf')
 
-    wavelength = 550e-9
+    # wavelength = 550e-9
+    wavelength = 1
     res = 1000 * wavelength / cfg.diameter
-    extent_l = (-res/2 * 1e6, res/2 * 1e6, -res/2 * 1e6, res/2 * 1e6)
+    # extent_l = (-res/2 * 1e6, res/2 * 1e6, -res/2 * 1e6, res/2 * 1e6)
+    extent_l = (-res/2, res/2, -res/2, res/2)
+    
+
+    print(f"Ideal MSE: {cfg.loss_function(torch.from_numpy(target_screen), torch.from_numpy(fitted_screen)).item()}")
+    print(f"LSQ MSE: {cfg.loss_function(torch.from_numpy(target_screen), torch.from_numpy(lsq_screen)).item()}")
+    print(f"MINN-LS MSE: {cfg.loss_function(torch.from_numpy(target_screen), torch.from_numpy(recon_screen)).item()}")
+    print(f"MMSE MSE: {cfg.loss_function(torch.from_numpy(target_screen), torch.from_numpy(mmse_screen)).item()}")
+
 
     airy_disc = psf.psf(mask)
     fitted_psf = psf.psf(target_screen - fitted_screen)
     recon_psf = psf.psf(target_screen - recon_screen)
     mmse_psf = psf.psf(target_screen - mmse_screen)
+    lsq_psf = psf.psf(target_screen - lsq_screen)
 
     plt.figure(figsize=(height, height))
     airy_psf = np.log10(airy_disc / airy_disc.max())
-    psf_im = plt.imshow(airy_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    psf_im = plt.imshow(airy_psf, vmax=0, vmin=-6, cmap=psf_cmap, extent=extent_l)
     plt.xlabel("Position ($\mu$m)")
     plt.ylabel("Position ($\mu$m)")
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "airy_psf.tex"))
-    plt.savefig(os.path.join(save_dir, "example_airy_psf.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_airy_psf_{heuristic}.pgf"), backend='pgf')
+
+    plt.figure(figsize=(height, height))
+    lsq_psf = np.log10(lsq_psf / airy_disc.max())
+    plt.imshow(lsq_psf, vmax=0, vmin=-6, cmap=psf_cmap, extent=extent_l)
+    plt.xlabel("Position ($\mu$m)")
+    plt.ylabel("Position ($\mu$m)")
+    plt.tight_layout()
+    # tikzplotlib.save(os.path.join(save_dir, "airy_psf.tex"))
+    plt.savefig(os.path.join(save_dir, f"example_lsq_psf_{heuristic}.pgf"), backend='pgf')
 
     plt.figure(figsize=(height, height))
     fitted_psf = np.log10(fitted_psf / airy_disc.max())
-    plt.imshow(fitted_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.imshow(fitted_psf, vmax=0, vmin=-6, cmap=psf_cmap, extent=extent_l)
     plt.xlabel("Position ($\mu$m)")
     plt.ylabel("Position ($\mu$m)")
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "fitted_psf.tex"))
-    plt.savefig(os.path.join(save_dir, "example_fitted_psf.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_fitted_psf_{heuristic}.pgf"), backend='pgf')
 
     plt.figure(figsize=(height, height))
     recon_psf = np.log10(recon_psf / airy_disc.max())
-    plt.imshow(recon_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.imshow(recon_psf, vmax=0, vmin=-6, cmap=psf_cmap, extent=extent_l)
     plt.xlabel("Position ($\mu$m)")
     plt.ylabel("Position ($\mu$m)")
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "recon_psf.tex"))
-    plt.savefig(os.path.join(save_dir, "example_recon_psf.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_recon_psf_{heuristic}.pgf"), backend='pgf')
 
     plt.figure(figsize=(height, height))
     mmse_psf = np.log10(mmse_psf / airy_disc.max())
-    plt.imshow(mmse_psf, vmax=0, vmin=-6, cmap=cmap, extent=extent_l)
+    plt.imshow(mmse_psf, vmax=0, vmin=-6, cmap=psf_cmap, extent=extent_l)
     plt.xlabel("Position ($\mu$m)")
     plt.ylabel("Position ($\mu$m)")
     plt.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "mmse_psf.tex"))
-    plt.savefig(os.path.join(save_dir, "example_mmse_psf.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_mmse_psf_{heuristic}.pgf"), backend='pgf')
 
     plt.figure(figsize=(height, height))
     ax = plt.gca()
-    plt.scatter(gs_x, gs_y, marker="x")
+    plt.scatter([0], [0], marker="x", color='k', label="Target")
+    plt.scatter(gs_x, gs_y, marker="+", color='r', label='Guide-stars')
     x = [120 * np.cos(theta) for theta in np.linspace(0, 2*np.pi, endpoint=True)]
     y = [120 * np.sin(theta) for theta in np.linspace(0, 2*np.pi, endpoint=True)]
-    plt.plot(x, y, "--")
+    plt.plot(x, y, linestyle='dotted', color='k')
     plt.xlabel('Position (")')
     plt.ylabel('Position (")')
     ax.set_aspect('equal', 'box')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "example_asterism.pgf"), backend='pgf')
-    # tikzplotlib.save(os.path.join(save_dir, "asterism.tex"))
+    plt.savefig(os.path.join(save_dir, f"example_asterism_{heuristic}.pgf"), backend='pgf')
+    # plt.legend(loc='lower left')
+    # 3. Collect handles and labels from the data axis
+    handles, labels = ax.get_legend_handles_labels()
 
-    fig2, ax2 = plt.subplots(figsize=(1, height))
+    plt.figure(figsize=(height, 1))
+    ax = plt.gca()
+    ax.legend(handles, labels, loc='center')
+    ax.axis('off')
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, f"example_asterism_{heuristic}_legend.pgf"), backend='pgf')
+    
+    psf_cmap = eval(f"mpl.cm.{psf_cmap}")
+    cmap = eval(f"mpl.cm.{cmap}")
+
+    fig2, ax2 = plt.subplots(figsize=(height, 1))
     # fig2 = plt.figure(figsize=(1, 4.5))
     # ax2 = fig2.add_axes() #[0.1, 0.1, 0.3, 0.8])
-    cmap = eval(f"mpl.cm.{cmap}")
     norm = mpl.colors.Normalize(vmin=-6, vmax=0)
 
-    cbar = mpl.colorbar.ColorbarBase(ax2, cmap=cmap, norm=norm, orientation='vertical')
+    cbar = mpl.colorbar.ColorbarBase(ax2, cmap=psf_cmap, norm=norm, orientation='horizontal')
 
     cbar.set_label("Normalised Intensity [$\\log(I/I_{max})$]")
     fig2.tight_layout()
-    plt.savefig(os.path.join(save_dir, "example_psf_cb.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_psf_cb_{heuristic}.pgf"), backend='pgf')
     # tikzplotlib.save(os.path.join(save_dir, "psf_cb.tex"))
 
     # cbar = fig2.colorbar(psf_im, ax=ax2, cax=ax2, orientation='vertical', cmap=cmap)
@@ -431,16 +567,16 @@ def run_and_display_single_example():
     # fig2.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "psf_cb.tex"))
 
-    fig3, ax3 = plt.subplots(figsize=(1, height))
+    fig3, ax3 = plt.subplots(figsize=(2.5*height, 1))
     # fig3 = plt.figure(figsize=(1, 4.5))
     # ax3 = fig3.add_axes() #[0.1, 0.1, 0.3, 0.8])
     norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
 
-    cbar = mpl.colorbar.ColorbarBase(ax3, cmap=cmap, norm=norm, orientation='vertical')
+    cbar = mpl.colorbar.ColorbarBase(ax3, cmap=cmap, norm=norm, orientation='horizontal')
 
     cbar.set_label("Phase (radians)")
     fig3.tight_layout()
-    plt.savefig(os.path.join(save_dir, "example_screen_cb.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_screen_cb_{heuristic}.pgf"), backend='pgf')
     # tikzplotlib.save(os.path.join(save_dir, "screen_cb.tex"))
 
     # cbar = fig3.colorbar(scr_im, ax=ax3, cax=ax3, orientation='vertical', cmap=cmap)
@@ -448,16 +584,16 @@ def run_and_display_single_example():
     # fig3.tight_layout()
     # tikzplotlib.save(os.path.join(save_dir, "screen_cb.tex"))
 
-    fig4, ax4 = plt.subplots(figsize=(1, height))
+    fig4, ax4 = plt.subplots(figsize=(height, 1))
     # fig4 = plt.figure(figsize=(1, 4.5))
     # ax4 = fig4.add_axes() #[0.1, 0.1, 0.3, 0.8])
     norm = mpl.colors.Normalize(vmin=dmin, vmax=dmax)
 
-    cbar = mpl.colorbar.ColorbarBase(ax4, cmap=cmap, norm=norm, orientation='vertical')
+    cbar = mpl.colorbar.ColorbarBase(ax4, cmap=cmap, norm=norm, orientation='horizontal')
 
     cbar.set_label("Phase (radians)")
     fig4.tight_layout()
-    plt.savefig(os.path.join(save_dir, "example_resid_cb.pgf"), backend='pgf')
+    plt.savefig(os.path.join(save_dir, f"example_resid_cb_{heuristic}.pgf"), backend='pgf')
     # tikzplotlib.save(os.path.join(save_dir, "resid_cb.tex"))
 
     # cbar = fig4.colorbar(dif_im, ax=ax4, cax=ax4, orientation='vertical', cmap=cmap)
@@ -470,11 +606,11 @@ def run_and_display_single_example():
 def run_models_over_different_heuristics():
     from training import run_epoch
     
-    N = 1000
+    N = 256
 
     cfg = config.Config()
 
-    ml_run = ml.Trainer(cfg, skip_lsq=True)
+    ml_run = ml.Trainer(cfg, skip_lsq=False)
 
     results = {
         "Model_Heuristic": [],
@@ -485,11 +621,11 @@ def run_models_over_different_heuristics():
         "stdev": []
     }
 
-    heuristics = ["both", "none", "quality", "regime"]
+    heuristics = ["all", "quality"]
 
-    directory_base = cfg.directory.split("_")[0]
+    directory_base = cfg.directory
 
-    directories = [directory_base + "_" + h for h in heuristics]
+    directories = [os.path.join(directory_base, h + "_asterisms") for h in heuristics]
     print(ml_run.model_file_names)
 
     mask = cfg.basis.get_mask(cfg.aperture_size)
@@ -583,7 +719,8 @@ def display_models_over_different_heuristics():
         'pseudo_lsq': "Pseudo-LS",
         'pseudo_mmse': "Pseudo-MMSE",
         'NoInverseKzz': "PQ + Priors",
-        'LeastSquares': "LS"
+        'LeastSquares': "LS",
+        "AO": "SCAO"
     }).fillna(df["Model"])
 
     print(df.head())
@@ -615,15 +752,15 @@ def display_models_over_different_heuristics():
     #            & ((df["Model Heuristic"] == "Both") | (df["Model Heuristic"] == "None"))
     #        & ((df["Asterism Heuristic"] == "Both") | (df["Asterism Heuristic"] == "None"))]
 
-    for model in ["Pseudo-LS", "AO", "GLAO"]:
+    for model in ["Pseudo-LS", "Pseudo-MMSE", "Direct MLNN", "PQ + Priors", "ResNet", "SCAO", "GLAO", "LS", "MMSE"]:
         df0 = df[df["Model"] == model]
-        if model == "Pseudo-LS":
-            df1 = df0[df0["Size"] == "Small"]
-            df1 = df1[df1["Embed"] == "Yes"]
-            print(df1)
-            df1 = df0[df0["Size"] == "Small"]
-            df1 = df1[df1["Embed"] == "No"]
-            print(df1)
+        if model != "SCAO" and model != "GLAO" and model != "LS" and model != "MMSE":
+            # df1 = df0[df0["Size"] == "Small"]
+            # df1 = df1[df1["Embed"] == "Yes"]
+            # print(df1)
+            # df1 = df0[df0["Size"] == "Small"]
+            # df1 = df1[df1["Embed"] == "No"]
+            # print(df1)
             df1 = df0[df0["Size"] == "Standardised"]
             df1 = df1[df1["Embed"] == "Yes"]
             print(df1)

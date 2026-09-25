@@ -87,8 +87,8 @@ def generate_asterisms(n,
                        quality_model="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl",
                        regime_model="NN_tomo_regime.pkl",
                        include_quality=False,
-                       use_regime_model=True,
-                       return_all=False):
+                       return_all=False,
+                       minimum_angle=0.0):
     logger.info(f"Generating {n} variable asterisms")
 
     if isinstance(rng, int):
@@ -102,6 +102,7 @@ def generate_asterisms(n,
         low_quality_list = []
         high_quality_list = []
         tomo_regime_list = []
+        min_angle_list = []
         ao_regime_list = []
     
     quality_list = []
@@ -120,13 +121,17 @@ def generate_asterisms(n,
         print(regime_model)
         with open(os.path.join(model_location, regime_model), 'rb') as f:
             regime_model, regime_scaler = pickle.load(f)
+            use_regime_model = True
     else:
         use_regime_model = False
 
     while (len(asterism_list) < n):
         if len(asterism_list) > 0:
             logger.info(f"Searching for new asterisms. Currently {len(asterism_list)}/{n}")
-        asterism_data = asterisms.load_data(magnitude, n=n, limit=limiting_angle, rng=rng, quick_load=True, asterism_size=group_size)
+        n_a = n
+        if n_a > 2000:
+            n_a = 2000
+        asterism_data = asterisms.load_data(magnitude, n=n_a, limit=limiting_angle, rng=rng, quick_load=True, asterism_size=group_size)
         # asterism_data = [[(g+1, t, rng.normal()) for t in np.linspace(0, 2*np.pi, 3, endpoint=False)] for g in range(0, n)]
 
         t_offset = rng.uniform(0, 2*np.pi, asterism_data.shape[0])
@@ -178,8 +183,14 @@ def generate_asterisms(n,
                 
                 # l = l ** 1
                 # l = 1.0
+                m = 1.0
+                if minimum_angle > 0.0:
+                    if min([a._gamma_arcsec for a in raw]) < minimum_angle:
+                        m = 0.0
+                        if return_all:
+                            min_angle_list.append(raw)
                             
-                if t * l > p:
+                if t * l * m > p:
                     if include_quality:
                         asterism_list.append((raw, q))
                     else:
@@ -191,7 +202,7 @@ def generate_asterisms(n,
     # print(n_tomo, n_total)
     
     if return_all:
-        return rng.choice(asterism_list, n), low_quality_list, high_quality_list, ao_regime_list, tomo_regime_list, raw_asterism_list
+        return rng.choice(asterism_list, n), asterism_list, low_quality_list, high_quality_list, ao_regime_list, tomo_regime_list, raw_asterism_list, min_angle_list
     else:
         return rng.choice(asterism_list, n) #[:n]
 

@@ -225,6 +225,7 @@ class LeastSquares(Tomography):
             M0 = np.matmul(A, T_inv)
             self.sv = np.linalg.svd(M0, compute_uv=False)
             M1 = np.linalg.pinv(M0, rcond=self.eps)
+            self.ATii = M1
             C_T = np.matmul(M1, L)
             if self.method == "Tinv":
                 return np.concatenate([ptt, C_T])

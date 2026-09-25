@@ -123,108 +123,111 @@ def run(cfg):
     else:
         regime_settings = [(a, b, True) for a,b in cfg.regime_settings]
 
-    for n_epochs, n_screens, use_regime_model in regime_settings:
-        for e in range(n_epochs):
-            epoch += 1
-            log.info(f"Running Epoch {epoch}/{total_epochs} (Sub-epoch {e+1}/{n_epochs}) [{cfg.r0}]")
-            atmosphere_train = phase_screen.Atmosphere(n_screens, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+    if cfg.training_size > 0:
+        for n_epochs, n_screens, use_regime_model in regime_settings:
+            for e in range(n_epochs):
+                epoch += 1
+                log.info(f"Running Epoch {epoch}/{total_epochs} (Sub-epoch {e+1}/{n_epochs}) [{cfg.r0}]")
+                atmosphere_train = phase_screen.Atmosphere(n_screens, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
 
-            for n in range(n_screens):
-                for layer in range(len(cfg.altitudes)):
-                    var = atmosphere_train.generators[layer].screen_var[n]
-                    r0 = atmosphere_train.generators[layer].screen_r0[n]
+                for n in range(n_screens):
+                    for layer in range(len(cfg.altitudes)):
+                        var = atmosphere_train.generators[layer].screen_var[n]
+                        r0 = atmosphere_train.generators[layer].screen_r0[n]
+
+                        phase_data["Epoch"].append(epoch)
+                        phase_data["Index"].append(n)
+                        phase_data["Layer"].append(layer+1)
+                        phase_data["r0"].append(r0)
+                        phase_data["Variance"].append(var)
+
+                    co = target.total_cutout(cfg.diameter, cfg.altitudes, atmosphere_train[n], atmosphere_train.metapupil_diameters)
+                    var = np.var(co)
+                    r0 = var_to_r0(cfg.diameter, var)
 
                     phase_data["Epoch"].append(epoch)
                     phase_data["Index"].append(n)
-                    phase_data["Layer"].append(layer+1)
+                    phase_data["Layer"].append("Total")
                     phase_data["r0"].append(r0)
                     phase_data["Variance"].append(var)
+                    
 
-                co = target.total_cutout(cfg.diameter, cfg.altitudes, atmosphere_train[n], atmosphere_train.metapupil_diameters)
-                var = np.var(co)
-                r0 = var_to_r0(cfg.diameter, var)
+                log.info(f"Loading asterism groups. Training size: {cfg.training_size}")
 
-                phase_data["Epoch"].append(epoch)
-                phase_data["Index"].append(n)
-                phase_data["Layer"].append("Total")
-                phase_data["r0"].append(r0)
-                phase_data["Variance"].append(var)
-                
+                for asterism_set in asterism_sets:
+                    print(asterism_set)
+                    if asterism_set == "Variable":
+                        training_asterisms = asterisms.generate_asterisms(cfg.training_size, 
+                                                                        cfg.magnitude,
+                                                                        mask=mask,
+                                                                        model_location=cfg.asterism_model_location,
+                                                                        quality_model=cfg.quality_model,
+                                                                        regime_model=cfg.regime_model,
+                                                                        minimum_angle=cfg.angle_threshold)
+                        trainer = variable_trainer
+                    else:
+                        training_asterisms = asterisms.sample_asterisms(cfg.training_size, mask=mask, seed=cfg.sample_seed)
+                        trainer = sample_trainer
 
-            log.info(f"Loading asterism groups. Training size: {cfg.training_size}")
+                    for n in range(cfg.training_size):
+                        for s in range(cfg.asterism_size):
+                            asterism_data["Epoch"].append(epoch)
+                            asterism_data["Index"].append(n)
+                            asterism_data["Star"].append(s)
+                            asterism_data["Gamma"].append(training_asterisms[n][s]._gamma_arcsec)
+                            asterism_data["Theta"].append(training_asterisms[n][s].theta)
+                            asterism_data["Magnitude"].append(training_asterisms[n][s].magnitude)
+                    
+                    data = run_epoch(trainer,
+                                        cfg.training_size, 
+                                        training_asterisms, 
+                                        atmosphere_train, 
+                                        cfg.basis,
+                                        wfs=shwfs)
 
-            for asterism_set in asterism_sets:
-                print(asterism_set)
-                if asterism_set == "Variable":
-                    training_asterisms = asterisms.generate_asterisms(cfg.training_size, 
-                                                                      cfg.magnitude,
-                                                                      mask=mask,
-                                                                      quality_threshold=cfg.asterism_quality_threshold,
-                                                                      quality_limit=cfg.minimum_asterism_quality,
-                                                                      use_regime_model=use_regime_model,
-                                                                      model_location=cfg.asterism_model_location,
-                                                                      quality_model=cfg.quality_model,
-                                                                      regime_model=cfg.regime_model)
-                    trainer = variable_trainer
-                else:
-                    training_asterisms = asterisms.sample_asterisms(cfg.training_size, mask=mask, seed=cfg.sample_seed)
-                    trainer = sample_trainer
+                    append_results(results, epoch, "Train", n_screens, asterism_set, data)
 
-                for n in range(cfg.training_size):
-                    for s in range(cfg.asterism_size):
-                        asterism_data["Epoch"].append(epoch)
-                        asterism_data["Index"].append(n)
-                        asterism_data["Star"].append(s)
-                        asterism_data["Gamma"].append(training_asterisms[n][s]._gamma_arcsec)
-                        asterism_data["Theta"].append(training_asterisms[n][s].theta)
-                        asterism_data["Magnitude"].append(training_asterisms[n][s].magnitude)
-                
-                data = run_epoch(trainer,
-                                    cfg.training_size, 
-                                    training_asterisms, 
-                                    atmosphere_train, 
-                                    cfg.basis,
-                                    wfs=shwfs)
+                    if (epoch - 1) % cfg.save_frequency == 0:
+                        model_files = trainer.save_models(epoch, suffix=f"_{asterism_set}", dir=f"{directory}/{cfg.start_time}")
+                        trainer.save_models(epoch, suffix=f"_{asterism_set}", dir=f"{directory}/current")
 
-                append_results(results, epoch, "Train", n_screens, asterism_set, data)
+                        for model_path in model_files:
+                            model_data.append(model_path)
 
-                if (epoch - 1) % cfg.save_frequency == 0:
-                    model_files = trainer.save_models(epoch, suffix=f"_{asterism_set}", dir=f"{directory}/{cfg.start_time}")
-                    trainer.save_models(epoch, suffix=f"_{asterism_set}", dir=f"{directory}/current")
+                try: 
+                    snapshot = tracemalloc.take_snapshot()
+                    top_stats = snapshot.statistics('lineno')
 
-                    for model_path in model_files:
-                        model_data.append(model_path)
+                    log.info(f"tracemalloc: {top_stats[:3]}")
+                except RuntimeError:
+                    pass
 
-            try: 
-                snapshot = tracemalloc.take_snapshot()
-                top_stats = snapshot.statistics('lineno')
+        # Save final model
+        if "Variable" in asterism_sets:
+            model_files = variable_trainer.save_models(suffix='_Variable_Final', dir=f"{directory}/{cfg.start_time}")
+            variable_trainer.save_models(suffix='_Variable_Final', dir=f"{directory}/current")
 
-                log.info(f"tracemalloc: {top_stats[:3]}")
-            except RuntimeError:
-                pass
+            for model_path in model_files:
+                model_data.append(model_path)
 
-    # Save final model
-    if "Variable" in asterism_sets:
-        model_files = variable_trainer.save_models(suffix='_Variable_Final', dir=f"{directory}/{cfg.start_time}")
-        variable_trainer.save_models(suffix='_Variable_Final', dir=f"{directory}/current")
-
-        for model_path in model_files:
-            model_data.append(model_path)
-
-    if "Sample" in asterism_sets:
-        model_files = sample_trainer.save_models(suffix='_Sample_Final', dir=f"{directory}/{cfg.start_time}")
-        sample_trainer.save_models(suffix='_Sample_Final', dir=f"{directory}/current")
-        for model_path in model_files:
+        if "Sample" in asterism_sets:
+            model_files = sample_trainer.save_models(suffix='_Sample_Final', dir=f"{directory}/{cfg.start_time}")
+            sample_trainer.save_models(suffix='_Sample_Final', dir=f"{directory}/current")
+            for model_path in model_files:
+                model_data.append(model_path)
+    else:
+        for model_path in variable_trainer.save_models(suffix='_Variable_Final', dir=cfg.init_model_directory, skip_saving=True):
             model_data.append(model_path)
 
     # Run verification test
     log.info(f"Running final verification test")
     for runner in variable_trainer.runners:
+        print(cfg.verification_skip_lsq)
         try:
-            runner.skip_lsq = False
+            runner.skip_lsq = cfg.verification_skip_lsq
         except AttributeError:
             pass
-
+    
     # PERFORM VERIFICATION
     if not cfg.sample_set_off:
         trainers = {
@@ -287,12 +290,18 @@ def verification(cfg, log, asterism_sets, model_data, mask, shwfs, results, phas
     # does a verification run, including 
     target = beacon.Beacon(0, 0, 14, aperture_mask=mask)
 
-    trainer = ml.Trainer(cfg, model_dict=model_data)
+    trainer = ml.Trainer(cfg, model_dict=model_data, skip_lsq=cfg.verification_skip_lsq)
     trainer.load_models(model_dict=model_data)
     
     for asterism_set in asterism_sets:
         if asterism_set == "Variable":
-            verification_asterism = asterisms.generate_asterisms(cfg.verification_size, cfg.magnitude, mask=mask, quality_threshold=cfg.asterism_quality_threshold, quality_limit=cfg.minimum_asterism_quality, use_regime_model=True)
+            verification_asterism = asterisms.generate_asterisms(cfg.verification_size, 
+                                                                cfg.magnitude,
+                                                                mask=mask,
+                                                                model_location=cfg.asterism_model_location,
+                                                                quality_model=cfg.quality_model,
+                                                                regime_model=cfg.regime_model,
+                                                                minimum_angle=cfg.angle_threshold)
         else:
             verification_asterism = asterisms.sample_asterisms(cfg.verification_size, mask=mask, seed=cfg.sample_seed)
 

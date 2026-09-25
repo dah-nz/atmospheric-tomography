@@ -106,8 +106,8 @@ class ResNetEmbed(Network):
         x3 = self.fc_in(x[:, 2, :])
 
         x = cat([x1, x2, x3, gs], dim=1)
-        print(x.shape)
-        print(self.embed.size)
+        # print(x.shape)
+        # print(self.embed.size)
 
         a = int(self.embed.size/int(self.embed.size**0.5))
         b = int(self.embed.size/a)
@@ -117,7 +117,7 @@ class ResNetEmbed(Network):
         x = reshape(x, shape=(-1, 4, a, b))
         
         x = self.conv1(x)
-        x = self.maxpool(x)
+        # x = self.maxpool(x)
         x = self.layer0(x)
         x = self.layer1(x)
         x = self.layer2(x)
@@ -169,13 +169,13 @@ class ResNet(Network):
     def forward(self, x):
         # x = x.transpose(2, -1).contiguous()
         x = self.conv1(x)
-        # x = self.maxpool(x)
+        x = self.maxpool(x)
         x = self.layer0(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
 
-        # x = self.avgpool(x)
+        x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 

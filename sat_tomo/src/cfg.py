@@ -82,7 +82,7 @@ class Config():
         parser.add_argument('--asterism_size', action='store', default=3, type=int, help="Number of stars in asterisms")
         parser.add_argument('--asterism_quality_threshold', action='store', default=0.0, type=float, help='Threshold for selecting asterisms based on their predicted quality (Predicted Log of Relative Strehl). Assterisms above this qualities have no penalty for selection from the quality metric.')
         parser.add_argument('--minimum_asterism_quality', action='store', default=-0.2, type=float, help='Lower limit for selecting asterisms based on their predicted quality (Predicted Log of Relative Strehl). Asterisms that are worse than this will not be selected.')
-        # parser.add_argument("--asterism_angle_threshold", action="store", default=0.0, type=float, help='Threshold distance for guide stars from the target. Minimum angles less than this are less likely to be selected.')
+        parser.add_argument("--angle_threshold", action="store", default=0.0, type=float, help='Threshold distance for guide stars from the target. Minimum angles less than this are not selected.')
         parser.add_argument("--shuffle_asterism", action='store_true', help="Shuffle each asterism before performing tomography")
         
         parser.add_argument('--shwfs', action='store_true', help="Use Shack-Hartmann WFS for estimating guide-star wavefront modes")
@@ -103,9 +103,15 @@ class Config():
         parser.add_argument('-c', '--continue_training', action='store_true', help="Save results appended to previous training run")
         parser.add_argument("--mode_skip", action='store', default=3, help="Skip modes from the beginning. Default=3, skipping piston, tip/tilt.")
 
+        parser.add_argument("--verification_skip_lsq", action='store_true', help="Skip LSQ and MMSE in verification.")
+
         parser.add_argument("--asterism_model_location", action="store", default="C:/Code/PhD/Data/Models", help="Location of asterism selection models.")
         parser.add_argument("--quality_model", action="store", default="Neural_Network_lsq_T_strehl_ratio_rel_log_mean_All without Overlap.pkl", help="Name of model that performs quality regression on asterisms geometry.")
         parser.add_argument("--regime_model", action="store", default="NN_tomo_regime.pkl", help="Name of model that classifies asterisms based on tomographic regime.")
+
+        parser.add_argument("--init_model_directory", action="store", default=None, help="Location of pre-trained models.")
+
+        parser.add_argument("--standard_verification", action='store_true', help="Use a standard set of asterisms and atmospheric conditions (for D/r0=30)")
 
         try:
             args = parser.parse_args()
@@ -149,8 +155,8 @@ class Config():
         # if type(args.asterism_angle_threshold) is str:
         #     args.asterism_angle_threshold = float(args.asterism_angle_threshold)
 
-        if args.verification_size < 0:
-            args.verification_size = args.testing_size
+        # if args.verification_size < 0:
+        #     args.verification_size = args.testing_size
 
         if args.altitudes is None or len(args.altitudes) == 0:
             args.altitudes = [1000, 5000, 10000]
@@ -182,7 +188,8 @@ class Config():
                 
         self.basis = basis.select(self.basis_function, self.num_modes)
         
-        max_screens = min(self.testing_size, self.training_size)
+        # max_screens = min(self.testing_size, self.training_size)
+        max_screens = self.training_size
 
         # regime is [(num epochs, screens per epoch)]
         match self.regime:

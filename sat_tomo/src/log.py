@@ -9,7 +9,7 @@ time_str = time.strftime("%Y%m%d_%H%M%S")
 default_logging_level = logging.INFO
 
 fstring = "%(asctime)s:%(levelname)s:%(name)s:%(funcName)s :: %(message)s"
-logging.basicConfig(filename=f"logs/{time_str}.log", level=default_logging_level, format=fstring)
+logging.basicConfig(filename=f"logs/{time_str}.log", level=default_logging_level, format=fstring, filemode="w")
 
 def get_logger(name):
     logger = logging.getLogger(name)
