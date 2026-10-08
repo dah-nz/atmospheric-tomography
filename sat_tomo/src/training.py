@@ -74,7 +74,9 @@ def run(cfg):
     phase_data = {
         "Epoch": [],
         "Index": [],
+        "AltitudeIndex": [],
         "Layer": [],
+        "Altitude": [],
         "Variance": [],
         "r0": []
     }
@@ -240,7 +242,7 @@ def run(cfg):
         }
 
     if cfg.verification_size > 0:
-        results, phase_data, asterism_data = verification(cfg, log, asterism_sets, model_data, mask, shwfs, results, phase_data, asterism_data)
+        results, phase_data, asterism_data = verification_multi_alt(cfg, log, asterism_sets, model_data, mask, shwfs, results, phase_data, asterism_data)
 
     df = pd.DataFrame.from_dict(results, orient="columns")
     df_phase = pd.DataFrame.from_dict(phase_data, orient="columns")
@@ -284,7 +286,7 @@ def run(cfg):
     return df
 
 
-def verification(cfg, log, asterism_sets, model_data, mask, shwfs, results, phase_data, asterism_data):
+def verification_multi_alt(cfg, log, asterism_sets, model_data, mask, shwfs, results, phase_data, asterism_data):
     from tomography import oopao, beacon
     import torch
     # does a verification run, including 
@@ -317,32 +319,53 @@ def verification(cfg, log, asterism_sets, model_data, mask, shwfs, results, phas
         log.info(f"Running verification test for {asterism_set}")
         # N = 16
 
-        atmosphere = phase_screen.Atmosphere(cfg.verification_size, cfg.altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+        l1_altitudes = np.linspace(0, 3000, num=31, endpoint=True)
+        l2_altitudes = np.linspace(1250, 9750, num=35, endpoint=True)
+        l3_altitudes = np.linspace(5250, 15000, num=40, endpoint=True)
+        max_altitudes = [max(l1_altitudes), max(l2_altitudes), max(l3_altitudes)]
 
-        for n in range(cfg.verification_size):
-            for layer in range(len(cfg.altitudes)):
-                var = atmosphere.generators[layer].screen_var[n]
-                r0 = atmosphere.generators[layer].screen_r0[n]
+        atmosphere = phase_screen.Atmosphere(cfg.verification_size, max_altitudes, cfg.r0, cfg.diameter, cfg.aperture_size)
+
+        altitude_list = []
+
+        for a in l1_altitudes:
+            altitude_list.append((a, cfg.altitudes[1], cfg.altitudes[2]))
+        for b in l2_altitudes:
+            altitude_list.append((cfg.altitudes[0], b, cfg.altitudes[2]))
+        for c in l3_altitudes:
+            altitude_list.append((cfg.altitudes[0], cfg.altitudes[1], c))
+
+        for i, altitudes in enumerate(altitude_list):
+            log.info(f"Running test for altitudes: {altitudes} [{i+1}/{len(altitude_list)}]")
+            for n in range(cfg.verification_size):
+                for layer, alt in enumerate(altitudes):
+                    var = atmosphere.generators[layer].screen_var[n]
+                    r0 = atmosphere.generators[layer].screen_r0[n]
+
+                    phase_data["Epoch"].append("Verification")
+                    phase_data["Index"].append(n)
+                    phase_data["AltitudeIndex"].append(i)
+                    phase_data["Layer"].append(layer+1)
+                    phase_data["Altitude"].append(alt)
+                    phase_data["r0"].append(r0)
+                    phase_data["Variance"].append(var)
+
+                co = target.total_cutout(cfg.diameter, altitudes, atmosphere[n], atmosphere.metapupil_diameters)
+                var = np.var(co)
+                r0 = var_to_r0(cfg.diameter, var)
 
                 phase_data["Epoch"].append("Verification")
                 phase_data["Index"].append(n)
-                phase_data["Layer"].append(layer+1)
+                phase_data["AltitudeIndex"].append(i)
+                phase_data["Layer"].append("Total")
+                phase_data["Altitude"].append("-")
                 phase_data["r0"].append(r0)
                 phase_data["Variance"].append(var)
 
-            co = target.total_cutout(cfg.diameter, cfg.altitudes, atmosphere[n], atmosphere.metapupil_diameters)
-            var = np.var(co)
-            r0 = var_to_r0(cfg.diameter, var)
+            atmosphere.altitudes = altitudes
+            dt = data.TomographyData(cfg.verification_size, verification_asterism, atmosphere, cfg.basis, wfs=shwfs)
+            out = trainer.test(dt)
 
-            phase_data["Epoch"].append("Verification")
-            phase_data["Index"].append(n)
-            phase_data["Layer"].append("Total")
-            phase_data["r0"].append(r0)
-            phase_data["Variance"].append(var)
-
-        dt = data.TomographyData(cfg.verification_size, verification_asterism, atmosphere, cfg.basis, wfs=shwfs)
-        out = trainer.test(dt)
-
-        append_results(results, cfg.epochs, "Verification", cfg.verification_size, asterism_set, out)
+            append_results(results, i, "Verification", cfg.verification_size, asterism_set, out)
 
     return results, phase_data, asterism_data

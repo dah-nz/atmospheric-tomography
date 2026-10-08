@@ -1,4 +1,4 @@
-import hcipy
+# import hcipy
 
 import numpy as np
 import scipy.ndimage as ndimage
