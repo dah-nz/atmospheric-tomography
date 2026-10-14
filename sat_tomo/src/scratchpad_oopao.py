@@ -17,7 +17,7 @@ from OOPAO.Zernike import Zernike
 
 #%% ### Telescope ###
 
-n_subaperture = 20
+n_subaperture = 10
 n_pixel_per_subaperture = 8
  
 tel = Telescope(diameter          = 1.8,   # diameter [m]
@@ -56,13 +56,13 @@ ngs_asterism*tel
 
 #%%
 
-r0 = 0.15
+r0 = 0.06
 
 atm = Atmosphere(telescope=tel,  # Telescope
                   r0=r0,  # Fried Parameter [m]
                   L0=25,  # Outer Scale [m]
-                  fractionalR0=[1./3,1./3,1./3],  # Cn2 Profile
-                  windSpeed=[1,1,1],  # Wind Speed in [m]
+                  fractionalR0=[0.8824,0.0294,0.0882],  # Cn2 Profile
+                  windSpeed=[0,0,0],  # Wind Speed in [m]
                   windDirection=[0,0,0],  # Wind Direction in [degrees]
                   altitude=[1000,5000,10000]) # Altitude Layers in [m]
 

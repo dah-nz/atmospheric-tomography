@@ -1,72 +1,56 @@
-import numpy as np
+from tomography import phase_screen, wavefront, asterisms
+from basis import zernike
+import util
+import matplotlib.pyplot as plt
 
-def config(a, b, c):
-    return f'{{\n\
-      "directory": "D:/Data/2026/altitudes2/altitudes_{int(a*1000)}_{int(b*1000)}_{int(c*1000)}",\n\
-      "num_modes": 36,\n\
-      "aperture_size": 100,\n\
-      "diameter": 1.8,\n\
-      "r0": [0.064677, 0.497862, 0.257559],\n\
-      "layers": 3,\n\
-      "altitudes": [{int(a*1000)},{int(b*1000)},{int(c*1000)}],\n\
-      "magnitude": 14,\n\
-      "train_models": ["GuideStarEmbed_baseline",\n\
-                       "GuideStarEmbed_pseudo_lsq",\n\
-                       "GuideStarEmbed_pseudo_mmse",\n\
-                       "GuideStarEmbed_NoInverseKzz",\n\
-                       "ResNetEmbed"\n\
-                    ],\n\
-      "lsq_off": false,\n\
-      "glao_off": false,\n\
-      "ao_off": false,\n\
-      "mmse_off": false,\n\
-      "sample_set_off": true,\n\
-      "sample_seed": 123,\n\
-      "epochs": 0,\n\
-      "training_size": 0,\n\
-      "verification_size": 1000,\n\
-      "save_frequency": 200,\n\
-      "display_training": false,\n\
-      "shwfs": false,\n\
-      "noise": false,\n\
-      "asterism_size": 3,\n\
-      "angle_threshold": 5,\n\
-      "satellites": false,\n\
-      "period": 72,\n\
-      "load_previous": false,\n\
-      "continue_training": false,\n\
-      "verification_skip_lsq": true,\n\
-      "asterism_model_location": "C:/Code/PhD/Data/2026/Models",\n\
-      "quality_model": "disabled",\n\
-      "regime_model": "disabled",\n\
-      "init_model_directory": "D:/Data/2026/all_asterisms/20260817_143646"\n\
-    }}'
+altitudes = [1000, 5000, 10000]
+r0 = [0.064677, 0.497862, 0.257559]
+D = 1.8
+aperture_size = 100
+n = 36
 
-with open('output.txt', 'w') as f:
-    first = True
-    A = np.linspace(0, 2, num=21, endpoint=True)
-    B = np.linspace(2, 8, num=25, endpoint=True)
-    C = np.linspace(7, 14, num=29, endpoint=True)
+atm = phase_screen.Atmosphere(1, altitudes, r0, D, aperture_size)
 
-    print(A,B,C)
+asts = asterisms.generate_asterisms(1)
 
-    f.write('[')
+wfs = wavefront.SHWFS(D, n)
+wfs_n = wavefront.SHWFS(D, n, noise=True)
 
-    for a in A:
-        if not first:
-            f.write(',')
-        else:
-            first = False
-        f.write(config(a, 5, 10))
+z = zernike.Zernike(n)
 
-    for b in B:
-        if b != 5:
-            f.write(',')
-            f.write(config(1, b, 10))
+mask = util.circle(aperture_size)
 
-    for c in C:
-        if c != 10:
-            f.write(',')
-            f.write(config(1, 5, c))
+for a in asts:
+    for b in a:
+        co = b.total_cutout(D, altitudes, atm[0], atm.metapupil_diameters)
+        coeffs, spots = wfs.run(co, b.magnitude)
+        coeffs_n, spots_n = wfs_n.run(co, b.magnitude)
+        coeffs_ideal = z.decompose(co)
+        ptt = coeffs_ideal[:3]
+        coeffs_n[:3] = ptt
+        coeffs[:3] = ptt
+        fig, axs = plt.subplots(3,4)
+        axs[0,0].imshow(co * mask)
 
-    f.write(']')
+        axs[0,1].imshow(spots)
+        recon = z.compose(aperture_size, coeffs)
+        axs[0,2].imshow(recon)
+        axs[0,3].imshow(co * mask - recon)
+
+        axs[1,0].plot(coeffs, label="WFS w/o Photon Noise")
+        axs[1,0].plot(coeffs_n, label=f"WFS w/ Photon Noise  [mag = {b.magnitude}]")
+        axs[1,0].plot(coeffs_ideal, label="Ideal Coeffs")
+        axs[1,0].legend()
+        
+        axs[1,1].imshow(spots_n)
+        recon_n = z.compose(aperture_size, coeffs_n)
+        axs[1,2].imshow(recon_n)
+        axs[1,3].imshow(co * mask - recon_n)
+
+        recon_ideal = z.compose(aperture_size, coeffs_ideal)
+        axs[2, 0].imshow(recon_ideal)
+        axs[2, 1].imshow(co * mask - recon_ideal)
+        axs[2, 2].imshow(recon_ideal - recon)
+        axs[2, 3].imshow(recon_ideal - recon_n)
+
+plt.show()
