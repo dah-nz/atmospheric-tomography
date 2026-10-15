@@ -87,6 +87,11 @@ class Config():
         
         parser.add_argument('--shwfs', action='store_true', help="Use Shack-Hartmann WFS for estimating guide-star wavefront modes")
         parser.add_argument('--noise', action='store_true', help='Turn on noise in the SHWFS')
+        parser.add_argument('--ccd_integration_time', action="store", default=0.001, type=float, help="Integration time/exposure time of the sensor. Impacts photon count for SHWFS")
+        parser.add_argument('--ccd_efficiency', action="store", default=0.3, type=float, help="Efficiency of CCD detector. Impacts SHWFS photon count")
+        parser.add_argument('--wavelength', action="store", default=550, type=float, help="SHWFS wavelength (nm)")
+        parser.add_argument('--wavelength_flux_zeropoint', action="store", default=3.44e-8, type=float, help="The flux at magnitude 0, for the SHWFS wavelength (W m-2 um-1)")
+        parser.add_argument('--filter_bandpass', action="store", default=86, type=float, help="Filter bandpass width around the wavelength (um)")
 
         parser.add_argument('--display_asterisms', action='store_true', help="Display data about asterisms")
         parser.add_argument('--display_training', action='store_true', help="Display results of training")
@@ -152,11 +157,19 @@ class Config():
         if type(args.sample_seed) is str:
             args.sample_seed = int(args.sample_seed)
 
-        # if type(args.asterism_angle_threshold) is str:
-        #     args.asterism_angle_threshold = float(args.asterism_angle_threshold)
+        if type(args.wavelength) is str:
+            args.wavelength = float(args.wavelength)
+        args.wavelength = args.wavelength * 1e-9
 
-        # if args.verification_size < 0:
-        #     args.verification_size = args.testing_size
+        if type(args.ccd_integration_time) is str:
+            args.ccd_integration_time = float(args.ccd_integration_time)
+
+        if type(args.ccd_efficiency) is str:
+            args.ccd_efficiency = float(args.ccd_efficiency)
+        if type(args.wavelength_flux_zeropoint) is str:
+            args.wavelength_flux_zeropoint = float(args.wavelength_flux_zeropoint)
+        if type(args.filter_bandpass) is str:
+            args.filter_bandpass = float(args.filter_bandpass)
 
         if args.altitudes is None or len(args.altitudes) == 0:
             args.altitudes = [1000, 5000, 10000]

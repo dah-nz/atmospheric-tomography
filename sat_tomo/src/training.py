@@ -107,7 +107,12 @@ def run(cfg):
 
     if cfg.shwfs:
         log.info(f"Using SHWFS for coefficient estimation")
-        shwfs = wavefront.SHWFS(cfg.diameter, cfg.num_modes, noise=cfg.noise)
+        shwfs = wavefront.SHWFS(cfg.diameter, cfg.num_modes, noise=cfg.noise,
+                                integration_time=cfg.ccd_integration_time,
+                                detector_efficiency=cfg.ccd_efficiency,
+                                wavelength=cfg.wavelength,
+                                flux_zeropoint=cfg.wavelength_flux_zeropoint,
+                                filter_bandpass=cfg.filter_bandpass)
     else:
         log.info(f"Using dot product (ideal WFS) for coefficient estimation")
         shwfs = None
