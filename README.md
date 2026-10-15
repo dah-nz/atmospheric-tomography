@@ -1,3 +1,3 @@
-# Optical Sim Research
+# Atmospheric tomography research
 
-Research into optical simulation for adaptive optics
+Use of machine learning and optical simulation to research new methods of performing atmospheric tomography.
